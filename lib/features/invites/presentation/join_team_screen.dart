@@ -1,0 +1,250 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/network/api_exception.dart';
+import '../../../shared/widgets/form_scaffold.dart';
+import '../../auth/application/auth_controller.dart';
+import '../data/invite_repository.dart';
+import '../domain/invite_models.dart';
+
+/// Entrada por código. Sem deep link no MVP: verificar dominio no Android custa
+/// dias e o código colavel resolve o mesmo problema hoje.
+class JoinTeamScreen extends ConsumerStatefulWidget {
+  const JoinTeamScreen({super.key});
+
+  @override
+  ConsumerState<JoinTeamScreen> createState() => _JoinTeamScreenState();
+}
+
+class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
+  final _code = TextEditingController();
+
+  InvitePreview? _preview;
+  bool _checking = false;
+  bool _joining = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _code.addListener(_onCodeChanged);
+  }
+
+  @override
+  void dispose() {
+    _code.removeListener(_onCodeChanged);
+    _code.dispose();
+    super.dispose();
+  }
+
+  /// O código tem 20 caracteres uteis; assim que completa, buscamos o preview
+  /// sozinhos -- a pessoa não precisa apertar nada para saber se acertou.
+  void _onCodeChanged() {
+    final clean = _clean(_code.text);
+    if (clean.length == 20 && _preview == null && !_checking) {
+      _check();
+    } else if (clean.length < 20 && _preview != null) {
+      setState(() {
+        _preview = null;
+        _error = null;
+      });
+    }
+  }
+
+  String _clean(String value) =>
+      value.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+
+  Future<void> _check() async {
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
+
+    try {
+      final preview =
+          await ref.read(inviteRepositoryProvider).preview(_clean(_code.text));
+      if (mounted) setState(() => _preview = preview);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  Future<void> _join() async {
+    setState(() {
+      _joining = true;
+      _error = null;
+    });
+
+    try {
+      final result =
+          await ref.read(inviteRepositoryProvider).accept(_clean(_code.text));
+      await ref.read(authControllerProvider.notifier).reloadTeams();
+
+      if (!mounted) return;
+      context.go('/home');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.joined
+                ? 'Você entrou em ${result.teamName}.'
+                : 'Você ja fazia parte de ${result.teamName}.',
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _joining = false);
+    }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null) return;
+
+    // Aceita o texto inteiro compartilhado no WhatsApp: extraimos o código.
+    final match = RegExp(r'[0-9A-HJKMNP-TV-Z]{5}(?:-[0-9A-HJKMNP-TV-Z]{5}){3}')
+        .firstMatch(text.toUpperCase());
+
+    _code.text = match?.group(0) ?? text.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final busy = _checking || _joining;
+
+    return FormScaffold(
+      appBar: AppBar(title: const Text('Convite')),
+      title: 'Entrar com convite',
+      subtitle: 'Cole o código que o líder da sua equipe enviou.',
+      children: [
+        TextField(
+          controller: _code,
+          decoration: InputDecoration(
+            labelText: 'Código do convite',
+            hintText: 'ABCDE-FGHIJ-KLMNO-PQRST',
+            suffixIcon: IconButton(
+              tooltip: 'Colar',
+              icon: const Icon(Icons.content_paste_rounded),
+              onPressed: busy ? null : _pasteFromClipboard,
+            ),
+          ),
+          textCapitalization: TextCapitalization.characters,
+          autocorrect: false,
+          enabled: !busy,
+          style: theme.textTheme.titleMedium?.copyWith(
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (_checking)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+            ),
+          )
+        else if (_preview != null)
+          _PreviewCard(preview: _preview!),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          FormErrorBanner(message: _error!),
+        ],
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: _preview == null || busy ? null : _join,
+          child: _joining
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Entrar na equipe'),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'O código tem 20 caracteres. Maiúsculas, minúsculas e hífens tanto '
+          'faz.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewCard extends StatelessWidget {
+  const _PreviewCard({required this.preview});
+
+  final InvitePreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      color: scheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.groups_rounded,
+                    color: scheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    preview.teamName,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              [
+                if (preview.invitedBy != null)
+                  'Convite enviado por ${preview.invitedBy}.',
+                if (preview.invitedName != null)
+                  'Você entrará como ${preview.invitedName}, com as funções '
+                      'que ja foram cadastradas para você.',
+              ].join(' '),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

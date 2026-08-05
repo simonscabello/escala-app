@@ -1,0 +1,123 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/dio_client.dart';
+import '../../auth/application/auth_controller.dart';
+import '../domain/team_models.dart';
+
+class TeamRepository {
+  const TeamRepository(this._dio);
+
+  final Dio _dio;
+
+  Future<Team> create({required String name}) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams',
+        data: {'name': name},
+      );
+      return Team.fromJson(response.data!);
+    });
+  }
+
+  Future<Team> find(String teamId) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>('/teams/$teamId');
+      return Team.fromJson(response.data!);
+    });
+  }
+
+  Future<List<Member>> members(String teamId) async {
+    return _guard(() async {
+      final response =
+          await _dio.get<List<dynamic>>('/teams/$teamId/members');
+      return response.data!
+          .map((e) => Member.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  Future<List<Position>> positions(String teamId) async {
+    return _guard(() async {
+      final response =
+          await _dio.get<List<dynamic>>('/teams/$teamId/positions');
+      return response.data!
+          .map((e) => Position.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  Future<Member> addMember(
+    String teamId, {
+    required String displayName,
+    String? phone,
+    List<String> positionIds = const [],
+  }) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/members',
+        data: {
+          'displayName': displayName,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (positionIds.isNotEmpty) 'positionIds': positionIds,
+        },
+      );
+      return Member.fromJson(response.data!);
+    });
+  }
+
+  Future<Member> updateMember(
+    String teamId,
+    String membershipId, {
+    String? displayName,
+    String? phone,
+    List<String>? positionIds,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/members/$membershipId',
+        data: {
+          if (displayName != null) 'displayName': displayName,
+          if (phone != null) 'phone': phone,
+          if (positionIds != null) 'positionIds': positionIds,
+        },
+      );
+      return Member.fromJson(response.data!);
+    });
+  }
+
+  Future<void> removeMember(String teamId, String membershipId) async {
+    return _guard(() async {
+      await _dio.delete<void>('/teams/$teamId/members/$membershipId');
+    });
+  }
+
+  Future<T> _guard<T>(Future<T> Function() request) async {
+    try {
+      return await request();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+}
+
+final teamRepositoryProvider = Provider<TeamRepository>((ref) {
+  return TeamRepository(ref.watch(dioProvider));
+});
+
+/// Equipe ativa: no MVP e a primeira (e normalmente unica) do usuario.
+final activeTeamIdProvider = Provider<String?>((ref) {
+  final teams = ref.watch(authControllerProvider).teams;
+  return teams.isEmpty ? null : teams.first.teamId;
+});
+
+final membersProvider =
+    FutureProvider.autoDispose.family<List<Member>, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).members(teamId);
+});
+
+final positionsProvider =
+    FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).positions(teamId);
+});
