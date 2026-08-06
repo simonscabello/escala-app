@@ -18,6 +18,10 @@ String buildScheduleShareText(Event event) {
       '🎤 Ensaio: ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
       'às ${formatEventTime(event.rehearsalAt!, timezone)}',
     );
+  } else {
+    // Dito explicitamente: o convidado que recebe este texto não tem o app
+    // para conferir, e a ausência da linha seria ambígua.
+    buffer.writeln('🎤 Sem ensaio');
   }
 
   if (event.location?.isNotEmpty ?? false) {

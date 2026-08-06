@@ -567,14 +567,21 @@ class _FeaturedEventCard extends ConsumerWidget {
                       label: 'Culto',
                       value: formatEventTime(event.startsAt, timezone),
                     ),
-                    if (event.rehearsalAt != null) ...[
-                      const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.sm),
+                    if (event.rehearsalAt != null)
                       _HeroTimePill(
                         icon: Icons.music_note_rounded,
                         label: 'Ensaio',
                         value: formatEventTime(event.rehearsalAt!, timezone),
+                      )
+                    else
+                      // Ausência de ensaio é informação, não vazio: sem a tag
+                      // fica a dúvida se ninguém marcou ou se não vai ter.
+                      const _HeroTimePill(
+                        icon: Icons.music_off_rounded,
+                        label: 'Sem ensaio',
+                        value: '',
                       ),
-                    ],
                   ],
                 ),
                 if (youLabel != null) ...[
@@ -712,14 +719,16 @@ class _HeroTimePill extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.85),
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+          if (value.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              value,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -781,7 +790,7 @@ class _EventTile extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         'Culto ${formatEventTime(event.startsAt, timezone)}'
-                        '${event.rehearsalAt == null ? '' : '  ·  Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'}',
+                        '${event.rehearsalAt == null ? '  ·  Sem ensaio' : '  ·  Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'}',
                         style: theme.textTheme.bodySmall,
                       ),
                     ),

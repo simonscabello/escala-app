@@ -28,10 +28,15 @@ class TeamRepository {
     });
   }
 
-  Future<List<Member>> members(String teamId) async {
+  Future<List<Member>> members(
+    String teamId, {
+    bool includeGuests = false,
+  }) async {
     return _guard(() async {
-      final response =
-          await _dio.get<List<dynamic>>('/teams/$teamId/members');
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/members',
+        queryParameters: includeGuests ? {'includeGuests': true} : null,
+      );
       return response.data!
           .map((e) => Member.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -62,6 +67,18 @@ class TeamRepository {
           if (phone != null && phone.isNotEmpty) 'phone': phone,
           if (positionIds.isNotEmpty) 'positionIds': positionIds,
         },
+      );
+      return Member.fromJson(response.data!);
+    });
+  }
+
+  /// Convidado: entra na escala e no texto compartilhado, mas não vira
+  /// integrante nem recebe convite.
+  Future<Member> addGuest(String teamId, String displayName) {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/members',
+        data: {'displayName': displayName, 'isGuest': true},
       );
       return Member.fromJson(response.data!);
     });
@@ -115,6 +132,21 @@ final activeTeamIdProvider = Provider<String?>((ref) {
 final membersProvider =
     FutureProvider.autoDispose.family<List<Member>, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).members(teamId);
+});
+
+/// Quem pode ser escalado: integrantes + convidados. Separado do
+/// [membersProvider] porque convidado não é integrante e não deve aparecer na
+/// tela de equipe.
+final schedulableMembersProvider =
+    FutureProvider.autoDispose.family<List<Member>, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).members(teamId, includeGuests: true);
+});
+
+/// Cadastra um músico de fora e devolve o registro criado.
+final addGuestProvider = Provider<
+    Future<Member> Function(String teamId, String displayName)>((ref) {
+  return (teamId, displayName) =>
+      ref.read(teamRepositoryProvider).addGuest(teamId, displayName);
 });
 
 final positionsProvider =

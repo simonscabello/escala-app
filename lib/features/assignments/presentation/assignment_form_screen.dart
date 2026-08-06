@@ -53,6 +53,47 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   int get _distinctPeople =>
       _selected.values.expand((ids) => ids).toSet().length;
 
+  /// Por que esta pessoa não pode entrar nesta função, dado o resto da escala.
+  ///
+  /// Duas regras do culto (as mesmas validadas no backend):
+  ///  - ninguém toca dois instrumentos; vocal acumula com um instrumento
+  ///  - quem está na multimídia ou no som fica fora da banda
+  ///
+  /// Bloquear na tela evita o líder montar a escala inteira e só descobrir o
+  /// problema ao salvar.
+  String? _blockedReason(
+    Member member,
+    Position target,
+    List<Position> positions,
+  ) {
+    final byId = {for (final p in positions) p.id: p};
+    final current = <Position>[
+      for (final entry in _selected.entries)
+        if (entry.key != target.id && entry.value.contains(member.id))
+          if (byId[entry.key] != null) byId[entry.key]!,
+    ];
+
+    if (target.isInstrument) {
+      final other = current.where((p) => p.isInstrument).firstOrNull;
+      if (other != null) return 'Já está em ${other.name}';
+      final tech = current.where((p) => p.isTech).firstOrNull;
+      if (tech != null) return 'Está em ${tech.name}';
+    }
+
+    if (target.isVocal) {
+      final tech = current.where((p) => p.isTech).firstOrNull;
+      if (tech != null) return 'Está em ${tech.name}';
+    }
+
+    if (target.isTech) {
+      final band =
+          current.where((p) => p.isVocal || p.isInstrument).firstOrNull;
+      if (band != null) return 'Está em ${band.name}';
+    }
+
+    return null;
+  }
+
   int get _filledPositions =>
       _selected.values.where((ids) => ids.isNotEmpty).length;
 
@@ -73,6 +114,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           .read(eventRepositoryProvider)
           .replaceAssignments(widget.eventId, payload);
       ref.invalidate(eventProvider(widget.eventId));
+      // A agenda também mostra a escalação (o chip "VOCÊ" e a contagem de
+      // escalados). Sem invalidar a lista, o cartão continuava com o número
+      // de antes de salvar, contradizendo a tela de detalhe.
+      ref.invalidate(eventsProvider((updated.teamId, 'upcoming')));
+      ref.invalidate(eventsProvider((updated.teamId, 'past')));
       if (!mounted) return;
 
       // Avisos depois de salvar, não bloqueios antes: a escala é do líder.
@@ -80,8 +126,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
 
       final unavailable = updated.warnings.unavailableAssigned;
       if (unavailable.isNotEmpty) {
-        final names =
-            unavailable.map((u) => u.displayName).toSet().join(', ');
+        final names = unavailable.map((u) => u.displayName).toSet().join(', ');
         warnings.add('$names marcou que não pode neste dia.');
       }
 
@@ -112,7 +157,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   Future<void> _openPicker({
     required Position position,
     required List<Member> members,
+    required List<Position> positions,
     required Set<String> unavailableIds,
+    required String teamId,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -122,10 +169,26 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         position: position,
         members: members,
         unavailableIds: unavailableIds,
+        blockedReason: (member) => _blockedReason(member, position, positions),
+        onAddGuest: (name) => _addGuest(teamId, name),
         initialSelection: _selected[position.id] ?? const <String>{},
         onChanged: (next) => setState(() => _selected[position.id] = next),
       ),
     );
+  }
+
+  Future<Member?> _addGuest(String teamId, String name) async {
+    try {
+      final guest = await ref.read(addGuestProvider)(teamId, name);
+      ref.invalidate(schedulableMembersProvider(teamId));
+      return guest;
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+      return null;
+    }
   }
 
   @override
@@ -144,7 +207,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       data: (cached) {
         final event = cached.data;
         _seedFromEvent(event);
-        final membersAsync = ref.watch(membersProvider(event.teamId));
+        final membersAsync =
+            ref.watch(schedulableMembersProvider(event.teamId));
         final positionsAsync = ref.watch(positionsProvider(event.teamId));
 
         return membersAsync.when(
@@ -163,8 +227,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 message: 'Não foi possível carregar as funções.',
               ),
             ),
-            data: (positions) =>
-                _buildForm(context, event, members, positions),
+            data: (positions) => _buildForm(context, event, members, positions),
           ),
         );
       },
@@ -218,7 +281,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               onTap: () => _openPicker(
                 position: position,
                 members: members,
+                positions: activePositions,
                 unavailableIds: unavailableIds,
+                teamId: event.teamId,
               ),
               onRemove: (membershipId) => setState(() {
                 final next = {...?_selected[position.id]}..remove(membershipId);
@@ -490,6 +555,8 @@ class _MemberPickerSheet extends StatefulWidget {
     required this.position,
     required this.members,
     required this.unavailableIds,
+    required this.blockedReason,
+    required this.onAddGuest,
     required this.initialSelection,
     required this.onChanged,
   });
@@ -497,6 +564,10 @@ class _MemberPickerSheet extends StatefulWidget {
   final Position position;
   final List<Member> members;
   final Set<String> unavailableIds;
+
+  /// Nulo = pode escalar. Texto = motivo do bloqueio, exibido na linha.
+  final String? Function(Member) blockedReason;
+  final Future<Member?> Function(String displayName) onAddGuest;
   final Set<String> initialSelection;
   final ValueChanged<Set<String>> onChanged;
 
@@ -511,6 +582,68 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   /// quem já tem a função cadastrada, e repetir a equipe inteira em cada
   /// função era o que transformava a tela num paredão.
   bool _showOthers = false;
+  bool _addingGuest = false;
+
+  /// Cadastra o convidado e já o deixa marcado nesta função — quem abre esse
+  /// fluxo está com a função vazia na mão.
+  Future<void> _promptGuest() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Convidar alguém de fora'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Músico convidado não tem conta no app. Ele entra na escala e '
+              'recebe os detalhes pelo texto compartilhado.',
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Nome'),
+              onSubmitted: (value) =>
+                  Navigator.of(dialogContext).pop(value.trim()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+
+    if (name == null || name.length < 2 || !mounted) return;
+
+    setState(() => _addingGuest = true);
+    final guest = await widget.onAddGuest(name);
+    if (!mounted) return;
+
+    setState(() {
+      _addingGuest = false;
+      if (guest != null) {
+        _working = {..._working, guest.id};
+        _extraGuests = [..._extraGuests, guest];
+      }
+    });
+    if (guest != null) widget.onChanged(_working);
+  }
+
+  /// Convidados criados aqui dentro: a lista recebida por parâmetro só é
+  /// recarregada quando a folha fecha.
+  List<Member> _extraGuests = [];
 
   void _toggle(String membershipId) {
     setState(() {
@@ -527,10 +660,11 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    final registered = widget.members
+    final all = [...widget.members, ..._extraGuests];
+    final registered = all
         .where((m) => m.positions.any((p) => p.id == widget.position.id))
         .toList();
-    final others = widget.members
+    final others = all
         .where((m) => !m.positions.any((p) => p.id == widget.position.id))
         .toList();
 
@@ -599,6 +733,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                         member: member,
                         checked: _working.contains(member.id),
                         unavailable: widget.unavailableIds.contains(member.id),
+                        blockedReason: widget.blockedReason(member),
                         onTap: () => _toggle(member.id),
                       ),
                   ],
@@ -618,6 +753,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                         checked: _working.contains(member.id),
                         outsideRegistration: true,
                         unavailable: widget.unavailableIds.contains(member.id),
+                        blockedReason: widget.blockedReason(member),
                         onTap: () => _toggle(member.id),
                       ),
                   ],
@@ -626,13 +762,30 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
             ),
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Concluir'),
-                ),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                children: [
+                  // O momento em que se descobre que falta alguém é este:
+                  // montando a escala e sem ninguém para a função.
+                  TextButton.icon(
+                    onPressed: _addingGuest ? null : _promptGuest,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: const Text('Convidar alguém de fora'),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Concluir'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -685,6 +838,7 @@ class _PickerTile extends StatelessWidget {
     required this.onTap,
     this.outsideRegistration = false,
     this.unavailable = false,
+    this.blockedReason,
   });
 
   final Member member;
@@ -695,57 +849,108 @@ class _PickerTile extends StatelessWidget {
   /// A pessoa avisou que não pode no dia desta escala.
   final bool unavailable;
 
+  /// Combinação proibida (dois instrumentos, ou técnica junto com banda).
+  /// Diferente de "indisponível": aqui não há escolha, a regra impede.
+  final String? blockedReason;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final blocked = blockedReason != null && !checked;
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            AppAvatar(name: member.displayName, radius: 18),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          member.displayName,
-                          style: theme.textTheme.bodyLarge,
+    return Opacity(
+      opacity: blocked ? 0.45 : 1,
+      child: InkWell(
+        onTap: blocked ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              AppAvatar(name: member.displayName, radius: 18),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            member.displayName,
+                            style: theme.textTheme.bodyLarge,
+                          ),
+                        ),
+                        // Continua na lista e continua selecionável: o líder às
+                        // vezes já acertou uma troca por fora do app.
+                        if (unavailable) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          const UnavailableBadge(),
+                        ],
+                        if (member.isGuest) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          const _GuestBadge(),
+                        ],
+                      ],
+                    ),
+                    if (blocked)
+                      Text(
+                        blockedReason!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      )
+                    else if (outsideRegistration && checked)
+                      Text(
+                        'Fora do cadastro desta função',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.accent(scheme),
                         ),
                       ),
-                      // Continua na lista e continua selecionável: o líder às
-                      // vezes já acertou uma troca por fora do app.
-                      if (unavailable) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        const UnavailableBadge(),
-                      ],
-                    ],
-                  ),
-                  if (outsideRegistration && checked)
-                    Text(
-                      'Fora do cadastro desta função',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.accent(scheme),
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Checkbox(value: checked, onChanged: (_) => onTap()),
-          ],
+              Checkbox(
+                value: checked,
+                onChanged: blocked ? null : (_) => onTap(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+/// Marca quem é de fora — na escala compartilhada isso muda o que se espera
+/// da pessoa (não tem o app, não vê avisos).
+class _GuestBadge extends StatelessWidget {
+  const _GuestBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      ),
+      child: Text(
+        'Convidado',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: scheme.onSecondaryContainer,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
