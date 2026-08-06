@@ -145,8 +145,9 @@ class EventRepository {
 
   Future<Event> replaceAssignments(
     String eventId,
-    List<Map<String, String?>> assignments,
-  ) async {
+    List<Map<String, Object?>> assignments, {
+    String? ministerMembershipId,
+  }) async {
     return _guard(() async {
       final response = await _dio.put<Map<String, dynamic>>(
         '/events/$eventId/assignments',
@@ -156,11 +157,15 @@ class EventRepository {
                 (item) => {
                   'membershipId': item['membershipId'],
                   'positionId': item['positionId'],
-                  if (item['note'] != null && item['note']!.isNotEmpty)
+                  if (item['note'] is String &&
+                      (item['note']! as String).isNotEmpty)
                     'note': item['note'],
                 },
               )
               .toList(),
+          // Sempre presente: `null` é o pedido de limpar, e omitir significaria
+          // "não mexe" -- o que deixaria o ministrante antigo preso na escala.
+          'ministerMembershipId': ministerMembershipId,
         },
       );
       return Event.fromJson(response.data!);

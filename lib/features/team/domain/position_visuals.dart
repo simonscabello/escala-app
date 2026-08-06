@@ -32,6 +32,7 @@ class PositionVisuals {
       'percussao' => FontAwesomeIcons.drumSteelpan,
       'multimidia' => FontAwesomeIcons.video,
       'som' => FontAwesomeIcons.sliders,
+      'direcao' => FontAwesomeIcons.personChalkboard,
       _ => _iconForCategory(category),
     };
   }
@@ -46,6 +47,7 @@ class PositionVisuals {
       'bateria' || 'percussao' => '🥁',
       'multimidia' => '🎥',
       'som' => '🎚️',
+      'direcao' => '🎯',
       _ => _emojiForCategory(category),
     };
   }
@@ -86,6 +88,11 @@ class PositionVisuals {
     }
     if (n.contains('percuss')) {
       return 'percussao';
+    }
+    // Antes de "som": "direção do culto" nao contem "som", mas manter a ordem
+    // explicita evita surpresa se alguem cadastrar "direcao de som".
+    if (n.contains('direc') || n.contains('dirigente')) {
+      return 'direcao';
     }
     if (n.contains('multimidia') ||
         n.contains('midia') ||

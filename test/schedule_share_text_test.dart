@@ -83,6 +83,41 @@ void main() {
     expect('Manhã'.allMatches(text).length, 1);
   });
 
+  test('ministrante aparece antes da equipe', () {
+    final event = Event.fromJson({
+      'id': 'e4',
+      'teamId': 't1',
+      'title': 'Domingo',
+      'startsAt': '2026-08-16T12:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'minister': {'membershipId': 'm1', 'displayName': 'Ana'},
+      'assignments': [],
+      'songs': [],
+    });
+
+    final text = buildScheduleShareText(event);
+
+    expect(text, contains('Ministrante: Ana'));
+    expect(text.indexOf('Ministrante'), lessThan(text.indexOf('Equipe')));
+  });
+
+  test('sem ministrante escolhido, a linha não aparece', () {
+    final event = Event.fromJson({
+      'id': 'e5',
+      'teamId': 't1',
+      'title': 'Domingo',
+      'startsAt': '2026-08-16T12:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'assignments': [],
+      'songs': [],
+    });
+
+    expect(event.minister, isNull);
+    expect(buildScheduleShareText(event), isNot(contains('Ministrante')));
+  });
+
   test('escala sem services (cache antigo) cai no horário da escala', () {
     final event = Event.fromJson({
       'id': 'e3',

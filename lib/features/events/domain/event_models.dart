@@ -27,6 +27,25 @@ class AssignmentMember {
   final bool isRegisteredForPosition;
 }
 
+/// Quem conduz a ministração do louvor nesta escala.
+///
+/// Um por escala, não por função: é quem lê os versículos, fala antes das
+/// músicas e delega. Está escalado em alguma função, mas o papel não pertence
+/// à função.
+class EventMinister {
+  const EventMinister({required this.membershipId, required this.displayName});
+
+  factory EventMinister.fromJson(Map<String, dynamic> json) {
+    return EventMinister(
+      membershipId: json['membershipId'] as String,
+      displayName: json['displayName'] as String,
+    );
+  }
+
+  final String membershipId;
+  final String displayName;
+}
+
 class AssignmentGroup {
   const AssignmentGroup({
     required this.positionId,
@@ -146,6 +165,7 @@ class Event {
     required this.assignments,
     required this.songs,
     this.services = const [],
+    this.minister,
     this.unavailable = const [],
     this.warnings = const EventWarnings(),
   });
@@ -179,6 +199,9 @@ class Event {
           .whereType<Map<String, dynamic>>()
           .map(EventService.fromJson)
           .toList(),
+      minister: json['minister'] is Map<String, dynamic>
+          ? EventMinister.fromJson(json['minister'] as Map<String, dynamic>)
+          : null,
       songs: (json['songs'] as List<dynamic>? ?? const []).cast<Object?>(),
       unavailable: (json['unavailable'] as List<dynamic>? ?? const [])
           .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
@@ -204,6 +227,9 @@ class Event {
 
   /// Horários de culto desta escala, do mais cedo para o mais tarde.
   final List<EventService> services;
+
+  /// Quem conduz a ministração do louvor. Nulo enquanto ninguém foi escolhido.
+  final EventMinister? minister;
 
   /// Os cultos para exibir.
   ///

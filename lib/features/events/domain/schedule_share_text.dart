@@ -36,6 +36,12 @@ String buildScheduleShareText(Event event) {
   }
 
   buffer.writeln();
+  // Antes da equipe: quem recebe o texto precisa saber a quem se reportar
+  // antes de procurar o próprio nome na lista.
+  if (event.minister != null) {
+    buffer.writeln('🎙️ Ministrante: ${event.minister!.displayName}');
+    buffer.writeln();
+  }
   buffer.writeln('👥 Equipe');
 
   if (event.assignments.isEmpty) {

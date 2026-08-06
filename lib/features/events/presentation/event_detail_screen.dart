@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -244,6 +245,7 @@ class _EventDetailBody extends StatelessWidget {
               else
                 _AssignedTeamCard(
                   groups: event.assignments,
+                  minister: event.minister,
                   unavailable: {
                     for (final person in event.unavailable)
                       person.membershipId: person.reason,
@@ -616,10 +618,14 @@ class _UnavailableWarningBand extends StatelessWidget {
 class _AssignedTeamCard extends StatelessWidget {
   const _AssignedTeamCard({
     required this.groups,
+    this.minister,
     this.unavailable = const {},
   });
 
   final List<AssignmentGroup> groups;
+
+  /// Quem conduz a ministração do louvor.
+  final EventMinister? minister;
 
   /// membershipId -> motivo (ou nulo) de quem avisou que não pode neste dia.
   final Map<String, String?> unavailable;
@@ -636,6 +642,12 @@ class _AssignedTeamCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (minister != null) ...[
+            _MinisterBanner(name: minister!.displayName),
+            const SizedBox(height: AppSpacing.md),
+            Divider(color: scheme.outlineVariant, height: 1),
+            const SizedBox(height: AppSpacing.md),
+          ],
           for (var i = 0; i < groups.length; i++) ...[
             if (i > 0) ...[
               const SizedBox(height: AppSpacing.md),
@@ -647,6 +659,65 @@ class _AssignedTeamCard extends StatelessWidget {
               unavailable: unavailable,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Quem conduz a ministração, no topo da equipe escalada.
+///
+/// No acento dourado e acima das funções: é a primeira pergunta de quem abre a
+/// escala pensando "quem vai conduzir?". Dentro dos grupos, misturado aos
+/// outros nomes, ele se perdia.
+class _MinisterBanner extends StatelessWidget {
+  const _MinisterBanner({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground = AppColors.onAccentContainer(scheme);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.accentContainer(scheme),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        children: [
+          AppAvatar(name: name, radius: 16),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'MINISTRANTE',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: foreground.withValues(alpha: 0.75),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                Text(
+                  name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.record_voice_over_rounded,
+            size: 20,
+            color: foreground.withValues(alpha: 0.7),
+          ),
         ],
       ),
     );
@@ -713,6 +784,7 @@ class _AssignmentGroupSection extends StatelessWidget {
     );
   }
 }
+
 
 class _AssignedMemberRow extends StatelessWidget {
   const _AssignedMemberRow({

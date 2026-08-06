@@ -36,6 +36,10 @@ class AssignmentFormScreen extends ConsumerStatefulWidget {
 class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   /// positionId -> membershipIds selecionados
   final Map<String, Set<String>> _selected = {};
+
+  /// Quem conduz a ministração do louvor. Um por escala, não por função.
+  String? _ministerId;
+
   bool _seeded = false;
   bool _saving = false;
   String? _error;
@@ -47,6 +51,18 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       _selected[group.positionId] = {
         for (final member in group.members) member.membershipId,
       };
+    }
+    _ministerId = event.minister?.membershipId;
+  }
+
+  /// Todos os escalados, sem repetir quem acumula duas funções.
+  Set<String> get _assignedIds =>
+      _selected.values.expand((ids) => ids).toSet();
+
+  /// O ministrante precisa continuar escalado; se saiu, o campo se limpa.
+  void _dropMinisterIfUnassigned() {
+    if (_ministerId != null && !_assignedIds.contains(_ministerId)) {
+      _ministerId = null;
     }
   }
 
@@ -104,7 +120,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       _error = null;
     });
 
-    final payload = <Map<String, String?>>[
+    final payload = <Map<String, Object?>>[
       for (final entry in _selected.entries)
         for (final membershipId in entry.value)
           {'membershipId': membershipId, 'positionId': entry.key},
@@ -113,7 +129,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     try {
       final updated = await ref
           .read(eventRepositoryProvider)
-          .replaceAssignments(widget.eventId, payload);
+          .replaceAssignments(
+            widget.eventId,
+            payload,
+            ministerMembershipId: _ministerId,
+          );
       ref.invalidate(eventProvider(widget.eventId));
       // A agenda também mostra a escalação (o chip "VOCÊ" e a contagem de
       // escalados). Sem invalidar a lista, o cartão continuava com o número
@@ -173,7 +193,10 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         blockedReason: (member) => _blockedReason(member, position, positions),
         onAddGuest: (name) => _addGuest(teamId, name),
         initialSelection: _selected[position.id] ?? const <String>{},
-        onChanged: (next) => setState(() => _selected[position.id] = next),
+        onChanged: (next) => setState(() {
+          _selected[position.id] = next;
+          _dropMinisterIfUnassigned();
+        }),
       ),
     );
   }
@@ -289,11 +312,22 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
               onRemove: (membershipId) => setState(() {
                 final next = {...?_selected[position.id]}..remove(membershipId);
                 _selected[position.id] = next;
+                _dropMinisterIfUnassigned();
               }),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.lg),
+          // Depois das funções de propósito: só dá para escolher o ministrante
+          // entre quem já foi escalado.
+          _MinisterPicker(
+            members: members,
+            assignedIds: _assignedIds,
+            ministerId: _ministerId,
+            enabled: !_saving,
+            onChanged: (id) => setState(() => _ministerId = id),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             'Salvar substitui toda a equipe escalada.',
             textAlign: TextAlign.center,
@@ -377,6 +411,146 @@ class _SummaryBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Quem conduz a ministração do louvor nesta escala.
+///
+/// Um por escala, e não por função: é a pessoa que lê os versículos, fala
+/// antes das músicas e delega. Ela também está escalada em alguma função, mas
+/// o papel não pertence à função — por isso o campo é próprio, e não uma marca
+/// dentro de cada cartão.
+class _MinisterPicker extends StatelessWidget {
+  const _MinisterPicker({
+    required this.members,
+    required this.assignedIds,
+    required this.ministerId,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final List<Member> members;
+  final Set<String> assignedIds;
+  final String? ministerId;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final assigned = members
+        .where((member) => assignedIds.contains(member.id))
+        .toList(growable: false)
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.record_voice_over_rounded,
+                size: 19,
+                color: AppColors.accent(scheme),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Ministrante', style: theme.textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            assigned.isEmpty
+                ? 'Escale a equipe primeiro: o ministrante sai de quem está na escala.'
+                : 'Quem conduz a ministração: lê os versículos, fala antes das '
+                    'músicas e delega.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (assigned.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final member in assigned)
+                  _MinisterChoice(
+                    name: member.displayName,
+                    selected: ministerId == member.id,
+                    // Tocar no escolhido limpa: às vezes ainda não se sabe
+                    // quem vai ministrar, e isso não pode travar a escala.
+                    onTap: enabled
+                        ? () => onChanged(
+                              ministerId == member.id ? null : member.id,
+                            )
+                        : null,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MinisterChoice extends StatelessWidget {
+  const _MinisterChoice({
+    required this.name,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground = selected
+        ? AppColors.onAccentContainer(scheme)
+        : scheme.onSurfaceVariant;
+
+    return Material(
+      color: selected
+          ? AppColors.accentContainer(scheme)
+          : scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppAvatar(name: name, radius: 11),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                name,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: foreground,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 5),
+                Icon(Icons.check_rounded, size: 16, color: foreground),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
