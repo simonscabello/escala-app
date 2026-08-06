@@ -490,7 +490,6 @@ class _FeaturedEventCard extends ConsumerWidget {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youPositions = event.positionsForMembership(membershipId);
-    final youLabel = youAssignmentLabel(youPositions);
     final gradient = AppColors.heroGradient(scheme);
 
     return Container(
@@ -584,10 +583,9 @@ class _FeaturedEventCard extends ConsumerWidget {
                       ),
                   ],
                 ),
-                if (youLabel != null) ...[
+                if (youPositions.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.lg),
                   YouHighlight(
-                    label: youLabel,
                     positionNames: youPositions,
                     onDarkSurface: true,
                   ),
@@ -757,7 +755,6 @@ class _EventTile extends ConsumerWidget {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youPositions = event.positionsForMembership(membershipId);
-    final youLabel = youAssignmentLabel(youPositions);
 
     return AppCard(
       onTap: () => context.push('/agenda/${event.id}'),
@@ -800,13 +797,9 @@ class _EventTile extends ConsumerWidget {
                     ),
                   ],
                 ),
-                if (youLabel != null) ...[
+                if (youPositions.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  YouHighlight(
-                    label: youLabel,
-                    positionNames: youPositions,
-                    compact: true,
-                  ),
+                  YouHighlight(positionNames: youPositions, compact: true),
                 ],
               ],
             ),

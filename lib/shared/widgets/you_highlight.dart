@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../features/events/domain/event_models.dart';
 import 'position_icon.dart';
 
 /// Destaque de "onde eu apareço".
@@ -9,22 +10,24 @@ import 'position_icon.dart';
 /// Usa o acento dourado, e não o verde da marca: numa tela inteira em verde,
 /// mais verde não destaca nada. Esta é a única informação da escala que é
 /// pessoal, e ela precisa ser encontrada sem procurar.
+///
+/// Recebe as **funções**, não um texto pronto: a versão grande já tem "VOCÊ"
+/// como sobretítulo, e receber "VOCÊ: Bateria" fazia a palavra aparecer duas
+/// vezes, uma embaixo da outra. Quem monta o texto é o widget, que sabe qual
+/// das duas formas está desenhando.
 class YouHighlight extends StatelessWidget {
   const YouHighlight({
     super.key,
-    required this.label,
-    this.positionNames = const [],
+    required this.positionNames,
     this.compact = false,
     this.onDarkSurface = false,
   });
 
-  final String label;
-
-  /// Funcoes em que a pessoa esta escalada nesta escala.
+  /// Funções em que a pessoa está escalada nesta escala.
   ///
-  /// Com exatamente uma, o icone da funcao substitui a estrela -- "voce toca
-  /// guitarra" fica visivel antes de ler o texto. Com duas ou mais nao ha
-  /// icone que represente o conjunto, e a estrela continua.
+  /// Com exatamente uma, o ícone da função substitui a estrela — "você toca
+  /// bateria" fica visível antes de ler o texto. Com duas ou mais não há ícone
+  /// que represente o conjunto, e a estrela continua.
   final List<String> positionNames;
 
   /// Versão para dentro de listas e cards menores.
@@ -54,6 +57,8 @@ class YouHighlight extends StatelessWidget {
     }
 
     if (compact) {
+      // Uma linha só: aqui não há sobretítulo, então o "VOCÊ:" precisa vir
+      // junto do nome da função.
       return Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -70,7 +75,7 @@ class YouHighlight extends StatelessWidget {
             const SizedBox(width: 5),
             Flexible(
               child: Text(
-                label,
+                youAssignmentLabel(positionNames) ?? '',
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: foreground,
@@ -115,8 +120,9 @@ class YouHighlight extends StatelessWidget {
                     letterSpacing: 1.1,
                   ),
                 ),
+                // Só as funções: o "VOCÊ" já está na linha de cima.
                 Text(
-                  label,
+                  positionNames.join(', '),
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: foreground,
                     fontWeight: FontWeight.w700,
