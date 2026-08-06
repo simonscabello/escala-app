@@ -211,19 +211,24 @@ class _PositionGrid extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: i + 2 < positions.length ? AppSpacing.sm : 0,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _buildTile(left)),
-              const SizedBox(width: AppSpacing.sm),
-              // Numero impar de funcoes: a ultima ocupa so a coluna da
-              // esquerda, em vez de esticar e ficar diferente das outras.
-              Expanded(
-                child: right == null
-                    ? const SizedBox.shrink()
-                    : _buildTile(right),
-              ),
-            ],
+          // IntrinsicHeight + stretch: as duas celulas da linha ficam com a
+          // mesma altura. Sem o IntrinsicHeight, o stretch pede altura
+          // infinita (o formulario rola) e a grade inteira some.
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _buildTile(left)),
+                const SizedBox(width: AppSpacing.sm),
+                // Numero impar de funcoes: a ultima ocupa so a coluna da
+                // esquerda, em vez de esticar e ficar diferente das outras.
+                Expanded(
+                  child: right == null
+                      ? const SizedBox.shrink()
+                      : _buildTile(right),
+                ),
+              ],
+            ),
           ),
         ),
       );
