@@ -12,7 +12,13 @@ String buildScheduleShareText(Event event) {
   buffer.writeln(
     '📅 ${formatEventWeekdayDate(event.startsAt, timezone)}',
   );
-  buffer.writeln('⏰ Culto às ${formatEventTime(event.startsAt, timezone)}');
+  // Uma linha por culto. Com dois, quem recebe precisa ver os dois horários --
+  // é a mesma equipe servindo de manhã e à noite.
+  for (final service in event.displayServices) {
+    buffer.writeln(
+      '⏰ ${service.label} às ${formatEventTime(service.startsAt, timezone)}',
+    );
+  }
 
   if (event.rehearsalAt != null) {
     buffer.writeln(

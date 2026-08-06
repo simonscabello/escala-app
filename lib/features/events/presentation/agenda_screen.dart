@@ -559,14 +559,18 @@ class _FeaturedEventCard extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Row(
+                // Wrap e não Row: com dois cultos mais o ensaio são três
+                // pílulas, e numa Row a terceira estouraria a largura.
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
                   children: [
-                    _HeroTimePill(
-                      icon: Icons.church_rounded,
-                      label: 'Culto',
-                      value: formatEventTime(event.startsAt, timezone),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
+                    for (final service in event.displayServices)
+                      _HeroTimePill(
+                        icon: Icons.church_rounded,
+                        label: service.label,
+                        value: formatEventTime(service.startsAt, timezone),
+                      ),
                     if (event.rehearsalAt != null)
                       _HeroTimePill(
                         icon: Icons.music_note_rounded,
@@ -790,8 +794,18 @@ class _EventTile extends ConsumerWidget {
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        'Culto ${formatEventTime(event.startsAt, timezone)}'
-                        '${event.rehearsalAt == null ? '  ·  Sem ensaio' : '  ·  Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'}',
+                        // "Manhã 08:30 · Noite 19:00 · Ensaio 13:00". Com um
+                        // culto só a linha fica igual à de antes.
+                        [
+                          for (final service in event.displayServices)
+                            '${service.label} '
+                                '${formatEventTime(service.startsAt, timezone)}',
+                          if (event.rehearsalAt == null)
+                            'Sem ensaio'
+                          else
+                            'Ensaio '
+                                '${formatEventTime(event.rehearsalAt!, timezone)}',
+                        ].join('  ·  '),
                         style: theme.textTheme.bodySmall,
                       ),
                     ),

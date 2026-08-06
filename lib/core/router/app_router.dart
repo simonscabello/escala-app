@@ -22,6 +22,7 @@ import '../../features/team/domain/team_models.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
 import '../../features/team/presentation/members_screen.dart';
+import '../../features/team/presentation/service_templates_screen.dart';
 
 /// Rotas acessiveis sem sessao.
 const _publicRoutes = {'/login', '/cadastro', '/diagnostico'};
@@ -107,6 +108,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/equipe/convites',
         builder: (_, __) =>
             _withActiveTeam(ref, (id) => InvitesScreen(teamId: id)),
+      ),
+      GoRoute(
+        path: '/equipe/cultos',
+        builder: (_, __) =>
+            _withActiveTeam(ref, (id) => ServiceTemplatesScreen(teamId: id)),
       ),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),

@@ -29,12 +29,18 @@ class MembersScreen extends ConsumerWidget {
         actions: [
           // Sem atalho para o perfil aqui: ele agora é uma aba na barra
           // inferior, sempre a um toque de distância.
-          if (canManage)
+          if (canManage) ...[
+            IconButton(
+              tooltip: 'Cultos da igreja',
+              icon: const Icon(Icons.church_outlined),
+              onPressed: () => context.push('/equipe/cultos'),
+            ),
             IconButton(
               tooltip: 'Convites',
               icon: const Icon(Icons.link_rounded),
               onPressed: () => context.push('/equipe/convites'),
             ),
+          ],
         ],
       ),
       floatingActionButton: canManage

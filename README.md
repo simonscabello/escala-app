@@ -55,12 +55,31 @@ flutter test
 
 ## Build release
 
+APK para instalar no celular — aponta para a API em produção (Railway):
+
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+```
+
+A URL vai **sem** barra no fim e **sem** `/api/v1`: o `AppConfig` já concatena o
+prefixo (`apiUrl = '$apiBaseUrl/api/v1'`). Com `/api/v1` na variável, o app
+chama `/api/v1/api/v1` e tudo responde 404.
+
+Build apontando para o backend local, para testar no emulador:
+
 ```powershell
 flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 HTTP em texto claro no release: `android/app/src/main/res/xml/network_security_config.xml`.
-Para celular físico, adicione o IP da máquina nesse arquivo.
+Para celular físico contra o backend local, adicione o IP da máquina nesse
+arquivo. Produção é HTTPS e não precisa de nada lá.
+
+Instalar no aparelho conectado:
+
+```powershell
+C:\Users\Acer\AppData\Local\Android\sdk\platform-tools\adb.exe install -r build\app\outputs\flutter-apk\app-release.apk
+```
 
 ## Estrutura
 

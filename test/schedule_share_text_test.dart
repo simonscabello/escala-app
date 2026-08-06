@@ -56,6 +56,50 @@ void main() {
     expect(text, isNot(contains('Músicas')));
   });
 
+  test('domingo com dois cultos lista os dois horários', () {
+    final event = Event.fromJson({
+      'id': 'e2',
+      'teamId': 't1',
+      'title': 'Domingo',
+      // A escala começa no culto mais cedo; os horários vêm de services.
+      'startsAt': '2026-08-16T11:30:00.000Z',
+      // Ensaio ENTRE os dois cultos: 13:00, "após a EBD".
+      'rehearsalAt': '2026-08-16T16:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'services': [
+        {'id': 's1', 'label': 'Manhã', 'startsAt': '2026-08-16T11:30:00.000Z'},
+        {'id': 's2', 'label': 'Noite', 'startsAt': '2026-08-16T22:00:00.000Z'},
+      ],
+      'assignments': [],
+      'songs': [],
+    });
+
+    final text = buildScheduleShareText(event);
+
+    expect(text, contains('Manhã às 08:30'));
+    expect(text, contains('Noite às 19:00'));
+    // A equipe é uma só para os dois cultos: nada de repetir a escalação.
+    expect('Manhã'.allMatches(text).length, 1);
+  });
+
+  test('escala sem services (cache antigo) cai no horário da escala', () {
+    final event = Event.fromJson({
+      'id': 'e3',
+      'teamId': 't1',
+      'title': 'Escala antiga',
+      'startsAt': '2026-08-16T12:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'assignments': [],
+      'songs': [],
+    });
+
+    expect(event.services, isEmpty);
+    expect(event.displayServices, hasLength(1));
+    expect(buildScheduleShareText(event), contains('Culto às 09:00'));
+  });
+
   test('texto inclui músicas quando a lista não está vazia', () {
     final text = buildScheduleShareText(
       sampleEvent(

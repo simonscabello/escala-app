@@ -52,6 +52,34 @@ class AssignmentGroup {
   final List<AssignmentMember> members;
 }
 
+/// Um horário de culto dentro da escala do dia.
+///
+/// No domingo típico da equipe são dois — manhã e noite — com a mesma
+/// escalação, o mesmo ensaio e o mesmo local. Por isso o culto é filho da
+/// escala, e não uma escala própria.
+class EventService {
+  const EventService({
+    required this.id,
+    required this.label,
+    required this.startsAt,
+  });
+
+  factory EventService.fromJson(Map<String, dynamic> json) {
+    return EventService(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? 'Culto',
+      startsAt: DateTime.parse(json['startsAt'] as String).toUtc(),
+    );
+  }
+
+  final String id;
+
+  /// "Manhã", "Noite". Vem da grade da igreja, ou é digitado em culto avulso.
+  final String label;
+
+  final DateTime startsAt;
+}
+
 class SameDayConflict {
   const SameDayConflict({
     required this.membershipId,
@@ -117,6 +145,7 @@ class Event {
     required this.timezone,
     required this.assignments,
     required this.songs,
+    this.services = const [],
     this.unavailable = const [],
     this.warnings = const EventWarnings(),
   });
@@ -146,6 +175,10 @@ class Event {
           })
           .whereType<AssignmentGroup>()
           .toList(),
+      services: (json['services'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventService.fromJson)
+          .toList(),
       songs: (json['songs'] as List<dynamic>? ?? const []).cast<Object?>(),
       unavailable: (json['unavailable'] as List<dynamic>? ?? const [])
           .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
@@ -168,6 +201,19 @@ class Event {
   final String timezone;
   final List<AssignmentGroup> assignments;
   final List<Object?> songs;
+
+  /// Horários de culto desta escala, do mais cedo para o mais tarde.
+  final List<EventService> services;
+
+  /// Os cultos para exibir.
+  ///
+  /// Cache antigo, gravado antes desta versão, não tem `services`. Em vez de
+  /// mostrar a escala sem horário nenhum, cai no `startsAt` — que é justamente
+  /// o horário do primeiro culto.
+  List<EventService> get displayServices {
+    if (services.isNotEmpty) return services;
+    return [EventService(id: id, label: 'Culto', startsAt: startsAt)];
+  }
 
   /// Quem avisou que não pode no dia desta escala.
   final List<UnavailableMember> unavailable;

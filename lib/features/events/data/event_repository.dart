@@ -75,7 +75,7 @@ class EventRepository {
   Future<Event> create(
     String teamId, {
     required String title,
-    required String startsAt,
+    required List<Map<String, String?>> services,
     String? rehearsalAt,
     String? location,
     String? notes,
@@ -86,7 +86,7 @@ class EventRepository {
         '/teams/$teamId/events',
         data: {
           'title': title,
-          'startsAt': startsAt,
+          'services': services,
           if (rehearsalAt != null) 'rehearsalAt': rehearsalAt,
           if (location != null && location.isNotEmpty) 'location': location,
           if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -101,7 +101,7 @@ class EventRepository {
   Future<Event> update(
     String eventId, {
     String? title,
-    String? startsAt,
+    List<Map<String, String?>>? services,
     String? rehearsalAt,
     bool removeRehearsalAt = false,
     String? location,
@@ -113,7 +113,9 @@ class EventRepository {
         '/events/$eventId',
         data: {
           if (title != null) 'title': title,
-          if (startsAt != null) 'startsAt': startsAt,
+          // Omitir preserva os cultos que já existem: editar só o local não
+          // pode apagar os horários.
+          if (services != null) 'services': services,
           if (removeRehearsalAt) 'rehearsalAt': null,
           if (rehearsalAt != null) 'rehearsalAt': rehearsalAt,
           if (location != null) 'location': location,

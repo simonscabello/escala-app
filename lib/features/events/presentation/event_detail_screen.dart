@@ -301,55 +301,113 @@ class _EventSummaryCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final hasPalette = event.colorPalette?.isNotEmpty ?? false;
     final hasNotes = event.notes?.isNotEmpty ?? false;
+    final hasLocation = event.location?.isNotEmpty ?? false;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (youPositions.isNotEmpty) ...[
-            YouAssignmentBanner(positionNames: youPositions),
-            const SizedBox(height: AppSpacing.lg),
-          ],
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DateBadge(
                 date: event.startsAt,
                 timezone: timezone,
-                size: DateBadgeSize.large,
                 background: scheme.primaryContainer,
                 foreground: scheme.onPrimaryContainer,
                 muted: scheme.onPrimaryContainer.withValues(alpha: 0.75),
               ),
-              const SizedBox(width: AppSpacing.lg),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
-                // Sem repetir a data ao lado do bloco que já a mostra: ela
-                // aparecia três vezes seguidas (bloco, linha e cartão).
-                child: Text(
-                  event.title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.15,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sem repetir a data ao lado do bloco que já a mostra: ela
+                    // aparecia três vezes seguidas (bloco, linha e cartão).
+                    Text(
+                      event.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Horários como etiquetas de uma linha. Antes cada um era
+                    // um bloco de duas linhas (rótulo em cima, valor embaixo)
+                    // separado por divisória: três informações curtas gastavam
+                    // meia tela.
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: 6,
+                      children: [
+                        // Um por culto: no domingo da equipe são dois, manhã e
+                        // noite. Só o horário -- a data está no bloco ao lado.
+                        for (final service in event.displayServices)
+                          _TimePill(
+                            // Mesmo ícone das pílulas do cartão herói.
+                            icon: Icons.church_rounded,
+                            label: '${service.label} '
+                                '${formatEventTime(service.startsAt, timezone)}',
+                            emphasized: true,
+                          ),
+                        if (event.rehearsalAt != null)
+                          _TimePill(
+                            icon: Icons.music_note_rounded,
+                            // O ensaio às vezes é em outro dia; a data só
+                            // aparece quando realmente difere da do culto.
+                            label: isSameLocalDay(
+                              event.rehearsalAt!,
+                              event.startsAt,
+                              timezone,
+                            )
+                                ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
+                                : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
+                                    '${formatEventTime(event.rehearsalAt!, timezone)}',
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Divider(color: scheme.outlineVariant, height: 1),
-          const SizedBox(height: AppSpacing.lg),
-          _ScheduleTimes(
-            startsAt: event.startsAt,
-            rehearsalAt: event.rehearsalAt,
-            location: event.location,
-            timezone: timezone,
-          ),
-          if (hasPalette || hasNotes) ...[
-            const SizedBox(height: AppSpacing.lg),
-            _PaletteNotesBlock(
-              palette: hasPalette ? event.colorPalette : null,
-              notes: hasNotes ? event.notes : null,
+          // Fora do Wrap: um endereço longo não caberia numa etiqueta e
+          // estouraria a linha. Aqui ele tem a largura toda e corta com "…".
+          if (hasLocation) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _MetaLine(
+              icon: Icons.location_on_outlined,
+              text: event.location!,
+              maxLines: 1,
             ),
+          ],
+          if (youPositions.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            // Versão compacta: a grande gastava 110px de altura para dizer
+            // uma palavra. O acento e o ícone do instrumento seguem ali.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: YouHighlight(positionNames: youPositions, compact: true),
+            ),
+          ],
+          if (hasPalette || hasNotes) ...[
+            const SizedBox(height: AppSpacing.md),
+            Divider(color: scheme.outlineVariant, height: 1),
+            const SizedBox(height: AppSpacing.md),
+            if (hasPalette)
+              _MetaLine(
+                icon: Icons.palette_outlined,
+                text: event.colorPalette!,
+                maxLines: 2,
+              ),
+            if (hasPalette && hasNotes) const SizedBox(height: AppSpacing.sm),
+            if (hasNotes)
+              _MetaLine(
+                icon: Icons.sticky_note_2_outlined,
+                text: event.notes!,
+                maxLines: 4,
+              ),
           ],
         ],
       ),
@@ -357,125 +415,91 @@ class _EventSummaryCard extends StatelessWidget {
   }
 }
 
-class _ScheduleTimes extends StatelessWidget {
-  const _ScheduleTimes({
-    required this.startsAt,
-    required this.rehearsalAt,
-    required this.location,
-    required this.timezone,
+/// Etiqueta de horário: ícone e texto numa linha só.
+class _TimePill extends StatelessWidget {
+  const _TimePill({
+    required this.icon,
+    required this.label,
+    this.emphasized = false,
   });
 
-  final DateTime startsAt;
-  final DateTime? rehearsalAt;
-  final String? location;
-  final String timezone;
+  final IconData icon;
+  final String label;
+
+  /// O horário do culto é a informação que se procura primeiro.
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground =
+        emphasized ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
 
-    return Column(
-      children: [
-        _DetailItem(
-          // Mesmos ícones das pílulas do cartão herói na agenda.
-          icon: Icons.church_rounded,
-          label: 'Culto',
-          value:
-              // Só o horário: a data já está no bloco logo acima.
-              formatEventTime(startsAt, timezone),
-          emphasized: true,
-        ),
-        if (rehearsalAt != null) ...[
-          const SizedBox(height: AppSpacing.lg),
-          Divider(color: scheme.outlineVariant, height: 1),
-          const SizedBox(height: AppSpacing.lg),
-          _DetailItem(
-            icon: Icons.music_note_rounded,
-            label: 'Ensaio',
-            value:
-                // O ensaio quase sempre é em outro dia; a data só aparece
-                // quando realmente difere da do culto.
-                isSameLocalDay(rehearsalAt!, startsAt, timezone)
-                    ? formatEventTime(rehearsalAt!, timezone)
-                    : '${formatEventWeekdayDate(rehearsalAt!, timezone)} '
-                        'às ${formatEventTime(rehearsalAt!, timezone)}',
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: emphasized
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: foreground),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
-        if (location?.isNotEmpty ?? false) ...[
-          const SizedBox(height: AppSpacing.lg),
-          Divider(color: scheme.outlineVariant, height: 1),
-          const SizedBox(height: AppSpacing.lg),
-          _DetailItem(
-            icon: Icons.location_on_outlined,
-            label: 'Local',
-            value: location!,
-          ),
-        ],
-      ],
+      ),
     );
   }
 }
 
-class _PaletteNotesBlock extends StatelessWidget {
-  const _PaletteNotesBlock({this.palette, this.notes});
+/// Linha de apoio (local, paleta, observações): ícone à esquerda, texto que
+/// ocupa o resto da largura.
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({
+    required this.icon,
+    required this.text,
+    required this.maxLines,
+  });
 
-  final String? palette;
-  final String? notes;
+  final IconData icon;
+  final String text;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        color: scheme.tertiaryContainer.withValues(alpha: 0.45),
-        border: Border(
-          left: BorderSide(color: scheme.tertiary, width: 4),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 15, color: scheme.onSurfaceVariant),
         ),
-      ),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (palette != null) ...[
-            Row(
-              children: [
-                Icon(
-                  Icons.palette_outlined,
-                  size: 18,
-                  color: scheme.onTertiaryContainer,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Paleta',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: scheme.onTertiaryContainer,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              palette!,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          if (palette != null && notes != null)
-            const SizedBox(height: AppSpacing.md),
-          if (notes != null) ...[
-            Text(
-              'Observações',
-              style: theme.textTheme.labelLarge,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(notes!, style: theme.textTheme.bodyLarge),
-          ],
-        ],
-      ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -753,54 +777,3 @@ class _AssignedMemberRow extends StatelessWidget {
   }
 }
 
-class _DetailItem extends StatelessWidget {
-  const _DetailItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.emphasized = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          color: emphasized ? scheme.primary : scheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                value,
-                style: (emphasized
-                        ? theme.textTheme.titleMedium
-                        : theme.textTheme.bodyLarge)
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}

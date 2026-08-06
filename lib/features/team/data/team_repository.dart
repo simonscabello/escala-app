@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../auth/application/auth_controller.dart';
+import '../domain/service_template.dart';
 import '../domain/team_models.dart';
 
 class TeamRepository {
@@ -50,6 +51,83 @@ class TeamRepository {
       return response.data!
           .map((e) => Position.fromJson(e as Map<String, dynamic>))
           .toList();
+    });
+  }
+
+  // --- Grade de cultos da igreja ---
+
+  Future<List<ServiceTemplate>> serviceTemplates(String teamId) async {
+    return _guard(() async {
+      final response =
+          await _dio.get<List<dynamic>>('/teams/$teamId/service-templates');
+      return response.data!
+          .map((e) => ServiceTemplate.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  Future<ServiceTemplate> addServiceTemplate(
+    String teamId, {
+    required String label,
+    required int weekday,
+    required int startMinutes,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/service-templates',
+        data: {
+          'label': label,
+          'weekday': weekday,
+          'startMinutes': startMinutes,
+        },
+      );
+      return ServiceTemplate.fromJson(response.data!);
+    });
+  }
+
+  /// Escalas futuras que usam esta linha da grade.
+  ///
+  /// Consultado **antes** de salvar, para o app perguntar se a mudança também
+  /// vale para elas em vez de decidir sozinho.
+  Future<List<AffectedEvent>> serviceTemplateFutureEvents(
+    String teamId,
+    String templateId,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/service-templates/$templateId/future-events',
+      );
+      return response.data!
+          .map((e) => AffectedEvent.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  Future<ServiceTemplate> updateServiceTemplate(
+    String teamId,
+    String templateId, {
+    String? label,
+    int? weekday,
+    int? startMinutes,
+    bool applyToFutureEvents = false,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/service-templates/$templateId',
+        data: {
+          if (label != null) 'label': label,
+          if (weekday != null) 'weekday': weekday,
+          if (startMinutes != null) 'startMinutes': startMinutes,
+          if (applyToFutureEvents) 'applyToFutureEvents': true,
+        },
+      );
+      return ServiceTemplate.fromJson(response.data!);
+    });
+  }
+
+  Future<void> removeServiceTemplate(String teamId, String templateId) async {
+    return _guard(() async {
+      await _dio.delete<void>('/teams/$teamId/service-templates/$templateId');
     });
   }
 
@@ -152,4 +230,11 @@ final addGuestProvider = Provider<
 final positionsProvider =
     FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).positions(teamId);
+});
+
+/// A grade de cultos da igreja. Leitura liberada a qualquer integrante: a tela
+/// de nova escala depende dela.
+final serviceTemplatesProvider = FutureProvider.autoDispose
+    .family<List<ServiceTemplate>, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).serviceTemplates(teamId);
 });
