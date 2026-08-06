@@ -3,14 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_models.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/team_models.dart';
 
+/// Montagem da escala.
+///
+/// A versão anterior listava todos os membros em checkbox dentro de cada
+/// função: com 6 funções e 6 integrantes eram 36 linhas e uma rolagem enorme
+/// para uma tarefa que o líder repete toda semana. Aqui cada função é um
+/// cartão compacto que mostra quem já está escalado, e a escolha acontece numa
+/// folha focada em uma função de cada vez.
 class AssignmentFormScreen extends ConsumerStatefulWidget {
   const AssignmentFormScreen({super.key, required this.eventId});
 
@@ -38,6 +49,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     }
   }
 
+  /// Pessoas distintas: quem acumula duas funções conta uma vez.
+  int get _distinctPeople =>
+      _selected.values.expand((ids) => ids).toSet().length;
+
+  int get _filledPositions =>
+      _selected.values.where((ids) => ids.isNotEmpty).length;
+
   Future<void> _save() async {
     setState(() {
       _saving = true;
@@ -47,10 +65,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     final payload = <Map<String, String?>>[
       for (final entry in _selected.entries)
         for (final membershipId in entry.value)
-          {
-            'membershipId': membershipId,
-            'positionId': entry.key,
-          },
+          {'membershipId': membershipId, 'positionId': entry.key},
     ];
 
     try {
@@ -60,14 +75,27 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       ref.invalidate(eventProvider(widget.eventId));
       if (!mounted) return;
 
+      // Avisos depois de salvar, não bloqueios antes: a escala é do líder.
+      final warnings = <String>[];
+
+      final unavailable = updated.warnings.unavailableAssigned;
+      if (unavailable.isNotEmpty) {
+        final names =
+            unavailable.map((u) => u.displayName).toSet().join(', ');
+        warnings.add('$names marcou que não pode neste dia.');
+      }
+
       final conflicts = updated.warnings.sameDayConflicts;
       if (conflicts.isNotEmpty) {
         final names = conflicts.map((c) => c.displayName).toSet().join(', ');
+        warnings.add('$names também está em outra escala no mesmo dia.');
+      }
+
+      if (warnings.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Escala salva. Aviso: $names também está escalado(a) em outro culto no mesmo dia.',
-            ),
+            duration: const Duration(seconds: 6),
+            content: Text('Escala salva. ${warnings.join(' ')}'),
           ),
         );
       }
@@ -81,6 +109,25 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     }
   }
 
+  Future<void> _openPicker({
+    required Position position,
+    required List<Member> members,
+    required Set<String> unavailableIds,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => _MemberPickerSheet(
+        position: position,
+        members: members,
+        unavailableIds: unavailableIds,
+        initialSelection: _selected[position.id] ?? const <String>{},
+        onChanged: (next) => setState(() => _selected[position.id] = next),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventAsync = ref.watch(eventProvider(widget.eventId));
@@ -90,7 +137,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       error: (_, __) => Scaffold(
         appBar: AppBar(title: const Text('Escalar')),
         body: AppErrorState(
-          message: 'Não foi possível carregar o culto.',
+          message: 'Não foi possível carregar a escala.',
           onRetry: () => ref.invalidate(eventProvider(widget.eventId)),
         ),
       ),
@@ -116,173 +163,478 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 message: 'Não foi possível carregar as funções.',
               ),
             ),
-            data: (positions) {
-              final activePositions = positions
-                  .where((p) => p.isActive)
-                  .toList()
-                ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-
-              return Scaffold(
-                appBar: AppBar(title: const Text('Escalar equipe')),
-                body: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.listPadding,
-                    AppSpacing.lg,
-                    AppSpacing.listPadding,
-                    100,
-                  ),
-                  children: [
-                    Text(
-                      event.title,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Escolha quem toca em cada função. Salvar substitui a escala inteira.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      FormErrorBanner(message: _error!),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    for (final position in activePositions) ...[
-                      _PositionSection(
-                        position: position,
-                        members: members,
-                        selected:
-                            _selected[position.id] ?? const <String>{},
-                        onChanged: (next) {
-                          setState(() {
-                            _selected[position.id] = next;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                  ],
-                ),
-                bottomNavigationBar: Material(
-                  elevation: 8,
-                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.sm,
-                        AppSpacing.lg,
-                        AppSpacing.lg,
-                      ),
-                      child: FilledButton(
-                        onPressed: _saving ? null : _save,
-                        child: _saving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Salvar escala'),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+            data: (positions) =>
+                _buildForm(context, event, members, positions),
           ),
         );
       },
     );
   }
+
+  Widget _buildForm(
+    BuildContext context,
+    Event event,
+    List<Member> members,
+    List<Position> positions,
+  ) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final activePositions = positions.where((p) => p.isActive).toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    // Quem avisou que não pode no dia desta escala. Não bloqueia escalar —
+    // sinaliza, porque o líder às vezes já combinou uma troca por fora.
+    final unavailableIds = {
+      for (final person in event.unavailable) person.membershipId,
+    };
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Escalar equipe')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.md,
+          AppSpacing.xl,
+          AppSpacing.xxxl,
+        ),
+        children: [
+          Text(event.title, style: theme.textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.lg),
+          _SummaryBar(
+            people: _distinctPeople,
+            filled: _filledPositions,
+            total: activePositions.length,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            FormErrorBanner(message: _error!),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          for (final position in activePositions) ...[
+            _PositionCard(
+              position: position,
+              members: members,
+              selected: _selected[position.id] ?? const <String>{},
+              unavailableIds: unavailableIds,
+              onTap: () => _openPicker(
+                position: position,
+                members: members,
+                unavailableIds: unavailableIds,
+              ),
+              onRemove: (membershipId) => setState(() {
+                final next = {...?_selected[position.id]}..remove(membershipId);
+                _selected[position.id] = next;
+              }),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Salvar substitui toda a equipe escalada.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLowest,
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              AppSpacing.md,
+            ),
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Salvar escala'),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _PositionSection extends StatelessWidget {
-  const _PositionSection({
+/// Responde "quanto falta?" sem o líder ter de rolar a lista inteira.
+class _SummaryBar extends StatelessWidget {
+  const _SummaryBar({
+    required this.people,
+    required this.filled,
+    required this.total,
+  });
+
+  final int people;
+  final int filled;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final empty = people == 0;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: empty ? scheme.surfaceContainerHigh : scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            empty ? Icons.person_off_outlined : Icons.groups_rounded,
+            color: empty ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              empty
+                  ? 'Nenhuma função preenchida ainda'
+                  : '$people ${people == 1 ? 'pessoa' : 'pessoas'} · '
+                      '$filled de $total ${filled == 1 ? 'função' : 'funções'}',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color:
+                    empty ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+IconData _positionIcon(String category) => switch (category) {
+      'VOCAL' => Icons.mic_rounded,
+      'INSTRUMENT' => Icons.music_note_rounded,
+      _ => Icons.people_alt_rounded,
+    };
+
+class _PositionCard extends StatelessWidget {
+  const _PositionCard({
     required this.position,
     required this.members,
     required this.selected,
-    required this.onChanged,
+    required this.unavailableIds,
+    required this.onTap,
+    required this.onRemove,
   });
 
   final Position position;
   final List<Member> members;
   final Set<String> selected;
-  final ValueChanged<Set<String>> onChanged;
+  final Set<String> unavailableIds;
+  final VoidCallback onTap;
+  final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final registered = members
-        .where((m) => m.positions.any((p) => p.id == position.id))
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final chosen =
+        members.where((m) => selected.contains(m.id)).toList(growable: false);
+
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: chosen.isEmpty
+                      ? scheme.surfaceContainerHigh
+                      : scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: Icon(
+                  _positionIcon(position.category),
+                  size: 19,
+                  color: chosen.isEmpty
+                      ? scheme.onSurfaceVariant
+                      : scheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(position.name, style: theme.textTheme.titleMedium),
+              ),
+              Icon(
+                chosen.isEmpty ? Icons.add_rounded : Icons.edit_outlined,
+                size: 20,
+                color: scheme.primary,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (chosen.isEmpty)
+            Text(
+              'Toque para escolher quem toca',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final member in chosen)
+                  _SelectedChip(
+                    member: member,
+                    // Escalar fora do cadastro é permitido (regra 18); o chip
+                    // sinaliza, não impede.
+                    outsideRegistration:
+                        !member.positions.any((p) => p.id == position.id),
+                    unavailable: unavailableIds.contains(member.id),
+                    onRemove: () => onRemove(member.id),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedChip extends StatelessWidget {
+  const _SelectedChip({
+    required this.member,
+    required this.outsideRegistration,
+    required this.unavailable,
+    required this.onRemove,
+  });
+
+  final Member member;
+  final bool outsideRegistration;
+  final bool unavailable;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Indisponível pesa mais que "fora do cadastro": a pessoa avisou que não
+    // estará lá, então o chip vai em vermelho.
+    final warn = outsideRegistration || unavailable;
+
+    final background = unavailable
+        ? scheme.errorContainer
+        : (warn
+            ? AppColors.accentContainer(scheme)
+            : scheme.surfaceContainerHigh);
+    final foreground = unavailable
+        ? scheme.onErrorContainer
+        : (warn ? AppColors.onAccentContainer(scheme) : scheme.onSurface);
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppAvatar(name: member.displayName, radius: 12),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            member.displayName,
+            style: theme.textTheme.labelLarge?.copyWith(color: foreground),
+          ),
+          if (unavailable) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.event_busy_rounded, size: 15, color: foreground),
+          ] else if (warn) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.info_outline_rounded, size: 15, color: foreground),
+          ],
+          const SizedBox(width: 2),
+          InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Folha de escolha, focada em uma função por vez.
+class _MemberPickerSheet extends StatefulWidget {
+  const _MemberPickerSheet({
+    required this.position,
+    required this.members,
+    required this.unavailableIds,
+    required this.initialSelection,
+    required this.onChanged,
+  });
+
+  final Position position;
+  final List<Member> members;
+  final Set<String> unavailableIds;
+  final Set<String> initialSelection;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  State<_MemberPickerSheet> createState() => _MemberPickerSheetState();
+}
+
+class _MemberPickerSheetState extends State<_MemberPickerSheet> {
+  late Set<String> _working = {...widget.initialSelection};
+
+  /// "Outros membros" começa recolhido: na maioria das semanas o líder escala
+  /// quem já tem a função cadastrada, e repetir a equipe inteira em cada
+  /// função era o que transformava a tela num paredão.
+  bool _showOthers = false;
+
+  void _toggle(String membershipId) {
+    setState(() {
+      _working = {..._working};
+      if (!_working.remove(membershipId)) {
+        _working.add(membershipId);
+      }
+    });
+    widget.onChanged(_working);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final registered = widget.members
+        .where((m) => m.positions.any((p) => p.id == widget.position.id))
         .toList();
-    final others = members
-        .where((m) => !m.positions.any((p) => p.id == position.id))
+    final others = widget.members
+        .where((m) => !m.positions.any((p) => p.id == widget.position.id))
         .toList();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+    // Quem foi escalado fora do cadastro continua visível mesmo com a seção
+    // recolhida -- senão a pessoa sumiria da folha logo após ser marcada.
+    final othersToShow = _showOthers
+        ? others
+        : others.where((m) => _working.contains(m.id)).toList();
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              position.name,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                0,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _positionIcon(widget.position.category),
+                    color: scheme.primary,
                   ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      widget.position.name,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                  Text(
+                    '${_working.length} '
+                    'escolhido${_working.length == 1 ? '' : 's'}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            if (registered.isEmpty && others.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Text('Nenhum membro cadastrado.'),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView(
+                // shrinkWrap para a folha ter a altura do conteúdo: com uma
+                // função de poucos membros ela abria ocupando 3/4 da tela,
+                // quase tudo vazio. O ConstrainedBox acima segue limitando.
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                children: [
+                  if (registered.isEmpty && others.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(AppSpacing.xl),
+                      child: Text('Nenhum membro cadastrado na equipe.'),
+                    ),
+                  if (registered.isNotEmpty) ...[
+                    _SheetLabel('Com esta função', count: registered.length),
+                    for (final member in registered)
+                      _PickerTile(
+                        member: member,
+                        checked: _working.contains(member.id),
+                        unavailable: widget.unavailableIds.contains(member.id),
+                        onTap: () => _toggle(member.id),
+                      ),
+                  ],
+                  if (others.isNotEmpty) ...[
+                    _SheetLabel(
+                      'Outros membros',
+                      count: others.length,
+                      trailing: TextButton(
+                        onPressed: () =>
+                            setState(() => _showOthers = !_showOthers),
+                        child: Text(_showOthers ? 'Ocultar' : 'Mostrar'),
+                      ),
+                    ),
+                    for (final member in othersToShow)
+                      _PickerTile(
+                        member: member,
+                        checked: _working.contains(member.id),
+                        outsideRegistration: true,
+                        unavailable: widget.unavailableIds.contains(member.id),
+                        onTap: () => _toggle(member.id),
+                      ),
+                  ],
+                ],
               ),
-            if (registered.isNotEmpty) ...[
-              Text(
-                'Com esta função',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-              for (final member in registered)
-                _MemberTile(
-                  member: member,
-                  checked: selected.contains(member.id),
-                  outsideCadastro: false,
-                  onChanged: (checked) {
-                    final next = {...selected};
-                    if (checked) {
-                      next.add(member.id);
-                    } else {
-                      next.remove(member.id);
-                    }
-                    onChanged(next);
-                  },
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Concluir'),
                 ),
-            ],
-            if (others.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Outros membros',
-                style: Theme.of(context).textTheme.labelMedium,
               ),
-              for (final member in others)
-                _MemberTile(
-                  member: member,
-                  checked: selected.contains(member.id),
-                  outsideCadastro: true,
-                  onChanged: (checked) {
-                    final next = {...selected};
-                    if (checked) {
-                      next.add(member.id);
-                    } else {
-                      next.remove(member.id);
-                    }
-                    onChanged(next);
-                  },
-                ),
-            ],
+            ),
           ],
         ),
       ),
@@ -290,31 +642,110 @@ class _PositionSection extends StatelessWidget {
   }
 }
 
-class _MemberTile extends StatelessWidget {
-  const _MemberTile({
+class _SheetLabel extends StatelessWidget {
+  const _SheetLabel(this.text, {required this.count, this.trailing});
+
+  final String text;
+  final int count;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.md,
+        trailing == null ? AppSpacing.xl : AppSpacing.sm,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$text ($count)',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class _PickerTile extends StatelessWidget {
+  const _PickerTile({
     required this.member,
     required this.checked,
-    required this.outsideCadastro,
-    required this.onChanged,
+    required this.onTap,
+    this.outsideRegistration = false,
+    this.unavailable = false,
   });
 
   final Member member;
   final bool checked;
-  final bool outsideCadastro;
-  final ValueChanged<bool> onChanged;
+  final VoidCallback onTap;
+  final bool outsideRegistration;
+
+  /// A pessoa avisou que não pode no dia desta escala.
+  final bool unavailable;
 
   @override
   Widget build(BuildContext context) {
-    return CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      value: checked,
-      onChanged: (value) => onChanged(value ?? false),
-      title: Text(member.displayName),
-      subtitle: outsideCadastro && checked
-          ? const Text('Fora do cadastro desta função')
-          : null,
-      controlAffinity: ListTileControlAffinity.leading,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            AppAvatar(name: member.displayName, radius: 18),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          member.displayName,
+                          style: theme.textTheme.bodyLarge,
+                        ),
+                      ),
+                      // Continua na lista e continua selecionável: o líder às
+                      // vezes já acertou uma troca por fora do app.
+                      if (unavailable) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        const UnavailableBadge(),
+                      ],
+                    ],
+                  ),
+                  if (outsideRegistration && checked)
+                    Text(
+                      'Fora do cadastro desta função',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.accent(scheme),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Checkbox(value: checked, onChanged: (_) => onTap()),
+          ],
+        ),
+      ),
     );
   }
 }
+

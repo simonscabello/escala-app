@@ -26,7 +26,6 @@ dependencies:
   intl: ^0.20.2
   timezone: ^0.11.1
   share_plus: ^12.0.2
-  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -35,3 +34,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # A fonte vai empacotada no APK de proposito. Com o pacote google_fonts ela
+  # era baixada de fonts.gstatic.com na primeira execucao: o app dependia de um
+  # segundo servidor alem da API e, em rede ruim, a primeira renderizacao caia
+  # para a fonte do sistema -- a identidade visual degradava em silencio.
+  # Plus Jakarta Sans e licenciada sob a SIL Open Font License, que permite
+  # a distribuicao junto do aplicativo.
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700

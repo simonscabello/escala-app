@@ -111,11 +111,13 @@ class AppEmptyState extends StatelessWidget {
 class AppErrorState extends StatelessWidget {
   const AppErrorState({
     super.key,
+    this.title = 'Algo deu errado',
     required this.message,
     this.onRetry,
     this.retryLabel = 'Tentar novamente',
   });
 
+  final String title;
   final String message;
   final VoidCallback? onRetry;
   final String retryLabel;
@@ -146,9 +148,17 @@ class AppErrorState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyLarge,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: AppSpacing.xl),

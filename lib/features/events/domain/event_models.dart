@@ -1,3 +1,5 @@
+import '../../unavailability/domain/unavailability_models.dart';
+
 class AssignmentMember {
   const AssignmentMember({
     required this.id,
@@ -74,7 +76,10 @@ class SameDayConflict {
 }
 
 class EventWarnings {
-  const EventWarnings({this.sameDayConflicts = const []});
+  const EventWarnings({
+    this.sameDayConflicts = const [],
+    this.unavailableAssigned = const [],
+  });
 
   factory EventWarnings.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
@@ -85,10 +90,17 @@ class EventWarnings {
       sameDayConflicts: (json['sameDayConflicts'] as List<dynamic>? ?? const [])
           .map((e) => SameDayConflict.fromJson(e as Map<String, dynamic>))
           .toList(),
+      unavailableAssigned:
+          (json['unavailableAssigned'] as List<dynamic>? ?? const [])
+              .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
+              .toList(),
     );
   }
 
   final List<SameDayConflict> sameDayConflicts;
+
+  /// Gente escalada que já tinha avisado que não pode neste dia.
+  final List<UnavailableMember> unavailableAssigned;
 }
 
 class Event {
@@ -105,6 +117,7 @@ class Event {
     required this.timezone,
     required this.assignments,
     required this.songs,
+    this.unavailable = const [],
     this.warnings = const EventWarnings(),
   });
 
@@ -134,6 +147,9 @@ class Event {
           .whereType<AssignmentGroup>()
           .toList(),
       songs: (json['songs'] as List<dynamic>? ?? const []).cast<Object?>(),
+      unavailable: (json['unavailable'] as List<dynamic>? ?? const [])
+          .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
+          .toList(),
       warnings: EventWarnings.fromJson(
         json['warnings'] as Map<String, dynamic>?,
       ),
@@ -152,9 +168,22 @@ class Event {
   final String timezone;
   final List<AssignmentGroup> assignments;
   final List<Object?> songs;
+
+  /// Quem avisou que não pode no dia desta escala.
+  final List<UnavailableMember> unavailable;
   final EventWarnings warnings;
 
   /// Nomes das funções em que o membership aparece nesta escala.
+  /// Quantas pessoas distintas estao escaladas. Quem acumula duas funcoes
+  /// conta uma vez -- o numero responde "a escala esta montada?", nao
+  /// "quantas linhas tem a escala".
+  int get scheduledMemberCount {
+    return <String>{
+      for (final group in assignments)
+        for (final member in group.members) member.membershipId,
+    }.length;
+  }
+
   List<String> positionsForMembership(String? membershipId) {
     if (membershipId == null || membershipId.isEmpty) {
       return const [];

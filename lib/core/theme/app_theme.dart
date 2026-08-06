@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 import 'app_spacing.dart';
@@ -7,11 +6,18 @@ import 'app_spacing.dart';
 class AppTheme {
   const AppTheme._();
 
+  /// Empacotada em assets/fonts (ver pubspec). Nao ha download em runtime:
+  /// a tipografia precisa estar correta ja no primeiro frame, mesmo offline.
+  static const String fontFamily = 'PlusJakartaSans';
+
   static ThemeData get light => _build(AppColors.lightScheme());
   static ThemeData get dark => _build(AppColors.darkScheme());
 
   static ThemeData _build(ColorScheme scheme) {
-    final baseText = GoogleFonts.plusJakartaSansTextTheme();
+    final baseText = (scheme.brightness == Brightness.dark
+            ? Typography.material2021().white
+            : Typography.material2021().black)
+        .apply(fontFamily: fontFamily);
     final textTheme = baseText
         .apply(
           bodyColor: scheme.onSurface,
@@ -82,6 +88,9 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      // Tambem no ThemeData: widgets que nao passam pelo textTheme (tooltip,
+      // menus do sistema) herdam a familia daqui.
+      fontFamily: fontFamily,
       scaffoldBackgroundColor: scheme.surface,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
@@ -134,7 +143,12 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(AppSpacing.touchTarget),
+          // Só altura mínima. `Size.fromHeight` significa largura infinita, e
+          // isso quebrava qualquer botão preenchido dentro de uma Row -- era o
+          // motivo de "Copiar convite" não aparecer na tela de convites.
+          // Nos formulários a largura total continua vindo do
+          // `CrossAxisAlignment.stretch` do FormScaffold.
+          minimumSize: const Size(0, AppSpacing.touchTarget),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
@@ -222,6 +236,13 @@ class AppTheme {
         color: scheme.outlineVariant,
         space: 1,
         thickness: 1,
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+        ),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: scheme.onSurfaceVariant,

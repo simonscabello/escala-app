@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../data/health_repository.dart';
 
 /// Diagnostico de conectividade. Acessivel mesmo deslogado, porque e
@@ -18,9 +19,9 @@ class HealthScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () async => ref.refresh(healthCheckProvider.future),
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
           children: [
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xxl),
             health.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _Card(
@@ -47,7 +48,7 @@ class HealthScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Center(
               child: TextButton.icon(
                 onPressed: () => ref.invalidate(healthCheckProvider),
@@ -79,22 +80,23 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(icon, color: color),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Text(title, style: Theme.of(context).textTheme.titleLarge),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             ...lines.map(
               (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(line, style: Theme.of(context).textTheme.bodyMedium),
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child:
+                    Text(line, style: Theme.of(context).textTheme.bodyMedium),
               ),
             ),
           ],

@@ -59,7 +59,7 @@ class InvitesScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xxl),
               const _SectionTitle('Convites individuais'),
               Text(
-                'Quem aceitar assume o cadastro que você ja criou, com as '
+                'Quem aceitar assume o cadastro que você já criou, com as '
                 'funções preenchidas.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -81,8 +81,7 @@ class InvitesScreen extends ConsumerWidget {
                 data: (all) => _IndividualSection(
                   teamId: teamId,
                   pending: all.where((m) => !m.hasAccount).toList(),
-                  invites:
-                      list.where((invite) => invite.isIndividual).toList(),
+                  invites: list.where((invite) => invite.isIndividual).toList(),
                 ),
               ),
             ],
@@ -110,7 +109,7 @@ class _IndividualSection extends ConsumerWidget {
       return const Card(
         child: ListTile(
           leading: Icon(Icons.check_circle_outline),
-          title: Text('Todo mundo ja tem conta'),
+          title: Text('Todo mundo já tem conta'),
           subtitle: Text('Nenhum convite individual pendente.'),
         ),
       );
@@ -206,7 +205,7 @@ class _InviteCard extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Vale ate $expires'
+              'Vale até $expires'
               '${invite.maxUses != null ? ' - ${invite.uses}/${invite.maxUses} usos' : ''}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -318,7 +317,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Text(text, style: Theme.of(context).textTheme.titleMedium),
     );
   }

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../team/data/team_repository.dart';
@@ -205,7 +206,8 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final eventAsync = _isEditing ? ref.watch(eventProvider(widget.eventId!)) : null;
+    final eventAsync =
+        _isEditing ? ref.watch(eventProvider(widget.eventId!)) : null;
 
     if (eventAsync != null && eventAsync.isLoading) {
       return const Scaffold(body: AppLoading());
@@ -215,7 +217,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('Culto')),
         body: AppErrorState(
-          message: 'Não foi possível carregar o culto.',
+          message: 'Não foi possível carregar a escala.',
           onRetry: () => ref.invalidate(eventProvider(widget.eventId!)),
         ),
       );
@@ -226,10 +228,10 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
     return FormScaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar culto' : 'Novo culto'),
+        title: Text(_isEditing ? 'Editar escala' : 'Nova escala'),
       ),
-      title: _isEditing ? 'Editar culto' : 'Novo culto',
-      subtitle: 'Informe os horários e os detalhes do culto.',
+      title: _isEditing ? 'Editar escala' : 'Nova escala',
+      subtitle: 'Informe os horários e os detalhes da escala.',
       children: [
         Form(
           key: _formKey,
@@ -241,21 +243,21 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                 enabled: !_loading,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Título do culto'),
+                decoration: const InputDecoration(labelText: 'Título da escala'),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Informe o título do culto.'
+                    ? 'Informe o título da escala.'
                     : null,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               Text('Culto', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               _DateTimeFields(
                 dateTime: _startsAt,
                 enabled: !_loading,
                 onPickDate: () => _pickDate(rehearsal: false),
                 onPickTime: () => _pickTime(rehearsal: false),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               Row(
                 children: [
                   Expanded(
@@ -289,24 +291,26 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                   onPickDate: () => _pickDate(rehearsal: true),
                   onPickTime: () => _pickTime(rehearsal: true),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _location,
                 enabled: !_loading,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Local (opcional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Local (opcional)'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _notes,
                 enabled: !_loading,
                 textCapitalization: TextCapitalization.sentences,
                 minLines: 3,
                 maxLines: 5,
-                decoration: const InputDecoration(labelText: 'Observações (opcional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Observações (opcional)'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _colorPalette,
                 enabled: !_loading,
@@ -319,7 +323,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
           onPressed: _loading ? null : _submit,
@@ -329,7 +333,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(_isEditing ? 'Salvar' : 'Criar culto'),
+              : Text(_isEditing ? 'Salvar' : 'Criar escala'),
         ),
       ],
     );
@@ -360,7 +364,7 @@ class _DateTimeFields extends StatelessWidget {
             label: Text(DateFormat('dd/MM/yyyy', 'pt_BR').format(dateTime)),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: OutlinedButton.icon(
             onPressed: enabled ? onPickTime : null,

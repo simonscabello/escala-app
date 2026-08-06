@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
@@ -105,7 +106,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
                 controller: _name,
                 decoration: const InputDecoration(
                   labelText: 'Nome',
-                  helperText: 'Como a pessoa e chamada na equipe',
+                  helperText: 'Como a pessoa é chamada na equipe',
                 ),
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next,
@@ -114,7 +115,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
                     ? 'Informe o nome do membro.'
                     : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _phone,
                 decoration: const InputDecoration(
@@ -127,7 +128,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.xxl),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
@@ -135,7 +136,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.xs),
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
@@ -143,13 +144,13 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         positions.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('$e'),
           data: (list) => Wrap(
-            spacing: 8,
-            runSpacing: 4,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
             children: [
               for (final position in list)
                 FilterChip(
@@ -168,7 +169,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
           onPressed: _loading ? null : _submit,

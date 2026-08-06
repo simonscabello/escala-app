@@ -1,0 +1,16 @@
+# Copie para android/key.properties e preencha com os seus dados.
+# O key.properties e o .jks NAO sao versionados (ver android/.gitignore).
+#
+# ATENCAO AO CAMINHO NO WINDOWS: em arquivos .properties a barra invertida e
+# caractere de escape, entao "C:\Users\..." quebra a leitura. Use barra normal
+# ou barra invertida dobrada:
+#   storeFile=C:/Users/Acer/keys/louvor-release.jks     (recomendado)
+#   storeFile=C:\\Users\\Acer\\keys\\louvor-release.jks
+#
+# Guarde o .jks FORA da pasta do projeto. Assim ele nunca entra em um commit
+# por acidente, e sobrevive a um `git clean` ou a apagar a pasta do projeto.
+
+storeFile=C:/Users/Acer/keys/louvor-release.jks
+storePassword=SUA_SENHA_DO_KEYSTORE
+keyAlias=louvor
+keyPassword=SUA_SENHA_DA_CHAVE

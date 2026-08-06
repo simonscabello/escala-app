@@ -13,7 +13,11 @@ class AppSpacing {
   static const double radiusSm = 8;
   static const double radiusMd = 12;
   static const double radiusLg = 16;
-  static const double radiusPill = 28;
+  /// Cards de conteudo. Raio maior deixa a superficie mais leve.
+  static const double radiusXl = 20;
+  /// Cartao heroi (proximo culto) e cabecalhos de tela.
+  static const double radiusHero = 28;
+  static const double radiusPill = 999;
 
   static const double screenPadding = 24;
   static const double listPadding = 16;

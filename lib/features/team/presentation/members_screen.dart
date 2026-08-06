@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/team_repository.dart';
@@ -24,6 +26,8 @@ class MembersScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Equipe'),
         actions: [
+          // Sem atalho para o perfil aqui: ele agora é uma aba na barra
+          // inferior, sempre a um toque de distância.
           if (canManage)
             IconButton(
               tooltip: 'Convites',
@@ -76,16 +80,23 @@ class MembersScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async => ref.refresh(membersProvider(teamId).future),
-            child: ListView.separated(
-              padding: const EdgeInsets.only(bottom: 96),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.listPadding,
+                AppSpacing.sm,
+                AppSpacing.listPadding,
+                96,
+              ),
               itemCount: list.length + 1,
-              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 if (index == 0) return _Header(count: list.length);
-                return _MemberTile(
-                  member: list[index - 1],
-                  teamId: teamId,
-                  canManage: canManage,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _MemberTile(
+                    member: list[index - 1],
+                    teamId: teamId,
+                    canManage: canManage,
+                  ),
                 );
               },
             ),
@@ -137,64 +148,57 @@ class _MemberTile extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final positions = member.positions.map((p) => p.name).join(', ');
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xs,
-      ),
-      leading: CircleAvatar(
-        backgroundColor: scheme.primaryContainer,
-        foregroundColor: scheme.onPrimaryContainer,
-        child: Text(
-          member.displayName.characters.first.toUpperCase(),
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+    return AppCard(
+      onTap: canManage
+          ? () => context.push('/equipe/membros/editar', extra: member)
+          : null,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.xs,
         ),
-      ),
-      title: Row(
-        children: [
-          Flexible(child: Text(member.displayName)),
-          if (member.role != 'MEMBER') ...[
-            const SizedBox(width: AppSpacing.sm),
-            _Tag(label: member.roleLabel, tone: scheme.primary),
+        leading: AppAvatar(name: member.displayName),
+        title: Row(
+          children: [
+            Flexible(child: Text(member.displayName)),
+            if (member.role != 'MEMBER') ...[
+              const SizedBox(width: AppSpacing.sm),
+              _Tag(label: member.roleLabel, tone: scheme.primary),
+            ],
           ],
-        ],
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (positions.isNotEmpty)
-            Text(
-              positions,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          if (!member.hasAccount)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                'Ainda sem conta no app',
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (positions.isNotEmpty)
+              Text(
+                positions,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
               ),
-            ),
-        ],
+            if (!member.hasAccount)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  'Ainda sem conta no app',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        trailing: canManage && !member.isOwner
+            ? PopupMenuButton<String>(
+                onSelected: (action) => _onAction(context, ref, action),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Editar')),
+                  PopupMenuItem(value: 'remove', child: Text('Remover')),
+                ],
+              )
+            : null,
       ),
-      trailing: canManage && !member.isOwner
-          ? PopupMenuButton<String>(
-              onSelected: (action) => _onAction(context, ref, action),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: Text('Editar')),
-                PopupMenuItem(value: 'remove', child: Text('Remover')),
-              ],
-            )
-          : null,
-      onTap: canManage
-          ? () => context.push('/equipe/membros/editar', extra: member)
-          : null,
     );
   }
 
@@ -257,7 +261,10 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../domain/event_datetime.dart';
 import '../data/event_repository.dart';
 import '../domain/event_models.dart';
 
@@ -26,13 +28,17 @@ Future<void> showDuplicateEventDialog({
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
-          final label = DateFormat(
-            "EEEE, d 'de' MMMM 'às' HH:mm",
-            'pt_BR',
-          ).format(pickedLocal);
+          // Mesma formatação do resto do app (dia da semana com maiúscula):
+          // aqui vinha "domingo, 16 de agosto" enquanto os cards mostravam
+          // "Domingo".
+          final dayLabel = capitalizeWeekday(
+            DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(pickedLocal),
+          );
+          final timeLabel = DateFormat('HH:mm', 'pt_BR').format(pickedLocal);
+          final label = '$dayLabel às $timeLabel';
 
           return AlertDialog(
-            title: const Text('Duplicar culto'),
+            title: const Text('Duplicar escala'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,9 +47,9 @@ Future<void> showDuplicateEventDialog({
                   'Copia a escalação e os detalhes de "${source.title}" '
                   'para a nova data. O ensaio mantém a mesma diferença.',
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 Text(label, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
                     TextButton.icon(

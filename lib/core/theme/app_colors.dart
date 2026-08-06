@@ -78,6 +78,43 @@ class AppColors {
   static const Color darkScrim = Color(0xFF000000);
   static const Color darkShadow = Color(0xFF000000);
 
+  // --- Acento "voce" ---
+  // Tudo no app e verde; o estado pessoal precisava de uma cor propria para
+  // saltar. Dourado quente contrasta com o verde sem brigar com ele, e carrega
+  // a ideia de destaque.
+  static const Color lightAccent = Color(0xFFB25E00);
+  static const Color lightAccentContainer = Color(0xFFFFE7C4);
+  static const Color lightOnAccentContainer = Color(0xFF432500);
+
+  static const Color darkAccent = Color(0xFFFFBC6B);
+  static const Color darkAccentContainer = Color(0xFF573100);
+  static const Color darkOnAccentContainer = Color(0xFFFFE7C4);
+
+  // --- Gradiente do cartao heroi ---
+  static const List<Color> lightHeroGradient = [
+    Color(0xFF156942),
+    Color(0xFF23935F),
+  ];
+  static const List<Color> darkHeroGradient = [
+    Color(0xFF0E3F29),
+    Color(0xFF175A3B),
+  ];
+
+  static bool _isDark(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark;
+
+  static Color accent(ColorScheme scheme) =>
+      _isDark(scheme) ? darkAccent : lightAccent;
+
+  static Color accentContainer(ColorScheme scheme) =>
+      _isDark(scheme) ? darkAccentContainer : lightAccentContainer;
+
+  static Color onAccentContainer(ColorScheme scheme) =>
+      _isDark(scheme) ? darkOnAccentContainer : lightOnAccentContainer;
+
+  static List<Color> heroGradient(ColorScheme scheme) =>
+      _isDark(scheme) ? darkHeroGradient : lightHeroGradient;
+
   static ColorScheme lightScheme() {
     return const ColorScheme(
       brightness: Brightness.light,

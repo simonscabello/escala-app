@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -76,7 +77,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ? 'Informe seu nome.'
                     : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _email,
                 decoration: const InputDecoration(labelText: 'E-mail'),
@@ -88,7 +89,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ? 'Informe um e-mail valido.'
                     : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _password,
                 decoration: InputDecoration(
@@ -113,7 +114,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
           onPressed: _loading ? null : _submit,
@@ -125,7 +126,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 )
               : const Text('Criar conta'),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         TextButton(
           onPressed: _loading ? null : () => context.go('/login'),
           child: const Text('Ja tenho conta. Entrar'),

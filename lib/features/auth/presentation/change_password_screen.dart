@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -74,11 +75,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                 obscureText: true,
                 textInputAction: TextInputAction.next,
                 enabled: !_loading,
-                validator: (v) => (v == null || v.isEmpty)
-                    ? 'Informe a senha atual.'
-                    : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? 'Informe a senha atual.' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _next,
                 decoration: const InputDecoration(
@@ -92,7 +92,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     ? 'A senha precisa ter ao menos 8 caracteres.'
                     : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _confirm,
                 decoration: const InputDecoration(
@@ -108,7 +108,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
           onPressed: _loading ? null : _submit,
@@ -120,7 +120,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                 )
               : const Text('Salvar e continuar'),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         TextButton(
           onPressed: _loading
               ? null

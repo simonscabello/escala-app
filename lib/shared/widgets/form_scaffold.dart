@@ -27,7 +27,11 @@ class FormScaffold extends StatelessWidget {
     return Scaffold(
       appBar: appBar,
       body: SafeArea(
-        child: Center(
+        // Alinhado ao topo quando há AppBar: centralizar deixava um vazio
+        // grande entre a barra e o título do formulário.
+        child: Align(
+          alignment:
+              appBar == null ? Alignment.center : Alignment.topCenter,
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding,
@@ -108,7 +112,7 @@ class FormErrorBanner extends StatelessWidget {
             size: 20,
             color: scheme.onErrorContainer,
           ),
-          const SizedBox(width: AppSpacing.sm + 2),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               message,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/invite_repository.dart';
@@ -91,7 +92,7 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
           content: Text(
             result.joined
                 ? 'Você entrou em ${result.teamName}.'
-                : 'Você ja fazia parte de ${result.teamName}.',
+                : 'Você já fazia parte de ${result.teamName}.',
           ),
         ),
       );
@@ -143,10 +144,10 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.xl),
         if (_checking)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
             child: Center(
               child: SizedBox(
                 width: 28,
@@ -158,10 +159,10 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
         else if (_preview != null)
           _PreviewCard(preview: _preview!),
         if (_error != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           FormErrorBanner(message: _error!),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         FilledButton(
           onPressed: _preview == null || busy ? null : _join,
           child: _joining
@@ -172,7 +173,7 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
                 )
               : const Text('Entrar na equipe'),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Text(
           'O código tem 20 caracteres. Maiúsculas, minúsculas e hífens tanto '
           'faz.',
@@ -199,7 +200,7 @@ class _PreviewCard extends StatelessWidget {
     return Card(
       color: scheme.primaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -210,14 +211,14 @@ class _PreviewCard extends StatelessWidget {
                   height: 40,
                   decoration: BoxDecoration(
                     color: scheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                   ),
                   child: Icon(
                     Icons.groups_rounded,
                     color: scheme.onPrimaryContainer,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
                     preview.teamName,
@@ -229,14 +230,14 @@ class _PreviewCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Text(
               [
                 if (preview.invitedBy != null)
                   'Convite enviado por ${preview.invitedBy}.',
                 if (preview.invitedName != null)
                   'Você entrará como ${preview.invitedName}, com as funções '
-                      'que ja foram cadastradas para você.',
+                      'que já foram cadastradas para você.',
               ].join(' '),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: scheme.onPrimaryContainer,

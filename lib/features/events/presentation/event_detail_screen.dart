@@ -3,16 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/date_badge.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/unavailable_badge.dart';
+import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
+import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
 
 class EventDetailScreen extends ConsumerWidget {
@@ -24,7 +31,6 @@ class EventDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
     final teams = ref.watch(authControllerProvider).teams;
-    final canManage = teams.firstOrNull?.canManage ?? false;
 
     return eventAsync.when(
       loading: () => const Scaffold(body: AppLoading()),
@@ -33,16 +39,19 @@ class EventDetailScreen extends ConsumerWidget {
         body: AppErrorState(
           message: error is ApiException
               ? error.message
-              : 'Não foi possível carregar o culto.',
+              : 'Não foi possível carregar a escala.',
           onRetry: () => ref.invalidate(eventProvider(eventId)),
         ),
       ),
       data: (cached) {
         final event = cached.data;
-        final myMembershipId = teams
-            .where((t) => t.teamId == event.teamId)
-            .map((t) => t.membershipId)
-            .firstOrNull;
+        // Permissao e identidade vem da equipe DO CULTO, nao da primeira da
+        // lista: quem participa de mais de uma equipe veria o menu de lider
+        // num culto onde e apenas membro.
+        final myTeam =
+            teams.where((t) => t.teamId == event.teamId).firstOrNull;
+        final myMembershipId = myTeam?.membershipId;
+        final canManage = myTeam?.canManage ?? false;
 
         return Scaffold(
           appBar: AppBar(
@@ -73,22 +82,30 @@ class EventDetailScreen extends ConsumerWidget {
                         await _confirmDelete(context, ref, event);
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
+                  itemBuilder: (menuContext) => [
+                    const PopupMenuItem(
                       value: 'assign',
                       child: Text('Escalar equipe'),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: 'edit',
-                      child: Text('Editar culto'),
+                      child: Text('Editar escala'),
                     ),
-                    PopupMenuItem(
-                      value: 'duplicate',
-                      child: Text('Duplicar culto'),
-                    ),
+                    if (FeatureFlags.duplicateSchedule)
+                      const PopupMenuItem(
+                        value: 'duplicate',
+                        child: Text('Duplicar escala'),
+                      ),
+                    // Em vermelho: é a única opção destrutiva do menu e estava
+                    // com o mesmo peso visual das outras.
                     PopupMenuItem(
                       value: 'delete',
-                      child: Text('Excluir culto'),
+                      child: Text(
+                        'Excluir escala',
+                        style: TextStyle(
+                          color: Theme.of(menuContext).colorScheme.error,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -99,6 +116,7 @@ class EventDetailScreen extends ConsumerWidget {
             child: _EventDetailBody(
               event: event,
               myMembershipId: myMembershipId,
+              canManage: canManage,
               fromCache: cached.fromCache,
               cachedAt: cached.cachedAt,
             ),
@@ -117,8 +135,8 @@ class EventDetailScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Excluir culto?'),
-        content: Text('O culto "${event.title}" será removido.'),
+        title: const Text('Excluir escala?'),
+        content: Text('A escala "${event.title}" será removida.'),
         actions: [
           TextButton(
             onPressed: () => dialogContext.pop(false),
@@ -156,12 +174,14 @@ class _EventDetailBody extends StatelessWidget {
   const _EventDetailBody({
     required this.event,
     required this.myMembershipId,
+    required this.canManage,
     required this.fromCache,
     required this.cachedAt,
   });
 
   final Event event;
   final String? myMembershipId;
+  final bool canManage;
   final bool fromCache;
   final DateTime? cachedAt;
 
@@ -196,15 +216,31 @@ class _EventDetailBody extends StatelessWidget {
                 YouAssignmentBanner(label: youLabel),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              Text(
-                formatEventWeekdayDate(event.startsAt, timezone),
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  DateBadge(
+                    date: event.startsAt,
+                    timezone: timezone,
+                    size: DateBadgeSize.large,
+                    background: scheme.primaryContainer,
+                    foreground: scheme.onPrimaryContainer,
+                    muted: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    // Sem repetir a data ao lado do bloco que já a mostra: ela
+                    // aparecia três vezes seguidas (bloco, linha e cartão).
+                    child: Text(
+                      event.title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(event.title, style: theme.textTheme.headlineMedium),
               const SizedBox(height: AppSpacing.xl),
               _ScheduleHero(
                 startsAt: event.startsAt,
@@ -220,6 +256,13 @@ class _EventDetailBody extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.xxl),
+              if (event.warnings.unavailableAssigned.isNotEmpty) ...[
+                _UnavailableWarningBand(
+                  people: event.warnings.unavailableAssigned,
+                  canManage: canManage,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               const SectionHeader(title: 'Equipe escalada'),
               if (event.assignments.isEmpty)
                 Text(
@@ -230,11 +273,17 @@ class _EventDetailBody extends StatelessWidget {
                 )
               else
                 for (final group in event.assignments) ...[
-                  _AssignmentGroupTile(group: group),
+                  _AssignmentGroupTile(
+                    group: group,
+                    unavailable: {
+                      for (final person in event.unavailable)
+                        person.membershipId: person.reason,
+                    },
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
               const SizedBox(height: AppSpacing.xl),
-              Card(
+              AppCard(
                 color: scheme.surfaceContainerLow,
                 child: ListTile(
                   leading: Icon(
@@ -248,7 +297,7 @@ class _EventDetailBody extends StatelessWidget {
                     ),
                   ),
                   subtitle: Text(
-                    'Em breve — repertório do culto.',
+                    'Em breve — repertório da escala.',
                     style: theme.textTheme.bodySmall,
                   ),
                 ),
@@ -278,20 +327,18 @@ class _ScheduleHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return AppCard(
+      color: scheme.surfaceContainerLowest,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
       child: Column(
         children: [
           _DetailItem(
-            icon: Icons.calendar_today_outlined,
+            // Mesmos ícones das pílulas do cartão herói na agenda.
+            icon: Icons.church_rounded,
             label: 'Culto',
             value:
-                '${formatEventWeekdayDate(startsAt, timezone)} às ${formatEventTime(startsAt, timezone)}',
+                // Só o horário: a data já está no bloco logo acima.
+                formatEventTime(startsAt, timezone),
             emphasized: true,
           ),
           if (rehearsalAt != null) ...[
@@ -299,10 +346,15 @@ class _ScheduleHero extends StatelessWidget {
             Divider(color: scheme.outlineVariant, height: 1),
             const SizedBox(height: AppSpacing.lg),
             _DetailItem(
-              icon: Icons.schedule_rounded,
+              icon: Icons.music_note_rounded,
               label: 'Ensaio',
               value:
-                  '${formatEventWeekdayDate(rehearsalAt!, timezone)} às ${formatEventTime(rehearsalAt!, timezone)}',
+                  // O ensaio quase sempre é em outro dia; a data só aparece
+                  // quando realmente difere da do culto.
+                  isSameLocalDay(rehearsalAt!, startsAt, timezone)
+                      ? formatEventTime(rehearsalAt!, timezone)
+                      : '${formatEventWeekdayDate(rehearsalAt!, timezone)} '
+                          'às ${formatEventTime(rehearsalAt!, timezone)}',
             ),
           ],
           if (location?.isNotEmpty ?? false) ...[
@@ -386,134 +438,181 @@ class _PaletteNotesCard extends StatelessWidget {
 }
 
 /// Destaque "onde eu apareço" — visível sem rolar.
+///
+/// Continua existindo como widget nomeado porque é o contrato do teste da
+/// Etapa 5; a aparência agora vem do [YouHighlight] compartilhado, para o
+/// destaque ser idêntico aqui e na agenda.
 class YouAssignmentBanner extends StatelessWidget {
   const YouAssignmentBanner({super.key, required this.label});
 
   final String label;
 
   @override
+  Widget build(BuildContext context) => YouHighlight(label: label);
+}
+
+/// Faixa de alerta quando alguém escalado já tinha avisado que não pode.
+///
+/// Fica logo acima de "Equipe escalada", e não no topo da tela: assim não
+/// disputa atenção com o destaque pessoal ("VOCÊ") e aparece colada na lista
+/// de nomes a que se refere.
+class _UnavailableWarningBand extends StatelessWidget {
+  const _UnavailableWarningBand({
+    required this.people,
+    required this.canManage,
+  });
+
+  final List<UnavailableMember> people;
+  final bool canManage;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final names = joinNames(people.map((p) => p.displayName));
+    final single = people.length == 1;
 
-    return Material(
-      color: scheme.primaryContainer,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.lg,
+    // Motivos só aparecem quando existem; ninguém é obrigado a justificar.
+    final reasons = people
+        .where((p) => p.reason?.isNotEmpty ?? false)
+        .map((p) => '${p.displayName}: ${p.reason}')
+        .join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border(
+          left: BorderSide(color: scheme.error, width: 4),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Icon(
-                Icons.person_pin_circle_rounded,
-                color: scheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w700,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.event_busy_rounded,
+            color: scheme.onErrorContainer,
+            size: 22,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  single
+                      ? '$names avisou que não pode neste dia'
+                      : '$names avisaram que não podem neste dia',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: scheme.onErrorContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
+                if (reasons.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    reasons,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onErrorContainer,
+                    ),
+                  ),
+                ],
+                if (canManage) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    single
+                        ? 'Ainda está na escala. Ajuste em "Escalar equipe".'
+                        : 'Ainda estão na escala. Ajuste em "Escalar equipe".',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onErrorContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _AssignmentGroupTile extends StatelessWidget {
-  const _AssignmentGroupTile({required this.group});
+  const _AssignmentGroupTile({
+    required this.group,
+    this.unavailable = const {},
+  });
 
   final AssignmentGroup group;
+
+  /// membershipId -> motivo (ou nulo) de quem avisou que não pode neste dia.
+  final Map<String, String?> unavailable;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.md,
-          AppSpacing.lg,
-          AppSpacing.md,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group.positionName,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: scheme.primary,
-              ),
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            group.positionName,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: scheme.primary,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            for (final member in group.members) ...[
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: scheme.secondaryContainer,
-                    foregroundColor: scheme.onSecondaryContainer,
-                    child: Text(
-                      member.displayName.isNotEmpty
-                          ? member.displayName[0].toUpperCase()
-                          : '?',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      member.displayName,
-                      style: theme.textTheme.bodyLarge,
-                    ),
-                  ),
-                  if (!member.isRegisteredForPosition)
-                    Text(
-                      'fora do cadastro',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.tertiary,
-                      ),
-                    ),
-                ],
-              ),
-              if (member.note?.isNotEmpty ?? false)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 36,
-                    top: 2,
-                    bottom: AppSpacing.xs,
-                  ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final member in group.members) ...[
+            Row(
+              children: [
+                AppAvatar(name: member.displayName, radius: 14),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
                   child: Text(
-                    member.note!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                    member.displayName,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ),
+                // A etiqueta ao lado do nome diz *quem*; a faixa acima diz que
+                // há um problema. Uma sem a outra obriga a procurar.
+                if (unavailable.containsKey(member.membershipId))
+                  UnavailableBadge(reason: unavailable[member.membershipId])
+                else if (!member.isRegisteredForPosition)
+                  Text(
+                    'fora do cadastro',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.tertiary,
                     ),
                   ),
-                )
-              else
-                const SizedBox(height: AppSpacing.xs),
-            ],
+              ],
+            ),
+            if (member.note?.isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 36,
+                  top: 2,
+                  bottom: AppSpacing.xs,
+                ),
+                child: Text(
+                  member.note!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: AppSpacing.xs),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -555,7 +654,7 @@ class _DetailItem extends StatelessWidget {
                   color: scheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 value,
                 style: (emphasized

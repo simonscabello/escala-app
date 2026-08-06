@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -73,7 +74,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ? 'Informe um e-mail valido.'
                     : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _password,
                 decoration: InputDecoration(
@@ -96,7 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
           onPressed: _loading ? null : _submit,
@@ -108,12 +109,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 )
               : const Text('Entrar'),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         TextButton(
           onPressed: _loading ? null : () => context.go('/cadastro'),
           child: const Text('Não tenho conta. Criar agora'),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         TextButton.icon(
           onPressed: () => context.push('/diagnostico'),
           icon: const Icon(Icons.wifi_tethering, size: 18),

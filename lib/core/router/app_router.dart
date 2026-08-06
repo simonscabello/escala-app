@@ -15,6 +15,8 @@ import '../../features/events/presentation/main_shell.dart';
 import '../../features/health/presentation/health_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
+import '../../features/unavailability/presentation/my_unavailability_screen.dart';
+import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/team/data/team_repository.dart';
 import '../../features/team/domain/team_models.dart';
 import '../../features/team/presentation/create_team_screen.dart';
@@ -95,6 +97,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/convite', builder: (_, __) => const JoinTeamScreen()),
       GoRoute(
+        path: '/disponibilidade',
+        builder: (_, __) => _withActiveTeam(
+          ref,
+          (id) => MyUnavailabilityScreen(teamId: id),
+        ),
+      ),
+      GoRoute(
         path: '/equipe/convites',
         builder: (_, __) =>
             _withActiveTeam(ref, (id) => InvitesScreen(teamId: id)),
@@ -132,6 +141,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // Perfil dentro da casca: é uma das abas, então precisa da barra.
+          GoRoute(path: '/perfil', builder: (_, __) => const ProfileScreen()),
           GoRoute(
             path: '/equipe',
             builder: (_, __) =>

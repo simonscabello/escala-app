@@ -42,4 +42,30 @@ void main() {
     expect(label.toLowerCase(), contains('domingo'));
     expect(time, '09:00');
   });
+
+  test('dia da semana comeca com maiuscula', () {
+    final label = formatEventWeekdayDate(
+      DateTime.parse('2026-08-09T12:00:00.000Z'),
+      'America/Sao_Paulo',
+    );
+
+    expect(label.startsWith('Domingo'), isTrue, reason: label);
+  });
+
+  test('mostra o ano apenas quando difere do ano corrente', () {
+    const tzName = 'America/Sao_Paulo';
+    final thisYear = DateTime.now().year;
+
+    final atual = formatEventWeekdayDate(
+      DateTime.utc(thisYear, 8, 9, 12),
+      tzName,
+    );
+    final antigo = formatEventWeekdayDate(
+      DateTime.utc(thisYear - 1, 8, 9, 12),
+      tzName,
+    );
+
+    expect(atual.contains('$thisYear'), isFalse, reason: atual);
+    expect(antigo.contains('${thisYear - 1}'), isTrue, reason: antigo);
+  });
 }

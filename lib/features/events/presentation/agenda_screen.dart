@@ -2,16 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/date_badge.dart';
+import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import 'duplicate_event_dialog.dart';
+
+/// Saudação por horário. Detalhe pequeno, mas é o que separa uma tela de
+/// listagem de um app que parece ter sido feito para aquela pessoa.
+String greetingForHour(int hour) {
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 
 class AgendaScreen extends ConsumerStatefulWidget {
   const AgendaScreen({super.key});
@@ -34,78 +47,195 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
 
     final events = ref.watch(eventsProvider((teamId, _scope)));
     final team = auth.teams.first;
-    final canManage = team.canManage;
-    final membershipId = team.membershipId;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agenda'),
-        actions: [
-          IconButton(
-            tooltip: 'Sair',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+      floatingActionButton: team.canManage
+          ? FloatingActionButton.extended(
+              onPressed: () => context.push('/agenda/novo'),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Nova escala'),
+            )
+          : null,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _GreetingHeader(
+              name: auth.user?.firstName ?? '',
+              teamName: team.name,
+            ),
+            _ScopeSwitch(
+              scope: _scope,
+              onChanged: (value) => setState(() => _scope = value),
+            ),
+            Expanded(
+              child: events.when(
+                loading: () => const AppLoading(),
+                error: (error, _) => AppErrorState(
+                  message: error is ApiException
+                      ? error.message
+                      : 'Não foi possível carregar a agenda.',
+                  onRetry: () =>
+                      ref.invalidate(eventsProvider((teamId, _scope))),
+                ),
+                data: (cached) => _EventsList(
+                  events: cached.data,
+                  showFeaturedEvent: _scope == 'upcoming',
+                  canManage: team.canManage,
+                  membershipId: team.membershipId,
+                  fromCache: cached.fromCache,
+                  cachedAt: cached.cachedAt,
+                  onRefresh: () =>
+                      ref.refresh(eventsProvider((teamId, _scope)).future),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GreetingHeader extends StatelessWidget {
+  const _GreetingHeader({required this.name, required this.teamName});
+
+  final String name;
+  final String teamName;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${greetingForHour(DateTime.now().hour)},',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  name,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.groups_rounded,
+                      size: 14,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        teamName,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // O avatar saiu daqui: virou a aba "Perfil" na barra inferior, e ter
+          // os dois caminhos para o mesmo lugar na mesma tela era ruído.
+        ],
+      ),
+    );
+  }
+}
+
+/// Alternador leve entre próximos e passados. Um SegmentedButton pesava demais
+/// para uma escolha de duas opções que muda a lista inteira.
+class _ScopeSwitch extends StatelessWidget {
+  const _ScopeSwitch({required this.scope, required this.onChanged});
+
+  final String scope;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        0,
+        AppSpacing.xl,
+        AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          _ScopeTab(
+            label: 'Próximos',
+            selected: scope == 'upcoming',
+            onTap: () => onChanged('upcoming'),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _ScopeTab(
+            label: 'Passados',
+            selected: scope == 'past',
+            onTap: () => onChanged('past'),
           ),
         ],
       ),
-      floatingActionButton: canManage
-          ? FloatingActionButton(
-              tooltip: 'Criar culto',
-              onPressed: () => context.push('/agenda/novo'),
-              child: const Icon(Icons.add_rounded),
-            )
-          : null,
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.listPadding,
-              AppSpacing.md,
-              AppSpacing.listPadding,
-              AppSpacing.sm,
-            ),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'upcoming',
-                  label: Text('Próximos'),
-                  icon: Icon(Icons.upcoming_outlined, size: 18),
-                ),
-                ButtonSegment(
-                  value: 'past',
-                  label: Text('Passados'),
-                  icon: Icon(Icons.history_rounded, size: 18),
-                ),
-              ],
-              selected: {_scope},
-              onSelectionChanged: (selection) {
-                setState(() => _scope = selection.first);
-              },
+    );
+  }
+}
+
+class _ScopeTab extends StatelessWidget {
+  const _ScopeTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: selected ? scheme.primary : scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          Expanded(
-            child: events.when(
-              loading: () => const AppLoading(),
-              error: (error, _) => AppErrorState(
-                message: error is ApiException
-                    ? error.message
-                    : 'Não foi possível carregar a agenda.',
-                onRetry: () =>
-                    ref.invalidate(eventsProvider((teamId, _scope))),
-              ),
-              data: (cached) => _EventsList(
-                events: cached.data,
-                showFeaturedEvent: _scope == 'upcoming',
-                canManage: canManage,
-                membershipId: membershipId,
-                fromCache: cached.fromCache,
-                cachedAt: cached.cachedAt,
-                onRefresh: () =>
-                    ref.refresh(eventsProvider((teamId, _scope)).future),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -119,78 +249,59 @@ class _AgendaOnboarding extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider);
     final user = auth.user;
     final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Agenda'),
-        actions: [
-          IconButton(
-            tooltip: 'Sair',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () =>
-            ref.read(authControllerProvider.notifier).reloadTeams(),
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            Text(
-              'Olá, ${user?.firstName ?? ''}',
-              style: theme.textTheme.headlineSmall,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Crie uma equipe ou entre com um convite para ver suas escalas.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            const _OnboardingCards(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OnboardingCards extends StatelessWidget {
-  const _OnboardingCards();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _OnboardingCard(
-          icon: Icons.groups_rounded,
-          title: 'Sou o líder da equipe',
-          message:
-              'Crie a equipe e cadastre os integrantes. Ninguém precisa ter conta ainda.',
-          actionLabel: 'Criar equipe',
-          filled: true,
-          onAction: () => context.push('/equipe/nova'),
-          iconBackground: scheme.primaryContainer,
-          iconColor: scheme.onPrimaryContainer,
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: () =>
+              ref.read(authControllerProvider.notifier).reloadTeams(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xxl,
+            ),
+            children: [
+              Text(
+                '${greetingForHour(DateTime.now().hour)}, '
+                '${user?.firstName ?? ''}',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Você ainda não faz parte de uma equipe.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              _OnboardingCard(
+                icon: Icons.groups_rounded,
+                title: 'Sou o líder da equipe',
+                message: 'Crie a equipe e cadastre os integrantes. '
+                    'Ninguém precisa ter conta ainda.',
+                actionLabel: 'Criar equipe',
+                filled: true,
+                onAction: () => context.push('/equipe/nova'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _OnboardingCard(
+                icon: Icons.link_rounded,
+                title: 'Recebi um convite',
+                message: 'Cole o código que o líder da equipe enviou.',
+                actionLabel: 'Entrar com código',
+                filled: false,
+                onAction: () => context.push('/convite'),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _OnboardingCard(
-          icon: Icons.link_rounded,
-          title: 'Recebi um convite',
-          message: 'Cole o código que o líder da equipe enviou para você.',
-          actionLabel: 'Entrar com código',
-          filled: false,
-          onAction: () => context.push('/convite'),
-          iconBackground: scheme.secondaryContainer,
-          iconColor: scheme.onSecondaryContainer,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -203,8 +314,6 @@ class _OnboardingCard extends StatelessWidget {
     required this.actionLabel,
     required this.filled,
     required this.onAction,
-    required this.iconBackground,
-    required this.iconColor,
   });
 
   final IconData icon;
@@ -213,50 +322,48 @@ class _OnboardingCard extends StatelessWidget {
   final String actionLabel;
   final bool filled;
   final VoidCallback onAction;
-  final Color iconBackground;
-  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: iconBackground,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Icon(icon, color: iconColor),
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: filled
+                  ? scheme.primaryContainer
+                  : AppColors.accentContainer(scheme),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text(title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            child: Icon(
+              icon,
+              color: filled
+                  ? scheme.onPrimaryContainer
+                  : AppColors.onAccentContainer(scheme),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            if (filled)
-              FilledButton(
-                onPressed: onAction,
-                child: Text(actionLabel),
-              )
-            else
-              FilledButton.tonal(
-                onPressed: onAction,
-                child: Text(actionLabel),
-              ),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(title, style: theme.textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            message,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (filled)
+            FilledButton(onPressed: onAction, child: Text(actionLabel))
+          else
+            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel)),
+        ],
       ),
     );
   }
@@ -292,13 +399,13 @@ class _EventsList extends StatelessWidget {
             if (fromCache && cachedAt != null)
               CacheStampBanner(cachedAt: cachedAt!),
             SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.55,
+              height: MediaQuery.sizeOf(context).height * 0.5,
               child: AppEmptyState(
                 icon: Icons.event_available_outlined,
-                title: 'Nenhum culto por aqui',
+                title: 'Nenhuma escala por aqui',
                 message: canManage
-                    ? 'Toque em + para criar o primeiro culto da equipe.'
-                    : 'Quando o líder cadastrar um culto, ele aparece aqui.',
+                    ? 'Toque em "Nova escala" para criar a primeira da equipe.'
+                    : 'Quando o líder criar uma escala, ela aparece aqui.',
               ),
             ),
           ],
@@ -306,90 +413,65 @@ class _EventsList extends StatelessWidget {
       );
     }
 
-    final featuredEvent = showFeaturedEvent ? events.first : null;
-    final remainingEvents = showFeaturedEvent ? events.skip(1) : events;
+    final featured = showFeaturedEvent ? events.first : null;
+    final remaining =
+        (showFeaturedEvent ? events.skip(1) : events).toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.listPadding,
-          fromCache ? 0 : AppSpacing.sm,
-          AppSpacing.listPadding,
-          96,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.xxxl * 2,
         ),
         children: [
           if (fromCache && cachedAt != null) ...[
             CacheStampBanner(cachedAt: cachedAt!),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
           ],
-          if (featuredEvent != null) ...[
+          if (featured != null) ...[
             _FeaturedEventCard(
-              event: featuredEvent,
+              event: featured,
               canManage: canManage,
               membershipId: membershipId,
             ),
-            if (remainingEvents.isNotEmpty)
-              const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.xl),
           ],
-          ...remainingEvents.map(
-            (event) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _EventTile(
-                event: event,
-                canManage: canManage,
-                membershipId: membershipId,
+          if (remaining.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.xs,
+                bottom: AppSpacing.md,
+              ),
+              child: Text(
+                showFeaturedEvent ? 'Depois dessa' : 'Escalas passadas',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _YouChip extends StatelessWidget {
-  const _YouChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs + 2,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.person_pin_circle_rounded,
-            size: 16,
-            color: scheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Flexible(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
+            ...remaining.map(
+              (event) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: _EventTile(
+                  event: event,
+                  canManage: canManage,
+                  membershipId: membershipId,
+                ),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
+/// Cartão do próximo culto. É a primeira coisa que a pessoa vê ao abrir o app,
+/// então concentra tudo que ela precisa saber sem abrir nada: quando, onde ela
+/// entra, e se a escala já está montada.
 class _FeaturedEventCard extends ConsumerWidget {
   const _FeaturedEventCard({
     required this.event,
@@ -403,165 +485,243 @@ class _FeaturedEventCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timezone =
-        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
-    final hasPalette = event.colorPalette?.isNotEmpty ?? false;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final timezone =
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youLabel =
         youAssignmentLabel(event.positionsForMembership(membershipId));
+    final gradient = AppColors.heroGradient(scheme);
 
-    return Card(
-      child: InkWell(
-        onTap: () => context.push('/agenda/${event.id}'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasPalette)
-              Container(
-                color: scheme.tertiaryContainer,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl,
-                  vertical: AppSpacing.sm + 2,
-                ),
-                child: Row(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusHero),
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: gradient.last.withValues(alpha: 0.32),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push('/agenda/${event.id}'),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.palette_outlined,
-                      size: 18,
-                      color: scheme.onTertiaryContainer,
+                    DateBadge(
+                      date: event.startsAt,
+                      timezone: timezone,
+                      size: DateBadgeSize.large,
+                      background: Colors.white.withValues(alpha: 0.16),
+                      foreground: Colors.white,
+                      muted: Colors.white.withValues(alpha: 0.8),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.lg),
                     Expanded(
-                      child: Text(
-                        event.colorPalette!,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: scheme.onTertiaryContainer,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PRÓXIMA ESCALA',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            event.title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    if (canManage && FeatureFlags.duplicateSchedule)
+                      _HeroMenu(event: event),
                   ],
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          formatEventWeekdayDate(event.startsAt, timezone),
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    _HeroTimePill(
+                      icon: Icons.church_rounded,
+                      label: 'Culto',
+                      value: formatEventTime(event.startsAt, timezone),
+                    ),
+                    if (event.rehearsalAt != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      _HeroTimePill(
+                        icon: Icons.music_note_rounded,
+                        label: 'Ensaio',
+                        value: formatEventTime(event.rehearsalAt!, timezone),
                       ),
-                      if (canManage)
-                        PopupMenuButton<String>(
-                          onSelected: (value) async {
-                            if (value == 'duplicate') {
-                              await showDuplicateEventDialog(
-                                context: context,
-                                ref: ref,
-                                source: event,
-                              );
-                            }
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(
-                              value: 'duplicate',
-                              child: Text('Duplicar culto'),
-                            ),
-                          ],
-                        ),
                     ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(event.title, style: theme.textTheme.headlineSmall),
+                  ],
+                ),
+                if (youLabel != null) ...[
                   const SizedBox(height: AppSpacing.lg),
-                    _TimeRow(
-                    icon: Icons.event_available_rounded,
-                    label: 'Culto',
-                    value: formatEventTime(event.startsAt, timezone),
-                    emphasized: true,
-                  ),
-                  if (event.rehearsalAt != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _TimeRow(
-                      icon: Icons.schedule_rounded,
-                      label: 'Ensaio',
-                      value: formatEventTime(event.rehearsalAt!, timezone),
-                    ),
-                  ],
-                  if (youLabel != null) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    _YouChip(label: youLabel),
-                  ],
-                  if (event.notes?.isNotEmpty ?? false) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      event.notes!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  YouHighlight(label: youLabel, onDarkSurface: true),
                 ],
-              ),
+                const SizedBox(height: AppSpacing.lg),
+                Divider(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.18),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                // Wrap, e nao Row: com paleta longa os dois itens brigavam pela
+                // mesma linha e o texto quebrava no meio.
+                Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _HeroFooterItem(
+                      icon: event.scheduledMemberCount == 0
+                          ? Icons.person_off_outlined
+                          : Icons.groups_rounded,
+                      label: _scheduleLabel(event.scheduledMemberCount),
+                    ),
+                    if (event.colorPalette?.isNotEmpty ?? false)
+                      _HeroFooterItem(
+                        icon: Icons.palette_outlined,
+                        label: event.colorPalette!,
+                      ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _TimeRow extends StatelessWidget {
-  const _TimeRow({
+String _scheduleLabel(int count) {
+  if (count == 0) return 'Ninguém escalado ainda';
+  if (count == 1) return '1 pessoa escalada';
+  return '$count pessoas escaladas';
+}
+
+class _HeroFooterItem extends StatelessWidget {
+  const _HeroFooterItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final white = Colors.white.withValues(alpha: 0.9);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: white),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          label,
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: white),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroMenu extends ConsumerWidget {
+  const _HeroMenu({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      icon: Icon(
+        Icons.more_vert_rounded,
+        color: Colors.white.withValues(alpha: 0.9),
+      ),
+      onSelected: (value) async {
+        if (value == 'duplicate') {
+          await showDuplicateEventDialog(
+            context: context,
+            ref: ref,
+            source: event,
+          );
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'duplicate', child: Text('Duplicar escala')),
+      ],
+    );
+  }
+}
+
+class _HeroTimePill extends StatelessWidget {
+  const _HeroTimePill({
     required this.icon,
     required this.label,
     required this.value,
-    this.emphasized = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
-  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 20,
-          color: emphasized ? scheme.primary : scheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Text(
-          '$label ',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.9)),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
+            ),
           ),
-        ),
-        Text(
-          value,
-          style: (emphasized ? theme.textTheme.titleMedium : theme.textTheme.bodyLarge)
-              ?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurface,
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            value,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -579,83 +739,90 @@ class _EventTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timezone =
-        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final timezone =
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youLabel =
         youAssignmentLabel(event.positionsForMembership(membershipId));
 
-    return Card(
-      child: InkWell(
-        onTap: () => context.push('/agenda/${event.id}'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.sm,
-            AppSpacing.md,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      onTap: () => context.push('/agenda/${event.id}'),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DateBadge(date: event.startsAt, timezone: timezone),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
                   children: [
-                    Text(
-                      formatEventWeekdayDate(event.startsAt, timezone),
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: scheme.primary,
-                        fontWeight: FontWeight.w600,
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        'Culto ${formatEventTime(event.startsAt, timezone)}'
+                        '${event.rehearsalAt == null ? '' : '  ·  Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'}',
+                        style: theme.textTheme.bodySmall,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(event.title, style: theme.textTheme.titleMedium),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Culto ${formatEventTime(event.startsAt, timezone)}'
-                      '${event.rehearsalAt == null ? '' : ' · Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (youLabel != null) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      _YouChip(label: youLabel),
-                    ],
                   ],
                 ),
-              ),
-              if (canManage)
-                PopupMenuButton<String>(
-                  onSelected: (value) async {
-                    if (value == 'duplicate') {
-                      await showDuplicateEventDialog(
-                        context: context,
-                        ref: ref,
-                        source: event,
-                      );
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'duplicate',
-                      child: Text('Duplicar culto'),
-                    ),
-                  ],
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
+                if (youLabel != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  YouHighlight(label: youLabel, compact: true),
+                ],
+              ],
+            ),
           ),
-        ),
+          // O menu do item só existe por causa de "Duplicar escala"; com a
+          // funcionalidade escondida, o card volta a ser só um atalho.
+          if (canManage && FeatureFlags.duplicateSchedule)
+            PopupMenuButton<String>(
+              onSelected: (value) async {
+                if (value == 'duplicate') {
+                  await showDuplicateEventDialog(
+                    context: context,
+                    ref: ref,
+                    source: event,
+                  );
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'duplicate',
+                  child: Text('Duplicar escala'),
+                ),
+              ],
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm, right: 4),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+        ],
       ),
     );
   }
