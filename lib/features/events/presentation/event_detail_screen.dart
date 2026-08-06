@@ -5,7 +5,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -390,7 +389,7 @@ class _EventSummaryCard extends StatelessWidget {
             // uma palavra. O acento e o ícone do instrumento seguem ali.
             Align(
               alignment: Alignment.centerLeft,
-              child: YouHighlight(positionNames: youPositions, compact: true),
+              child: YouHighlight(positionNames: youPositions),
             ),
           ],
           if (hasPalette || hasNotes) ...[
@@ -665,11 +664,11 @@ class _AssignedTeamCard extends StatelessWidget {
   }
 }
 
-/// Quem conduz a ministração, no topo da equipe escalada.
+/// Quem conduz a ministracao, no topo da equipe escalada.
 ///
-/// No acento dourado e acima das funções: é a primeira pergunta de quem abre a
-/// escala pensando "quem vai conduzir?". Dentro dos grupos, misturado aos
-/// outros nomes, ele se perdia.
+/// Linha discreta acima das funcoes: e a primeira pergunta de quem abre a
+/// escala pensando "quem vai conduzir?". Sem faixa colorida — o peso vem do
+/// rotulo e do icone.
 class _MinisterBanner extends StatelessWidget {
   const _MinisterBanner({required this.name});
 
@@ -679,47 +678,39 @@ class _MinisterBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final foreground = AppColors.onAccentContainer(scheme);
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.accentContainer(scheme),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Row(
-        children: [
-          AppAvatar(name: name, radius: 16),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      children: [
+        Icon(
+          Icons.record_voice_over_rounded,
+          size: 18,
+          color: scheme.primary,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
               children: [
-                Text(
-                  'MINISTRANTE',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: foreground.withValues(alpha: 0.75),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1,
+                TextSpan(
+                  text: 'Ministrante · ',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: foreground,
+                TextSpan(
+                  text: name,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
+            overflow: TextOverflow.ellipsis,
           ),
-          Icon(
-            Icons.record_voice_over_rounded,
-            size: 20,
-            color: foreground.withValues(alpha: 0.7),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

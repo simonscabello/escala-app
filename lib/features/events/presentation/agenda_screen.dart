@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -339,14 +338,14 @@ class _OnboardingCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: filled
                   ? scheme.primaryContainer
-                  : AppColors.accentContainer(scheme),
+                  : scheme.secondaryContainer,
               borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             ),
             child: Icon(
               icon,
               color: filled
                   ? scheme.onPrimaryContainer
-                  : AppColors.onAccentContainer(scheme),
+                  : scheme.onSecondaryContainer,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -470,8 +469,11 @@ class _EventsList extends StatelessWidget {
 }
 
 /// Cartão do próximo culto. É a primeira coisa que a pessoa vê ao abrir o app,
-/// então concentra tudo que ela precisa saber sem abrir nada: quando, onde ela
-/// entra, e se a escala já está montada.
+/// então concentra tudo que ela precisa saber sem abrir nada: quando e onde
+/// ela entra.
+///
+/// Layout alinhado ao resumo do detalhe da escala: badge, título, horários e
+/// chip "VOCÊ" — sem rótulo "próxima escala" nem ícone decorativo.
 class _FeaturedEventCard extends ConsumerWidget {
   const _FeaturedEventCard({
     required this.event,
@@ -490,174 +492,84 @@ class _FeaturedEventCard extends ConsumerWidget {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youPositions = event.positionsForMembership(membershipId);
-    final gradient = AppColors.heroGradient(scheme);
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusHero),
-        gradient: LinearGradient(
-          colors: gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: gradient.last.withValues(alpha: 0.32),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.push('/agenda/${event.id}'),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return AppCard(
+      onTap: () => context.push('/agenda/${event.id}'),
+      borderRadius: AppSpacing.radiusLg,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DateBadge(
+                date: event.startsAt,
+                timezone: timezone,
+                background: scheme.primaryContainer,
+                foreground: scheme.onPrimaryContainer,
+                muted: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DateBadge(
-                      date: event.startsAt,
-                      timezone: timezone,
-                      size: DateBadgeSize.large,
-                      background: Colors.white.withValues(alpha: 0.16),
-                      foreground: Colors.white,
-                      muted: Colors.white.withValues(alpha: 0.8),
+                    Text(
+                      event.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'PRÓXIMA ESCALA',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                            ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: 6,
+                      children: [
+                        for (final service in event.displayServices)
+                          _HeroTimePill(
+                            icon: Icons.church_rounded,
+                            label: '${service.label} '
+                                '${formatEventTime(service.startsAt, timezone)}',
+                            emphasized: true,
                           ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            event.title,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              height: 1.2,
-                            ),
+                        if (event.rehearsalAt != null)
+                          _HeroTimePill(
+                            icon: Icons.music_note_rounded,
+                            label: isSameLocalDay(
+                              event.rehearsalAt!,
+                              event.startsAt,
+                              timezone,
+                            )
+                                ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
+                                : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
+                                    '${formatEventTime(event.rehearsalAt!, timezone)}',
+                          )
+                        else
+                          // Ausência de ensaio é informação, não vazio.
+                          const _HeroTimePill(
+                            icon: Icons.music_off_rounded,
+                            label: 'Sem ensaio',
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                    if (canManage && FeatureFlags.duplicateSchedule)
-                      _HeroMenu(event: event),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                // Wrap e não Row: com dois cultos mais o ensaio são três
-                // pílulas, e numa Row a terceira estouraria a largura.
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    for (final service in event.displayServices)
-                      _HeroTimePill(
-                        icon: Icons.church_rounded,
-                        label: service.label,
-                        value: formatEventTime(service.startsAt, timezone),
-                      ),
-                    if (event.rehearsalAt != null)
-                      _HeroTimePill(
-                        icon: Icons.music_note_rounded,
-                        label: 'Ensaio',
-                        value: formatEventTime(event.rehearsalAt!, timezone),
-                      )
-                    else
-                      // Ausência de ensaio é informação, não vazio: sem a tag
-                      // fica a dúvida se ninguém marcou ou se não vai ter.
-                      const _HeroTimePill(
-                        icon: Icons.music_off_rounded,
-                        label: 'Sem ensaio',
-                        value: '',
-                      ),
-                  ],
-                ),
-                if (youPositions.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  YouHighlight(
-                    positionNames: youPositions,
-                    onDarkSurface: true,
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.lg),
-                Divider(
-                  height: 1,
-                  color: Colors.white.withValues(alpha: 0.18),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                // Wrap, e nao Row: com paleta longa os dois itens brigavam pela
-                // mesma linha e o texto quebrava no meio.
-                Wrap(
-                  spacing: AppSpacing.lg,
-                  runSpacing: AppSpacing.sm,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _HeroFooterItem(
-                      icon: event.scheduledMemberCount == 0
-                          ? Icons.person_off_outlined
-                          : Icons.groups_rounded,
-                      label: _scheduleLabel(event.scheduledMemberCount),
-                    ),
-                    if (event.colorPalette?.isNotEmpty ?? false)
-                      _HeroFooterItem(
-                        icon: Icons.palette_outlined,
-                        label: event.colorPalette!,
-                      ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              if (canManage && FeatureFlags.duplicateSchedule)
+                _HeroMenu(event: event),
+            ],
           ),
-        ),
+          if (youPositions.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: YouHighlight(positionNames: youPositions),
+            ),
+          ],
+        ],
       ),
-    );
-  }
-}
-
-String _scheduleLabel(int count) {
-  if (count == 0) return 'Ninguém escalado ainda';
-  if (count == 1) return '1 pessoa escalada';
-  return '$count pessoas escaladas';
-}
-
-class _HeroFooterItem extends StatelessWidget {
-  const _HeroFooterItem({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final white = Colors.white.withValues(alpha: 0.9);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 17, color: white),
-        const SizedBox(width: AppSpacing.sm),
-        Text(
-          label,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: white),
-        ),
-      ],
     );
   }
 }
@@ -669,11 +581,10 @@ class _HeroMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+
     return PopupMenuButton<String>(
-      icon: Icon(
-        Icons.more_vert_rounded,
-        color: Colors.white.withValues(alpha: 0.9),
-      ),
+      icon: Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),
       onSelected: (value) async {
         if (value == 'duplicate') {
           await showDuplicateEventDialog(
@@ -694,47 +605,43 @@ class _HeroTimePill extends StatelessWidget {
   const _HeroTimePill({
     required this.icon,
     required this.label,
-    required this.value,
+    this.emphasized = false,
   });
 
   final IconData icon;
   final String label;
-  final String value;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground =
+        emphasized ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: 5,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        color: emphasized
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.9)),
-          const SizedBox(width: AppSpacing.sm),
+          Icon(icon, size: 14, color: foreground),
+          const SizedBox(width: 5),
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: foreground,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          if (value.isNotEmpty) ...[
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              value,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -813,7 +720,7 @@ class _EventTile extends ConsumerWidget {
                 ),
                 if (youPositions.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.sm),
-                  YouHighlight(positionNames: youPositions, compact: true),
+                  YouHighlight(positionNames: youPositions),
                 ],
               ],
             ),

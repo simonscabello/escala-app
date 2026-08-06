@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -240,13 +239,13 @@ class _UnavailabilityTile extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.accentContainer(scheme),
+              color: scheme.primaryContainer,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             child: Icon(
               Icons.event_busy_rounded,
               size: 20,
-              color: AppColors.onAccentContainer(scheme),
+              color: scheme.onPrimaryContainer,
             ),
           ),
           const SizedBox(width: AppSpacing.md),

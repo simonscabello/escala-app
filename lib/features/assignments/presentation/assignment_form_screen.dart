@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -447,55 +446,56 @@ class _MinisterPicker extends StatelessWidget {
         .toList(growable: false)
       ..sort((a, b) => a.displayName.compareTo(b.displayName));
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.record_voice_over_rounded,
-                size: 19,
-                color: AppColors.accent(scheme),
+    // Sem cartão: o bloco vira mais uma superfície flutuante no meio de uma
+    // pilha que já tem um cartão por função. O rótulo e as pastilhas bastam.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.record_voice_over_rounded,
+              size: 17,
+              color: scheme.primary,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text('Ministrante', style: theme.textTheme.titleSmall),
+            const SizedBox(width: AppSpacing.sm),
+            // A explicação de o que é ministrante saiu: quem monta a escala
+            // sabe. Fica só o que muda com a tela -- se dá para escolher.
+            if (assigned.isEmpty)
+              Expanded(
+                child: Text(
+                  'escale a equipe primeiro',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Text('Ministrante', style: theme.textTheme.titleMedium),
+          ],
+        ),
+        if (assigned.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final member in assigned)
+                _MinisterChoice(
+                  name: member.displayName,
+                  selected: ministerId == member.id,
+                  // Tocar no escolhido limpa: às vezes ainda não se sabe
+                  // quem vai ministrar, e isso não pode travar a escala.
+                  onTap: enabled
+                      ? () => onChanged(
+                            ministerId == member.id ? null : member.id,
+                          )
+                      : null,
+                ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            assigned.isEmpty
-                ? 'Escale a equipe primeiro: o ministrante sai de quem está na escala.'
-                : 'Quem conduz a ministração: lê os versículos, fala antes das '
-                    'músicas e delega.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          if (assigned.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                for (final member in assigned)
-                  _MinisterChoice(
-                    name: member.displayName,
-                    selected: ministerId == member.id,
-                    // Tocar no escolhido limpa: às vezes ainda não se sabe
-                    // quem vai ministrar, e isso não pode travar a escala.
-                    onTap: enabled
-                        ? () => onChanged(
-                              ministerId == member.id ? null : member.id,
-                            )
-                        : null,
-                  ),
-              ],
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 }
@@ -516,38 +516,38 @@ class _MinisterChoice extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final foreground = selected
-        ? AppColors.onAccentContainer(scheme)
+        ? scheme.onPrimaryContainer
         : scheme.onSurfaceVariant;
 
     return Material(
       color: selected
-          ? AppColors.accentContainer(scheme)
+          ? scheme.primaryContainer
           : scheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
         child: Padding(
+          // Sem avatar e com folga menor: são as mesmas pessoas dos cartões
+          // logo acima, então o nome já identifica.
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
+            vertical: 6,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppAvatar(name: name, radius: 11),
-              const SizedBox(width: AppSpacing.sm),
+              if (selected) ...[
+                Icon(Icons.check_rounded, size: 14, color: foreground),
+                const SizedBox(width: 4),
+              ],
               Text(
                 name,
-                style: theme.textTheme.labelLarge?.copyWith(
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: foreground,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
-              if (selected) ...[
-                const SizedBox(width: 5),
-                Icon(Icons.check_rounded, size: 16, color: foreground),
-              ],
             ],
           ),
         ),
@@ -674,11 +674,11 @@ class _SelectedChip extends StatelessWidget {
     final background = unavailable
         ? scheme.errorContainer
         : (warn
-            ? AppColors.accentContainer(scheme)
+            ? scheme.primaryContainer
             : scheme.surfaceContainerHigh);
     final foreground = unavailable
         ? scheme.onErrorContainer
-        : (warn ? AppColors.onAccentContainer(scheme) : scheme.onSurface);
+        : (warn ? scheme.onPrimaryContainer : scheme.onSurface);
 
     return Container(
       padding: const EdgeInsets.all(4),
@@ -1081,7 +1081,7 @@ class _PickerTile extends StatelessWidget {
                       Text(
                         'Fora do cadastro desta função',
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: AppColors.accent(scheme),
+                          color: scheme.primary,
                         ),
                       ),
                   ],

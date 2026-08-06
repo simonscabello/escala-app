@@ -75,11 +75,8 @@ void main() {
       ),
     );
 
-    // "VOCÊ" so no sobretitulo; o valor traz apenas a funcao. Antes o banner
-    // recebia o texto pronto e a palavra aparecia nas duas linhas.
-    expect(find.text('VOCÊ'), findsOneWidget);
-    expect(find.text('Guitarra'), findsOneWidget);
-    expect(find.text('VOCÊ: Guitarra'), findsNothing);
+    // Chip de uma linha: rotulo e funcao juntos.
+    expect(find.text('VOCÊ: Guitarra'), findsOneWidget);
 
     await tester.pumpWidget(
       const MaterialApp(

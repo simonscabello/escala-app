@@ -78,17 +78,16 @@ class AppColors {
   static const Color darkScrim = Color(0xFF000000);
   static const Color darkShadow = Color(0xFF000000);
 
-  // --- Acento "voce" ---
-  // Tudo no app e azul; o estado pessoal precisava de uma cor propria para
-  // saltar. Dourado quente contrasta com o azul sem brigar com ele, e carrega
-  // a ideia de destaque.
-  static const Color lightAccent = Color(0xFFB25E00);
-  static const Color lightAccentContainer = Color(0xFFFFE7C4);
-  static const Color lightOnAccentContainer = Color(0xFF432500);
+  // --- Acento de destaque (aliases do primary) ---
+  // Antes era dourado; agora segue o azul da marca para nao competir com o
+  // heroi nem engordar faixas de Ministrante / VOCÊ.
+  static const Color lightAccent = lightPrimary;
+  static const Color lightAccentContainer = lightPrimaryContainer;
+  static const Color lightOnAccentContainer = lightOnPrimaryContainer;
 
-  static const Color darkAccent = Color(0xFFFFBC6B);
-  static const Color darkAccentContainer = Color(0xFF573100);
-  static const Color darkOnAccentContainer = Color(0xFFFFE7C4);
+  static const Color darkAccent = darkPrimary;
+  static const Color darkAccentContainer = darkPrimaryContainer;
+  static const Color darkOnAccentContainer = darkOnPrimaryContainer;
 
   // --- Gradiente do cartao heroi ---
   static const List<Color> lightHeroGradient = [
