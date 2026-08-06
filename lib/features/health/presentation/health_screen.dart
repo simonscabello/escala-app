@@ -16,7 +16,9 @@ class HealthScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Diagnostico')),
-      body: RefreshIndicator(
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
         onRefresh: () async => ref.refresh(healthCheckProvider.future),
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -57,6 +59,7 @@ class HealthScreen extends ConsumerWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

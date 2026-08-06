@@ -25,7 +25,11 @@ class InvitesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Convites')),
-      body: invites.when(
+      // Sem a barra inferior nesta rota, ninguem consome o recuo dos botoes de
+      // navegacao do Android -- o fim da lista ficava por baixo deles.
+      body: SafeArea(
+        top: false,
+        child: invites.when(
         loading: () => const AppLoading(),
         error: (error, _) => AppErrorState(
           message: error is ApiException
@@ -86,6 +90,7 @@ class InvitesScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

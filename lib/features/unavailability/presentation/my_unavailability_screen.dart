@@ -143,7 +143,9 @@ class _MyUnavailabilityScreenState
         icon: const Icon(Icons.edit_calendar_rounded),
         label: const Text('Escolher dias'),
       ),
-      body: items.when(
+      body: SafeArea(
+        top: false,
+        child: items.when(
         loading: () => const AppLoading(),
         error: (error, _) => AppErrorState(
           message: error is ApiException
@@ -200,6 +202,7 @@ class _MyUnavailabilityScreenState
             ),
           );
         },
+        ),
       ),
     );
   }

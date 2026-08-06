@@ -26,6 +26,12 @@ dependencies:
   intl: ^0.20.2
   timezone: ^0.11.1
   share_plus: ^12.0.2
+  # Icones das funcoes (violao, bateria, mesa de som). O Material Icons do
+  # Flutter nao tem instrumentos: so mic, piano e music_note. A fonte vai
+  # empacotada no APK, sem download em runtime -- mesma razao da Plus Jakarta.
+  # A 10.x nao compila neste SDK: ela estende `IconData`, que virou
+  # `final class` no Flutter novo. So a 11.x corrigiu.
+  font_awesome_flutter: ^11.0.0
 
 dev_dependencies:
   flutter_test:

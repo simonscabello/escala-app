@@ -1,3 +1,4 @@
+import '../../team/domain/position_visuals.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 
@@ -36,7 +37,11 @@ String buildScheduleShareText(Event event) {
   } else {
     for (final group in event.assignments) {
       buffer.writeln();
-      buffer.writeln('${group.positionName}:');
+      // Emoji e nao icone: quem recebe le no WhatsApp, fora do app. E o mesmo
+      // vocabulario que o resto deste texto ja usa (🎵 📅 ⏰).
+      buffer.writeln(
+        '${PositionVisuals.emoji(group.positionName)} ${group.positionName}:',
+      );
       for (final member in group.members) {
         final note =
             (member.note?.isNotEmpty ?? false) ? ' (${member.note})' : '';

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/position_icon.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -148,25 +149,17 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
         positions.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('$e'),
-          data: (list) => Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              for (final position in list)
-                FilterChip(
-                  label: Text(position.name),
-                  selected: _selected.contains(position.id),
-                  onSelected: _loading
-                      ? null
-                      : (on) => setState(() {
-                            if (on) {
-                              _selected.add(position.id);
-                            } else {
-                              _selected.remove(position.id);
-                            }
-                          }),
-                ),
-            ],
+          data: (list) => _PositionGrid(
+            positions: list,
+            selected: _selected,
+            enabled: !_loading,
+            onToggle: (id, on) => setState(() {
+              if (on) {
+                _selected.add(id);
+              } else {
+                _selected.remove(id);
+              }
+            }),
           ),
         ),
         const SizedBox(height: AppSpacing.xxl),
@@ -182,6 +175,145 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
               : Text(widget.isEditing ? 'Salvar' : 'Adicionar'),
         ),
       ],
+    );
+  }
+}
+
+/// Funcoes em duas colunas.
+///
+/// Antes era um `Wrap`: os chips tinham larguras diferentes ("Som" ao lado de
+/// "Multimidia") e as linhas ficavam desalinhadas, dando ao bloco a aparencia
+/// de sobra de layout. Em duas colunas de largura igual a lista vira uma
+/// grade que se le de cima para baixo.
+class _PositionGrid extends StatelessWidget {
+  const _PositionGrid({
+    required this.positions,
+    required this.selected,
+    required this.enabled,
+    required this.onToggle,
+  });
+
+  final List<Position> positions;
+  final Set<String> selected;
+  final bool enabled;
+  final void Function(String positionId, bool on) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+
+    for (var i = 0; i < positions.length; i += 2) {
+      final left = positions[i];
+      final right = i + 1 < positions.length ? positions[i + 1] : null;
+
+      rows.add(
+        Padding(
+          padding: EdgeInsets.only(
+            bottom: i + 2 < positions.length ? AppSpacing.sm : 0,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildTile(left)),
+              const SizedBox(width: AppSpacing.sm),
+              // Numero impar de funcoes: a ultima ocupa so a coluna da
+              // esquerda, em vez de esticar e ficar diferente das outras.
+              Expanded(
+                child: right == null
+                    ? const SizedBox.shrink()
+                    : _buildTile(right),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(children: rows);
+  }
+
+  Widget _buildTile(Position position) {
+    return _PositionTile(
+      position: position,
+      selected: selected.contains(position.id),
+      enabled: enabled,
+      onTap: () => onToggle(position.id, !selected.contains(position.id)),
+    );
+  }
+}
+
+class _PositionTile extends StatelessWidget {
+  const _PositionTile({
+    required this.position,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final Position position;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground =
+        selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Material(
+        color: selected ? scheme.primaryContainer : scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(
+                color: selected ? scheme.primary : scheme.outlineVariant,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                PositionIcon(
+                  position.name,
+                  category: position.category,
+                  size: 17,
+                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    position.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: foreground,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: scheme.primary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

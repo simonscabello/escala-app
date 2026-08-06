@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/position_icon.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
@@ -43,7 +44,9 @@ class MembersScreen extends ConsumerWidget {
               label: const Text('Adicionar'),
             )
           : null,
-      body: members.when(
+      body: SafeArea(
+        top: false,
+        child: members.when(
         loading: () => const AppLoading(),
         error: (error, _) => AppErrorState(
           message: error is ApiException
@@ -102,6 +105,7 @@ class MembersScreen extends ConsumerWidget {
             ),
           );
         },
+        ),
       ),
     );
   }
@@ -146,7 +150,6 @@ class _MemberTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final positions = member.positions.map((p) => p.name).join(', ');
 
     return AppCard(
       onTap: canManage
@@ -170,11 +173,35 @@ class _MemberTile extends ConsumerWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (positions.isNotEmpty)
-              Text(
-                positions,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+            // Antes era "Vocalista, Violao" em texto corrido. Com o icone na
+            // frente de cada uma da para saber o que a pessoa faz sem ler a
+            // linha inteira -- que e o que se faz ao procurar alguem na lista.
+            if (member.positions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    for (final position in member.positions)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          PositionIcon(
+                            position.name,
+                            category: position.category,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            position.name,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
               ),
             if (!member.hasAccount)

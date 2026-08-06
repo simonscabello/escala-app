@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../auth/application/auth_controller.dart';
@@ -24,7 +25,9 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Perfil')),
-      body: ListView(
+      body: SafeArea(
+        top: false,
+        child: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           Row(
@@ -88,6 +91,10 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.xxl),
+          Text('Aparência', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          const _ThemeModeCard(),
+          const SizedBox(height: AppSpacing.xxl),
           // Contornado e em vermelho: como botão tonal claro, "Sair" parecia
           // desabilitado.
           OutlinedButton.icon(
@@ -105,9 +112,68 @@ class ProfileScreen extends ConsumerWidget {
             child: const Text('Diagnóstico de conexão'),
           ),
         ],
+        ),
       ),
     );
   }
+}
+
+/// Escolha do tema.
+///
+/// "Sistema" e o padrao e vem primeiro: quem ja deixou o Android no escuro nao
+/// precisa configurar nada aqui. As outras duas existem para quem quer o app
+/// diferente do resto do aparelho.
+class _ThemeModeCard extends ConsumerWidget {
+  const _ThemeModeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final mode = ref.watch(themeModeProvider);
+
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Tema', style: theme.textTheme.titleSmall),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Vale só neste aparelho.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              segments: [
+                for (final option in ThemeMode.values)
+                  ButtonSegment(
+                    value: option,
+                    icon: Icon(_iconFor(option), size: 18),
+                    label: Text(themeModeLabel(option)),
+                  ),
+              ],
+              selected: {mode},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) => ref
+                  .read(themeModeProvider.notifier)
+                  .select(selection.first),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconFor(ThemeMode mode) => switch (mode) {
+        ThemeMode.system => Icons.brightness_auto_rounded,
+        ThemeMode.light => Icons.light_mode_rounded,
+        ThemeMode.dark => Icons.dark_mode_rounded,
+      };
 }
 
 class _TeamDetails extends StatelessWidget {

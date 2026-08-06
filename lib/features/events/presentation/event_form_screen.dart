@@ -8,6 +8,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/form_scaffold.dart';
+import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../team/data/team_repository.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
@@ -100,9 +101,10 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
   Future<void> _pickTime({required bool rehearsal}) async {
     final current = rehearsal ? _rehearsalAt ?? _startsAt : _startsAt;
-    final selected = await showTimePicker(
+    final selected = await showQuarterHourPicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(current),
+      title: rehearsal ? 'Horario do ensaio' : 'Horario do culto',
     );
     if (selected == null || !mounted) return;
 
@@ -357,22 +359,72 @@ class _DateTimeFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        // A data ganha mais espaco que a hora: "06/08/2026" tem o dobro dos
+        // caracteres de "09:00". Com os dois botoes em metades iguais, num
+        // Galaxy S23 com a fonte do sistema aumentada o ano quebrava para a
+        // linha de baixo.
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: enabled ? onPickDate : null,
-            icon: const Icon(Icons.calendar_today_outlined),
-            label: Text(DateFormat('dd/MM/yyyy', 'pt_BR').format(dateTime)),
+          flex: 3,
+          child: _PickerButton(
+            enabled: enabled,
+            onPressed: onPickDate,
+            icon: Icons.calendar_today_outlined,
+            label: DateFormat('dd/MM/yyyy', 'pt_BR').format(dateTime),
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: enabled ? onPickTime : null,
-            icon: const Icon(Icons.schedule_outlined),
-            label: Text(DateFormat('HH:mm', 'pt_BR').format(dateTime)),
+          flex: 2,
+          child: _PickerButton(
+            enabled: enabled,
+            onPressed: onPickTime,
+            icon: Icons.schedule_outlined,
+            label: DateFormat('HH:mm', 'pt_BR').format(dateTime),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Botao de data/hora que encolhe o texto em vez de quebrar a linha.
+class _PickerButton extends StatelessWidget {
+  const _PickerButton({
+    required this.enabled,
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: enabled ? onPressed : null,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          // `scaleDown` so age quando falta espaco -- em tela larga o texto
+          // fica no tamanho normal. `softWrap: false` garante que a saida seja
+          // encolher, e nao quebrar.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(label, maxLines: 1, softWrap: false),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

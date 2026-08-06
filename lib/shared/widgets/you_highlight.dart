@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import 'position_icon.dart';
 
 /// Destaque de "onde eu apareço".
 ///
@@ -12,11 +13,19 @@ class YouHighlight extends StatelessWidget {
   const YouHighlight({
     super.key,
     required this.label,
+    this.positionNames = const [],
     this.compact = false,
     this.onDarkSurface = false,
   });
 
   final String label;
+
+  /// Funcoes em que a pessoa esta escalada nesta escala.
+  ///
+  /// Com exatamente uma, o icone da funcao substitui a estrela -- "voce toca
+  /// guitarra" fica visivel antes de ler o texto. Com duas ou mais nao ha
+  /// icone que represente o conjunto, e a estrela continua.
+  final List<String> positionNames;
 
   /// Versão para dentro de listas e cards menores.
   final bool compact;
@@ -35,6 +44,14 @@ class YouHighlight extends StatelessWidget {
         : AppColors.accentContainer(scheme);
     final foreground =
         onDarkSurface ? Colors.white : AppColors.onAccentContainer(scheme);
+    final single = positionNames.length == 1 ? positionNames.first : null;
+
+    Widget markerIcon(double size) {
+      if (single == null) {
+        return Icon(Icons.star_rounded, size: size, color: foreground);
+      }
+      return PositionIcon(single, size: size * 0.85, color: foreground);
+    }
 
     if (compact) {
       return Container(
@@ -49,7 +66,7 @@ class YouHighlight extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.star_rounded, size: 15, color: foreground),
+            markerIcon(15),
             const SizedBox(width: 5),
             Flexible(
               child: Text(
@@ -83,7 +100,7 @@ class YouHighlight extends StatelessWidget {
                   : AppColors.accent(scheme).withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
-            child: Icon(Icons.star_rounded, size: 20, color: foreground),
+            child: Center(child: markerIcon(20)),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(

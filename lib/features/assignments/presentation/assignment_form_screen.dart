@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../events/data/event_repository.dart';
@@ -381,12 +382,6 @@ class _SummaryBar extends StatelessWidget {
   }
 }
 
-IconData _positionIcon(String category) => switch (category) {
-      'VOCAL' => Icons.mic_rounded,
-      'INSTRUMENT' => Icons.music_note_rounded,
-      _ => Icons.people_alt_rounded,
-    };
-
 class _PositionCard extends StatelessWidget {
   const _PositionCard({
     required this.position,
@@ -428,12 +423,15 @@ class _PositionCard extends StatelessWidget {
                       : scheme.primaryContainer,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
-                child: Icon(
-                  _positionIcon(position.category),
-                  size: 19,
-                  color: chosen.isEmpty
-                      ? scheme.onSurfaceVariant
-                      : scheme.onPrimaryContainer,
+                child: Center(
+                  child: PositionIcon(
+                    position.name,
+                    category: position.category,
+                    size: 17,
+                    color: chosen.isEmpty
+                        ? scheme.onSurfaceVariant
+                        : scheme.onPrimaryContainer,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -691,8 +689,10 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    _positionIcon(widget.position.category),
+                  PositionIcon(
+                    widget.position.name,
+                    category: widget.position.category,
+                    size: 20,
                     color: scheme.primary,
                   ),
                   const SizedBox(width: AppSpacing.md),

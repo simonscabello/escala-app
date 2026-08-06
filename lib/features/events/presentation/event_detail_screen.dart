@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/date_badge.dart';
+import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/you_highlight.dart';
@@ -111,14 +112,20 @@ class EventDetailScreen extends ConsumerWidget {
                 ),
             ],
           ),
-          body: RefreshIndicator(
-            onRefresh: () => ref.refresh(eventProvider(eventId).future),
-            child: _EventDetailBody(
-              event: event,
-              myMembershipId: myMembershipId,
-              canManage: canManage,
-              fromCache: cached.fromCache,
-              cachedAt: cached.cachedAt,
+          // Sem `SafeArea` o fim da lista ficava embaixo dos botoes de
+          // navegacao do Android. Esta tela nao tem barra inferior propria,
+          // entao ninguem estava consumindo o recuo do sistema.
+          body: SafeArea(
+            top: false,
+            child: RefreshIndicator(
+              onRefresh: () => ref.refresh(eventProvider(eventId).future),
+              child: _EventDetailBody(
+                event: event,
+                myMembershipId: myMembershipId,
+                canManage: canManage,
+                fromCache: cached.fromCache,
+                cachedAt: cached.cachedAt,
+              ),
             ),
           ),
         );
@@ -191,8 +198,8 @@ class _EventDetailBody extends StatelessWidget {
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final youLabel =
-        youAssignmentLabel(event.positionsForMembership(myMembershipId));
+    final youPositions = event.positionsForMembership(myMembershipId);
+    final youLabel = youAssignmentLabel(youPositions);
     final hasPalette = event.colorPalette?.isNotEmpty ?? false;
     final hasNotes = event.notes?.isNotEmpty ?? false;
 
@@ -213,7 +220,10 @@ class _EventDetailBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (youLabel != null) ...[
-                YouAssignmentBanner(label: youLabel),
+                YouAssignmentBanner(
+                  label: youLabel,
+                  positionNames: youPositions,
+                ),
                 const SizedBox(height: AppSpacing.xl),
               ],
               Row(
@@ -443,12 +453,18 @@ class _PaletteNotesCard extends StatelessWidget {
 /// Etapa 5; a aparência agora vem do [YouHighlight] compartilhado, para o
 /// destaque ser idêntico aqui e na agenda.
 class YouAssignmentBanner extends StatelessWidget {
-  const YouAssignmentBanner({super.key, required this.label});
+  const YouAssignmentBanner({
+    super.key,
+    required this.label,
+    this.positionNames = const [],
+  });
 
   final String label;
+  final List<String> positionNames;
 
   @override
-  Widget build(BuildContext context) => YouHighlight(label: label);
+  Widget build(BuildContext context) =>
+      YouHighlight(label: label, positionNames: positionNames);
 }
 
 /// Faixa de alerta quando alguém escalado já tinha avisado que não pode.
@@ -564,11 +580,25 @@ class _AssignmentGroupTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            group.positionName,
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: scheme.primary,
-            ),
+          Row(
+            children: [
+              // Sem `category`: o backend so devolve o nome da funcao no grupo
+              // da escala. O mapa de icones resolve pelo nome.
+              PositionIcon(
+                group.positionName,
+                size: 15,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  group.positionName,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
           for (final member in group.members) ...[
