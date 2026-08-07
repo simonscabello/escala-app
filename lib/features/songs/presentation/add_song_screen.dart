@@ -20,9 +20,18 @@ import '../domain/song_models.dart';
 /// A pessoa escolhe: título sozinho é ambíguo ("Aleluia" existe em cinco
 /// versões) e casar automaticamente erraria calado.
 class AddSongScreen extends ConsumerStatefulWidget {
-  const AddSongScreen({super.key, required this.teamId});
+  const AddSongScreen({super.key, required this.teamId, this.onCreated});
 
   final String teamId;
+
+  /// O que fazer com a música recém-criada.
+  ///
+  /// Nulo no caminho normal (`Equipe → Repertório → Nova`): abre a música
+  /// criada, que é o que se quer ao cadastrar por cadastrar. Preenchido quando
+  /// esta tela é aberta de dentro da montagem de uma escala, onde ir para o
+  /// detalhe da música abandonaria a escala pela metade -- ali a música volta
+  /// para quem pediu e entra direto no culto.
+  final ValueChanged<Song>? onCreated;
 
   @override
   ConsumerState<AddSongScreen> createState() => _AddSongScreenState();
@@ -98,9 +107,20 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       final song = await create();
       if (!mounted) return;
 
+      // A lista do repertório precisa enxergar a música nova: quem volta para
+      // ela (ou para o seletor da escala) procuraria por algo que a resposta
+      // em cache não tem.
+      ref.invalidate(songsProvider(SongQuery(teamId: widget.teamId)));
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('"${song.title}" entrou no repertório.')),
       );
+
+      final onCreated = widget.onCreated;
+      if (onCreated != null) {
+        onCreated(song);
+        return;
+      }
       context.pushReplacement('/equipe/musicas/${song.id}');
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
