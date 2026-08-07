@@ -205,6 +205,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'escalar',
                     builder: (_, state) => AssignmentFormScreen(
                       eventId: state.pathParameters['eventId']!,
+                      // `?novo=1` só é posto por quem acabou de criar a
+                      // escala: dali a tela emenda no repertório em vez de
+                      // voltar. Na consulta, e não em `extra`, para o encadeamento
+                      // sobreviver a um recarregamento da rota.
+                      nextIsSetlist: state.uri.queryParameters['novo'] == '1',
                     ),
                   ),
                   GoRoute(
@@ -216,7 +221,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                         eventId: state.pathParameters['eventId']!,
                         // A escala vem por `extra` para a tela abrir já com o
                         // repertório atual, sem uma segunda ida ao servidor.
+                        // Vem nula quando o encadeamento da criação chega aqui
+                        // por URL; aí a tela busca sozinha.
                         event: state.extra as Event?,
+                        isNewSchedule:
+                            state.uri.queryParameters['novo'] == '1',
                       ),
                     ),
                   ),

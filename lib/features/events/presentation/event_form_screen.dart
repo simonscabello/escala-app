@@ -24,8 +24,17 @@ class _ServiceDraft {
   _ServiceDraft({
     required this.label,
     required this.time,
+    this.id,
     this.templateId,
   });
+
+  /// O culto que já está gravado, quando este rascunho veio de uma escala
+  /// existente. Nulo em culto novo.
+  ///
+  /// É o que o servidor usa para saber que mudar o horário da noite é editar
+  /// aquele culto, e não trocá-lo por outro: sem o id ele recriaria a linha, e
+  /// o repertório da noite iria junto.
+  final String? id;
 
   String label;
   TimeOfDay time;
@@ -97,9 +106,15 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     final timezone = _timezone(event.timezone);
     final start = eventLocalTime(event.startsAt, timezone);
     _date = DateTime(start.year, start.month, start.day);
+    // `services`, e não `displayServices`: o fallback para cache antigo inventa
+    // um culto usando o id DA ESCALA, e devolver esse id ao servidor faria a
+    // edição ser recusada com INVALID_SERVICE. Sem culto gravado, os rascunhos
+    // nascem sem id e viram cultos novos.
+    final gravados = event.services;
     _services = [
-      for (final service in event.displayServices)
+      for (final service in gravados.isEmpty ? event.displayServices : gravados)
         _ServiceDraft(
+          id: gravados.isEmpty ? null : service.id,
           label: service.label,
           time: TimeOfDay.fromDateTime(
             eventLocalTime(service.startsAt, timezone),
@@ -236,6 +251,9 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     return [
       for (final service in _services)
         {
+          // Só nos cultos que já existiam: é o que diz ao servidor "edite este"
+          // em vez de "troque por um novo".
+          if (service.id != null) 'id': service.id,
           'label': service.label,
           'startsAt': _toUtc(
             DateTime(
@@ -318,6 +336,24 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         ref.invalidate(eventsProvider((createdEvent.teamId, 'upcoming')));
         ref.invalidate(eventsProvider((createdEvent.teamId, 'past')));
         ref.invalidate(eventProvider(createdEvent.id));
+
+        if (!mounted) return;
+        // Criar a escala não é o fim da tarefa: ela nasce sem ninguém escalado
+        // e sem repertório. Em vez de devolver o líder à agenda -- de onde ele
+        // teria de achar a escala nova e abrir dois menus --, a criação emenda
+        // direto na escalação e, dali, no repertório.
+        //
+        // **Uma chamada de navegação por passo.** A tentativa anterior fazia
+        // `go` (para montar agenda → detalhe) e `push` da escalação por cima,
+        // no mesmo frame: em go_router as duas disparam análises assíncronas, e
+        // o `push` toma como base a configuração de ANTES do `go`. A pilha
+        // saía indeterminada e o passo seguinte não avançava. `pushReplacement`
+        // troca este formulário -- que já cumpriu seu papel -- pela escalação,
+        // e cada etapa faz o mesmo com a próxima.
+        context.pushReplacement(
+          '/agenda/${createdEvent.id}/escalar?novo=1',
+        );
+        return;
       }
 
       if (mounted) context.pop();

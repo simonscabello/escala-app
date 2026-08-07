@@ -23,9 +23,22 @@ import '../../team/domain/team_models.dart';
 /// cartão compacto que mostra quem já está escalado, e a escolha acontece numa
 /// folha focada em uma função de cada vez.
 class AssignmentFormScreen extends ConsumerStatefulWidget {
-  const AssignmentFormScreen({super.key, required this.eventId});
+  const AssignmentFormScreen({
+    super.key,
+    required this.eventId,
+    this.nextIsSetlist = false,
+  });
 
   final String eventId;
+
+  /// Esta tela é o segundo passo de uma escala recém-criada, e o repertório é
+  /// o terceiro.
+  ///
+  /// Muda duas coisas: o botão diz para onde leva, e salvar emenda no
+  /// repertório em vez de voltar. Montar a escala é escalar a equipe **e**
+  /// escolher as músicas — parar no meio é o que fazia o líder ter de procurar
+  /// a escala de novo na agenda para terminar.
+  final bool nextIsSetlist;
 
   @override
   ConsumerState<AssignmentFormScreen> createState() =>
@@ -165,6 +178,15 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         );
       }
 
+      // `pushReplacement` e não `push`: a escalação já foi salva, e voltar para
+      // ela do repertório só ofereceria salvá-la de novo. O que fica embaixo é
+      // o detalhe da escala, que é onde o repertório desemboca ao terminar.
+      if (widget.nextIsSetlist) {
+        context.pushReplacement(
+          '/agenda/${widget.eventId}/repertorio?novo=1',
+        );
+        return;
+      }
       context.pop();
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -357,7 +379,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Salvar escala'),
+                  : Text(
+                      widget.nextIsSetlist
+                          ? 'Salvar e escolher músicas'
+                          : 'Salvar escala',
+                    ),
             ),
           ),
         ),
