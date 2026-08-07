@@ -69,6 +69,13 @@ class ManageTeamScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             _ManageTile(
+              icon: Icons.library_music_outlined,
+              title: 'Repertório',
+              subtitle: 'As músicas da equipe, com letra, cifra e tom',
+              onTap: () => context.push('/equipe/musicas'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _ManageTile(
               icon: Icons.tune_rounded,
               title: 'Dados da equipe',
               subtitle: 'Nome da equipe',

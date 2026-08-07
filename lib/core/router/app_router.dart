@@ -20,6 +20,11 @@ import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/team/data/team_repository.dart';
 import '../../features/team/domain/team_models.dart';
+import '../../features/songs/domain/song_models.dart';
+import '../../features/songs/presentation/add_song_screen.dart';
+import '../../features/songs/presentation/song_detail_screen.dart';
+import '../../features/songs/presentation/song_form_screen.dart';
+import '../../features/songs/presentation/songs_screen.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
 import '../../features/team/presentation/manage_team_screen.dart';
@@ -134,6 +139,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/equipe/dados',
         builder: (_, __) =>
             _withActiveTeam(ref, (id) => TeamSettingsScreen(teamId: id)),
+      ),
+      // Repertório fora da casca, como as outras telas de configuração: a
+      // barra inferior atrapalharia o caminho de volta.
+      GoRoute(
+        path: '/equipe/musicas',
+        builder: (_, __) => _withActiveTeam(ref, (id) => SongsScreen(teamId: id)),
+        routes: [
+          GoRoute(
+            path: 'nova',
+            builder: (_, __) =>
+                _withActiveTeam(ref, (id) => AddSongScreen(teamId: id)),
+          ),
+          GoRoute(
+            path: ':songId',
+            builder: (_, state) => _withActiveTeam(
+              ref,
+              (id) => SongDetailScreen(
+                teamId: id,
+                songId: state.pathParameters['songId']!,
+              ),
+            ),
+            routes: [
+              GoRoute(
+                path: 'editar',
+                builder: (_, state) => _withActiveTeam(
+                  ref,
+                  (id) => SongFormScreen(
+                    teamId: id,
+                    songId: state.pathParameters['songId']!,
+                    song: state.extra as Song?,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),

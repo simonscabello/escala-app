@@ -26,6 +26,9 @@ dependencies:
   intl: ^0.20.2
   timezone: ^0.11.1
   share_plus: ^12.0.2
+  # Abrir cifra, letra, YouTube e Spotify no app de fora. A cifra precisa
+  # abrir no navegador ou no app do CifraClub -- nao embutimos o conteudo.
+  url_launcher: ^6.3.0
   # Foto de perfil. A imagem ja sai reduzida do picker (ver profile_screen):
   # o backend aceita ate 5 MB, e foto de celular passa disso com folga.
   image_picker: ^1.1.2
