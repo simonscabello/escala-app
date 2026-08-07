@@ -10,7 +10,6 @@ import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
-import '../../../shared/widgets/date_badge.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
@@ -143,7 +142,7 @@ class EventDetailScreen extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Excluir escala?'),
-        content: Text('A escala "${event.title}" será removida.'),
+        content: Text('A escala de ${event.describe()} será removida.'),
         actions: [
           TextButton(
             onPressed: () => dialogContext.pop(false),
@@ -309,68 +308,54 @@ class _EventSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Sem selo de data: ele dizia "DOM 9 AGO" logo ao lado de "Domingo,
+          // 9 de agosto". A data por extenso sozinha basta.
+          Text(
+            formatEventWeekdayDate(event.startsAt, timezone),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+            ),
+          ),
+          if (event.hasTitle)
+            Text(
+              event.title!,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          const SizedBox(height: AppSpacing.md),
+          // Na largura do cartão, e não na coluna à direita do selo: ali cada
+          // etiqueta caía numa linha própria por falta de espaço.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: 6,
             children: [
-              DateBadge(
-                date: event.startsAt,
-                timezone: timezone,
-                background: scheme.primaryContainer,
-                foreground: scheme.onPrimaryContainer,
-                muted: scheme.onPrimaryContainer.withValues(alpha: 0.75),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Sem repetir a data ao lado do bloco que já a mostra: ela
-                    // aparecia três vezes seguidas (bloco, linha e cartão).
-                    Text(
-                      event.title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    // Horários como etiquetas de uma linha. Antes cada um era
-                    // um bloco de duas linhas (rótulo em cima, valor embaixo)
-                    // separado por divisória: três informações curtas gastavam
-                    // meia tela.
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: 6,
-                      children: [
-                        // Um por culto: no domingo da equipe são dois, manhã e
-                        // noite. Só o horário -- a data está no bloco ao lado.
-                        for (final service in event.displayServices)
-                          _TimePill(
-                            // Mesmo ícone das pílulas do cartão herói.
-                            icon: Icons.church_rounded,
-                            label: '${service.label} '
-                                '${formatEventTime(service.startsAt, timezone)}',
-                            emphasized: true,
-                          ),
-                        if (event.rehearsalAt != null)
-                          _TimePill(
-                            icon: Icons.music_note_rounded,
-                            // O ensaio às vezes é em outro dia; a data só
-                            // aparece quando realmente difere da do culto.
-                            label: isSameLocalDay(
-                              event.rehearsalAt!,
-                              event.startsAt,
-                              timezone,
-                            )
-                                ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
-                                : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
-                                    '${formatEventTime(event.rehearsalAt!, timezone)}',
-                          ),
-                      ],
-                    ),
-                  ],
+              // Um por culto: no domingo da equipe são dois, manhã e noite.
+              // Só o horário -- a data está no selo acima.
+              for (final service in event.displayServices)
+                _TimePill(
+                  // Mesmo ícone das pílulas do cartão da agenda.
+                  icon: Icons.church_rounded,
+                  label: '${service.label} '
+                      '${formatEventTime(service.startsAt, timezone)}',
+                  emphasized: true,
                 ),
-              ),
+              if (event.rehearsalAt != null)
+                _TimePill(
+                  icon: Icons.music_note_rounded,
+                  // O ensaio às vezes é em outro dia; a data só aparece
+                  // quando realmente difere da do culto.
+                  label: isSameLocalDay(
+                    event.rehearsalAt!,
+                    event.startsAt,
+                    timezone,
+                  )
+                      ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
+                      : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
+                          '${formatEventTime(event.rehearsalAt!, timezone)}',
+                ),
             ],
           ),
           // Fora do Wrap: um endereço longo não caberia numa etiqueta e

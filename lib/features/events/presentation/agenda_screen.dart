@@ -8,7 +8,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
-import '../../../shared/widgets/date_badge.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
@@ -500,65 +499,86 @@ class _FeaturedEventCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Sem selo de data: ele repetia, em três siglas, a mesma data que a
+          // linha ao lado já escrevia por extenso.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DateBadge(
-                date: event.startsAt,
-                timezone: timezone,
-                background: scheme.primaryContainer,
-                foreground: scheme.onPrimaryContainer,
-                muted: scheme.onPrimaryContainer.withValues(alpha: 0.75),
-              ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      event.title,
-                      style: theme.textTheme.titleLarge?.copyWith(
+                      'PRÓXIMA ESCALA',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
-                        height: 1.15,
+                        letterSpacing: 1.1,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: 6,
-                      children: [
-                        for (final service in event.displayServices)
-                          _HeroTimePill(
-                            icon: Icons.church_rounded,
-                            label: '${service.label} '
-                                '${formatEventTime(service.startsAt, timezone)}',
-                            emphasized: true,
-                          ),
-                        if (event.rehearsalAt != null)
-                          _HeroTimePill(
-                            icon: Icons.music_note_rounded,
-                            label: isSameLocalDay(
-                              event.rehearsalAt!,
-                              event.startsAt,
-                              timezone,
-                            )
-                                ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
-                                : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
-                                    '${formatEventTime(event.rehearsalAt!, timezone)}',
-                          )
-                        else
-                          // Ausência de ensaio é informação, não vazio.
-                          const _HeroTimePill(
-                            icon: Icons.music_off_rounded,
-                            label: 'Sem ensaio',
-                          ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      formatEventWeekdayDate(event.startsAt, timezone),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    // A data é a identidade da escala e fica sempre na mesma
+                    // posição; o título só existe em culto especial e entra
+                    // abaixo, em azul, para se ler como exceção.
+                    if (event.hasTitle)
+                      Text(
+                        event.title!,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
               ),
               if (canManage && FeatureFlags.duplicateSchedule)
                 _HeroMenu(event: event),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Fora da coluna à direita do selo: ali sobravam ~250px e cada
+          // etiqueta pedia ~150, então as três caíam uma por linha. Na largura
+          // do cartão elas cabem em uma ou duas.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: 6,
+            children: [
+              for (final service in event.displayServices)
+                _HeroTimePill(
+                  icon: Icons.church_rounded,
+                  label: '${service.label} '
+                      '${formatEventTime(service.startsAt, timezone)}',
+                  emphasized: true,
+                ),
+              if (event.rehearsalAt != null)
+                _HeroTimePill(
+                  icon: Icons.music_note_rounded,
+                  label: isSameLocalDay(
+                    event.rehearsalAt!,
+                    event.startsAt,
+                    timezone,
+                  )
+                      ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
+                      : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
+                          '${formatEventTime(event.rehearsalAt!, timezone)}',
+                )
+              else
+                // Ausência de ensaio é informação, não vazio.
+                const _HeroTimePill(
+                  icon: Icons.music_off_rounded,
+                  label: 'Sem ensaio',
+                ),
             ],
           ),
           if (youPositions.isNotEmpty) ...[
@@ -678,18 +698,29 @@ class _EventTile extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DateBadge(date: event.startsAt, timezone: timezone),
-          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // A data por extenso abre o item: é o que identifica a escala,
+                // e fica na mesma posição em todos, o que deixa a lista legível
+                // de cima a baixo.
                 Text(
-                  event.title,
+                  formatEventWeekdayDate(event.startsAt, timezone),
                   style: theme.textTheme.titleMedium,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (event.hasTitle)
+                  Text(
+                    event.title!,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [

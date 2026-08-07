@@ -44,7 +44,7 @@ Future<void> showDuplicateEventDialog({
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Copia a escalação e os detalhes de "${source.title}" '
+                  'Copia a escalação e os detalhes de ${source.describe()} '
                   'para a nova data. O ensaio mantém a mesma diferença.',
                 ),
                 const SizedBox(height: AppSpacing.lg),

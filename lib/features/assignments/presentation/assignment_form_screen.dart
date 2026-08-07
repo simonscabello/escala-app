@@ -283,7 +283,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           AppSpacing.xxxl,
         ),
         children: [
-          Text(event.title, style: theme.textTheme.titleLarge),
+          Text(event.describe(), style: theme.textTheme.titleLarge),
           const SizedBox(height: AppSpacing.lg),
           _SummaryBar(
             people: _distinctPeople,

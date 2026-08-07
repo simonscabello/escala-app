@@ -44,13 +44,71 @@ class TeamRepository {
     });
   }
 
-  Future<List<Position>> positions(String teamId) async {
+  /// O fuso não entra: é sempre o de Brasília, e a API nem aceita o campo.
+  Future<Team> update(String teamId, {required String name}) async {
     return _guard(() async {
-      final response =
-          await _dio.get<List<dynamic>>('/teams/$teamId/positions');
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId',
+        data: {'name': name},
+      );
+      return Team.fromJson(response.data!);
+    });
+  }
+
+  Future<List<Position>> positions(
+    String teamId, {
+    bool includeInactive = false,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/positions',
+        queryParameters: includeInactive ? {'includeInactive': true} : null,
+      );
       return response.data!
           .map((e) => Position.fromJson(e as Map<String, dynamic>))
           .toList();
+    });
+  }
+
+  Future<Position> addPosition(
+    String teamId, {
+    required String name,
+    required String category,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/positions',
+        data: {'name': name, 'category': category},
+      );
+      return Position.fromJson(response.data!);
+    });
+  }
+
+  Future<Position> updatePosition(
+    String teamId,
+    String positionId, {
+    String? name,
+    String? category,
+    bool? isActive,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/positions/$positionId',
+        data: {
+          if (name != null) 'name': name,
+          if (category != null) 'category': category,
+          if (isActive != null) 'isActive': isActive,
+        },
+      );
+      return Position.fromJson(response.data!);
+    });
+  }
+
+  /// A API desativa em vez de apagar: escalas passadas continuam apontando
+  /// para a função, e apagá-la reescreveria o histórico.
+  Future<void> deactivatePosition(String teamId, String positionId) async {
+    return _guard(() async {
+      await _dio.delete<void>('/teams/$teamId/positions/$positionId');
     });
   }
 
@@ -230,6 +288,19 @@ final addGuestProvider = Provider<
 final positionsProvider =
     FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).positions(teamId);
+});
+
+/// Inclui as funções desativadas — só a tela de gestão precisa vê-las.
+final allPositionsProvider =
+    FutureProvider.autoDispose.family<List<Position>, String>((ref, teamId) {
+  return ref
+      .watch(teamRepositoryProvider)
+      .positions(teamId, includeInactive: true);
+});
+
+final teamProvider =
+    FutureProvider.autoDispose.family<Team, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).find(teamId);
 });
 
 /// A grade de cultos da igreja. Leitura liberada a qualquer integrante: a tela

@@ -1,4 +1,5 @@
 import '../../unavailability/domain/unavailability_models.dart';
+import 'event_datetime.dart';
 
 class AssignmentMember {
   const AssignmentMember({
@@ -174,7 +175,7 @@ class Event {
     return Event(
       id: json['id'] as String,
       teamId: json['teamId'] as String,
-      title: json['title'] as String,
+      title: (json['title'] as String?)?.trim(),
       startsAt: DateTime.parse(json['startsAt'] as String).toUtc(),
       rehearsalAt: _parseUtcDateTime(json['rehearsalAt']),
       location: json['location'] as String?,
@@ -214,7 +215,12 @@ class Event {
 
   final String id;
   final String teamId;
-  final String title;
+
+  /// Nome do culto especial: "Páscoa", "Ceia", "Batismo".
+  ///
+  /// Nulo na maioria das escalas, e isso é o normal: o domingo comum já é
+  /// identificado pela data e pelos horários. Use [hasTitle] antes de exibir.
+  final String? title;
   final DateTime startsAt;
   final DateTime? rehearsalAt;
   final String? location;
@@ -230,6 +236,20 @@ class Event {
 
   /// Quem conduz a ministração do louvor. Nulo enquanto ninguém foi escolhido.
   final EventMinister? minister;
+
+  bool get hasTitle => title != null && title!.isNotEmpty;
+
+  /// Como se referir a esta escala num texto corrido (diálogos, avisos).
+  ///
+  /// Sem título, a data por extenso: "a escala de domingo, 9 de agosto" lê
+  /// melhor do que um identificador vazio.
+  String describe() {
+    if (hasTitle) return title!;
+    return formatEventWeekdayDate(
+      startsAt,
+      timezone.isEmpty ? 'America/Sao_Paulo' : timezone,
+    );
+  }
 
   /// Os cultos para exibir.
   ///

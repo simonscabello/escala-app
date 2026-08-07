@@ -27,20 +27,15 @@ class MembersScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Equipe'),
         actions: [
-          // Sem atalho para o perfil aqui: ele agora é uma aba na barra
-          // inferior, sempre a um toque de distância.
-          if (canManage) ...[
+          // Uma entrada só. Antes eram dois ícones — corrente e igreja — e
+          // ninguém adivinha que "corrente" leva a convites. Cada configuração
+          // nova acrescentaria mais um ícone mudo aqui.
+          if (canManage)
             IconButton(
-              tooltip: 'Cultos da igreja',
-              icon: const Icon(Icons.church_outlined),
-              onPressed: () => context.push('/equipe/cultos'),
+              tooltip: 'Gerenciar equipe',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => context.push('/equipe/gerenciar'),
             ),
-            IconButton(
-              tooltip: 'Convites',
-              icon: const Icon(Icons.link_rounded),
-              onPressed: () => context.push('/equipe/convites'),
-            ),
-          ],
         ],
       ),
       floatingActionButton: canManage

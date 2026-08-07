@@ -21,8 +21,11 @@ import '../../features/team/data/team_repository.dart';
 import '../../features/team/domain/team_models.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
+import '../../features/team/presentation/manage_team_screen.dart';
 import '../../features/team/presentation/members_screen.dart';
+import '../../features/team/presentation/positions_screen.dart';
 import '../../features/team/presentation/service_templates_screen.dart';
+import '../../features/team/presentation/team_settings_screen.dart';
 
 /// Rotas acessiveis sem sessao.
 const _publicRoutes = {'/login', '/cadastro', '/diagnostico'};
@@ -113,6 +116,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/equipe/cultos',
         builder: (_, __) =>
             _withActiveTeam(ref, (id) => ServiceTemplatesScreen(teamId: id)),
+      ),
+      // Gestão da equipe: fora da casca, como convites e cultos. São telas de
+      // configuração, e a barra inferior atrapalharia o caminho de volta.
+      GoRoute(
+        path: '/equipe/gerenciar',
+        builder: (_, __) =>
+            _withActiveTeam(ref, (id) => ManageTeamScreen(teamId: id)),
+      ),
+      GoRoute(
+        path: '/equipe/funcoes',
+        builder: (_, __) =>
+            _withActiveTeam(ref, (id) => PositionsScreen(teamId: id)),
+      ),
+      GoRoute(
+        path: '/equipe/dados',
+        builder: (_, __) =>
+            _withActiveTeam(ref, (id) => TeamSettingsScreen(teamId: id)),
       ),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),

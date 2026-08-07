@@ -8,7 +8,12 @@ String buildScheduleShareText(Event event) {
       event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
   final buffer = StringBuffer();
 
-  buffer.writeln('🎵 ${event.title}');
+  // O título só existe em culto especial ("Páscoa"). Sem ele, a data abre o
+  // texto sozinha -- repetir "Domingo" acima de "Domingo, 9 de agosto" não
+  // dizia nada a quem recebe.
+  if (event.hasTitle) {
+    buffer.writeln('🎵 ${event.title}');
+  }
   buffer.writeln(
     '📅 ${formatEventWeekdayDate(event.startsAt, timezone)}',
   );

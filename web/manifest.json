@@ -1,11 +1,11 @@
 {
-    "name": "louvor_app",
-    "short_name": "louvor_app",
+    "name": "Escalas de Louvor",
+    "short_name": "Escalas",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1D4ED8",
     "theme_color": "#1D4ED8",
-    "description": "A new Flutter project.",
+    "description": "Escalas de louvor - app da equipe",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

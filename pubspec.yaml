@@ -37,6 +37,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# Icone a partir de web/icons, com o azul da marca (AppColors.lightPrimary /
+# primaryContainer). Sem pasta ios neste projeto.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: web/icons/Icon-512.png
+  adaptive_icon_background: "#DBE6FE"
+  adaptive_icon_foreground: web/icons/Icon-maskable-512.png
+  web:
+    generate: true
+    image_path: web/icons/Icon-512.png
+    background_color: "#1D4ED8"
+    theme_color: "#1D4ED8"
 
 flutter:
   uses-material-design: true

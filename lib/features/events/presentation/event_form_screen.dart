@@ -89,7 +89,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
     _populated = true;
     _seededFromTemplates = true;
-    _title.text = event.title;
+    _title.text = event.title ?? '';
     _location.text = event.location ?? '';
     _notes.text = event.notes ?? '';
     _colorPalette.text = event.colorPalette ?? '';
@@ -371,16 +371,19 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Opcional e sem validação: o domingo comum não precisa de nome,
+              // e exigir um produzia "Domingo" ao lado de um selo que já dizia
+              // DOM 9 AGO. Só culto especial tem o que nomear.
               TextFormField(
                 controller: _title,
                 enabled: !_loading,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.next,
-                decoration:
-                    const InputDecoration(labelText: 'Título da escala'),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Informe o título da escala.'
-                    : null,
+                decoration: const InputDecoration(
+                  labelText: 'Título (opcional)',
+                  hintText: 'Páscoa, Ceia, Batismo...',
+                  helperText: 'Deixe vazio no culto comum.',
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
               Text('Dia', style: Theme.of(context).textTheme.titleMedium),
