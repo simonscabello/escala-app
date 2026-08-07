@@ -39,6 +39,7 @@ class AssignmentMember {
 class EventSong {
   const EventSong({
     required this.songId,
+    required this.serviceId,
     required this.title,
     this.artist,
     this.key,
@@ -52,6 +53,13 @@ class EventSong {
   });
 
   final String songId;
+
+  /// Em qual culto da escala esta música entra.
+  ///
+  /// A mesma música pode aparecer de manhã e à noite: são duas linhas, e à
+  /// noite pode estar em outro tom, em outra ordem e com outro recado.
+  final String serviceId;
+
   final String title;
   final String? artist;
 
@@ -75,6 +83,10 @@ class EventSong {
   factory EventSong.fromJson(Map<String, dynamic> json) {
     return EventSong(
       songId: json['songId'] as String,
+      // Cache gravado antes do repertório por culto não tem `serviceId`. Vazio
+      // em vez de exceção: a escala continua abrindo, e as músicas caem no
+      // primeiro culto ao serem agrupadas -- que é onde elas estavam.
+      serviceId: json['serviceId'] as String? ?? '',
       title: json['title'] as String,
       artist: json['artist'] as String?,
       key: json['key'] as String?,
@@ -324,6 +336,29 @@ class Event {
   List<EventService> get displayServices {
     if (services.isNotEmpty) return services;
     return [EventService(id: id, label: 'Culto', startsAt: startsAt)];
+  }
+
+  /// O repertório separado por culto, na ordem dos cultos.
+  ///
+  /// Todo culto entra na lista, inclusive o que ainda não tem música: um
+  /// domingo com a manhã montada e a noite vazia precisa **mostrar** a noite
+  /// vazia, senão o líder não enxerga o que falta.
+  ///
+  /// Música cujo culto não existe mais — ou que veio de cache gravado antes
+  /// desta versão, sem `serviceId` — cai no primeiro culto, que é onde ela
+  /// estava antes de os cultos passarem a ter repertório próprio.
+  List<({EventService service, List<EventSong> songs})> get songsByService {
+    final cultos = displayServices;
+    if (cultos.isEmpty) return const [];
+
+    final porCulto = {for (final culto in cultos) culto.id: <EventSong>[]};
+    for (final song in songs) {
+      (porCulto[song.serviceId] ?? porCulto[cultos.first.id]!).add(song);
+    }
+
+    return [
+      for (final culto in cultos) (service: culto, songs: porCulto[culto.id]!),
+    ];
   }
 
   /// Quem avisou que não pode no dia desta escala.

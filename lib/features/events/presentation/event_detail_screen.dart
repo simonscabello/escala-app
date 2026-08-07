@@ -21,6 +21,7 @@ import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
+import 'event_song_sheet.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -808,7 +809,11 @@ class _AssignedMemberRow extends StatelessWidget {
 }
 
 
-/// Repertório da escala, na ordem em que será tocado.
+/// Repertório da escala, com uma seção por culto.
+///
+/// O cabeçalho do culto aparece sempre, mesmo quando a escala tem um só: é o
+/// que faz "3ª música" querer dizer a mesma coisa em toda escala, e é o que
+/// impede o vocalista da noite de ensaiar o repertório da manhã.
 ///
 /// O tom aparece ao lado de cada música porque é a informação que o músico
 /// procura primeiro. Quando esta escala mudou o tom, ele vem destacado — a
@@ -823,6 +828,9 @@ class _SongsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final timezone =
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+    final grupos = event.songsByService;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,6 +862,8 @@ class _SongsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
+        // Escala inteira sem música: um aviso só. Repetir "sem músicas" em cada
+        // culto diria a mesma coisa duas vezes e ocuparia o dobro da tela.
         if (event.songs.isEmpty)
           AppCard(
             color: scheme.surfaceContainerLow,
@@ -869,11 +879,26 @@ class _SongsSection extends StatelessWidget {
           )
         else
           AppCard(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var i = 0; i < event.songs.length; i++)
-                  _SongRow(song: event.songs[i], position: i + 1),
+                for (var i = 0; i < grupos.length; i++) ...[
+                  if (i > 0) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Divider(color: scheme.outlineVariant, height: 1),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  _ServiceSongsSection(
+                    teamId: event.teamId,
+                    service: grupos[i].service,
+                    songs: grupos[i].songs,
+                    timezone: timezone,
+                  ),
+                ],
               ],
             ),
           ),
@@ -882,9 +907,80 @@ class _SongsSection extends StatelessWidget {
   }
 }
 
-class _SongRow extends StatelessWidget {
-  const _SongRow({required this.song, required this.position});
+/// Um culto e o repertório dele. Mesma forma da seção de função em "Equipe
+/// escalada": o rótulo uma vez no topo, os itens listados abaixo.
+class _ServiceSongsSection extends StatelessWidget {
+  const _ServiceSongsSection({
+    required this.teamId,
+    required this.service,
+    required this.songs,
+    required this.timezone,
+  });
 
+  final String teamId;
+  final EventService service;
+  final List<EventSong> songs;
+  final String timezone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.church_rounded, size: 15, color: scheme.primary),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '${service.label} '
+                '${formatEventTime(service.startsAt, timezone)}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: scheme.primary,
+                ),
+              ),
+            ),
+            if (songs.length > 1)
+              Text(
+                '${songs.length}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+          ],
+        ),
+        // Culto sem música numa escala que já tem repertório é informação, não
+        // vazio: quer dizer que falta montar este aqui.
+        if (songs.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs, left: 23),
+            child: Text(
+              'Repertório ainda não montado.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < songs.length; i++)
+            _SongRow(teamId: teamId, song: songs[i], position: i + 1),
+      ],
+    );
+  }
+}
+
+class _SongRow extends StatelessWidget {
+  const _SongRow({
+    required this.teamId,
+    required this.song,
+    required this.position,
+  });
+
+  final String teamId;
   final EventSong song;
   final int position;
 
@@ -895,6 +991,15 @@ class _SongRow extends StatelessWidget {
 
     return ListTile(
       dense: true,
+      contentPadding: EdgeInsets.zero,
+      // O que faltava: o vocalista e o instrumentista viam título, tom e
+      // recado, mas não alcançavam a cifra nem a letra -- que é justamente o
+      // que se procura antes de tocar. Vale para MEMBER, não só para o líder.
+      onTap: () => showEventSongSheet(
+        context: context,
+        teamId: teamId,
+        song: song,
+      ),
       leading: Text(
         '$position',
         style: theme.textTheme.titleSmall?.copyWith(

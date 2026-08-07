@@ -1,8 +1,14 @@
-import '../../team/domain/position_visuals.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 
 /// Gera o texto da escala para WhatsApp (sem markdown).
+///
+/// **Emoji marca seção, nunca linha.** A versão anterior punha um em cada
+/// horário, no ensaio, no local, no ministrante e em cada função — numa escala
+/// com seis funções davam quinze numa mensagem só, e o que deveria guiar o
+/// olho virava ruído. Sobraram três, um por bloco que se procura: a equipe, as
+/// músicas e as observações. O cabeçalho não precisa de nenhum, porque é a
+/// primeira coisa que se lê.
 String buildScheduleShareText(Event event) {
   final timezone =
       event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
@@ -12,39 +18,37 @@ String buildScheduleShareText(Event event) {
   // texto sozinha -- repetir "Domingo" acima de "Domingo, 9 de agosto" não
   // dizia nada a quem recebe.
   if (event.hasTitle) {
-    buffer.writeln('🎵 ${event.title}');
+    buffer.writeln(event.title);
   }
-  buffer.writeln(
-    '📅 ${formatEventWeekdayDate(event.startsAt, timezone)}',
-  );
+  buffer.writeln(formatEventWeekdayDate(event.startsAt, timezone));
   // Uma linha por culto. Com dois, quem recebe precisa ver os dois horários --
   // é a mesma equipe servindo de manhã e à noite.
   for (final service in event.displayServices) {
     buffer.writeln(
-      '⏰ ${service.label} às ${formatEventTime(service.startsAt, timezone)}',
+      '${service.label} às ${formatEventTime(service.startsAt, timezone)}',
     );
   }
 
   if (event.rehearsalAt != null) {
     buffer.writeln(
-      '🎤 Ensaio: ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
+      'Ensaio: ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
       'às ${formatEventTime(event.rehearsalAt!, timezone)}',
     );
   } else {
     // Dito explicitamente: o convidado que recebe este texto não tem o app
     // para conferir, e a ausência da linha seria ambígua.
-    buffer.writeln('🎤 Sem ensaio');
+    buffer.writeln('Sem ensaio');
   }
 
   if (event.location?.isNotEmpty ?? false) {
-    buffer.writeln('📍 ${event.location}');
+    buffer.writeln(event.location);
   }
 
   buffer.writeln();
   // Antes da equipe: quem recebe o texto precisa saber a quem se reportar
   // antes de procurar o próprio nome na lista.
   if (event.minister != null) {
-    buffer.writeln('🎙️ Ministrante: ${event.minister!.displayName}');
+    buffer.writeln('Ministrante: ${event.minister!.displayName}');
     buffer.writeln();
   }
   buffer.writeln('👥 Equipe');
@@ -54,11 +58,7 @@ String buildScheduleShareText(Event event) {
   } else {
     for (final group in event.assignments) {
       buffer.writeln();
-      // Emoji e nao icone: quem recebe le no WhatsApp, fora do app. E o mesmo
-      // vocabulario que o resto deste texto ja usa (🎵 📅 ⏰).
-      buffer.writeln(
-        '${PositionVisuals.emoji(group.positionName)} ${group.positionName}:',
-      );
+      buffer.writeln('${group.positionName}:');
       for (final member in group.members) {
         final note =
             (member.note?.isNotEmpty ?? false) ? ' (${member.note})' : '';
@@ -67,18 +67,11 @@ String buildScheduleShareText(Event event) {
     }
   }
 
-  final songLines = _songLines(event.songs);
-  if (songLines.isNotEmpty) {
-    buffer.writeln();
-    buffer.writeln('🎶 Músicas');
-    for (var i = 0; i < songLines.length; i++) {
-      buffer.writeln('${i + 1}. ${songLines[i]}');
-    }
-  }
+  _writeSongs(buffer, event, timezone);
 
   if (event.colorPalette?.isNotEmpty ?? false) {
     buffer.writeln();
-    buffer.writeln('🎨 Paleta: ${event.colorPalette}');
+    buffer.writeln('Paleta: ${event.colorPalette}');
   }
 
   if (event.notes?.isNotEmpty ?? false) {
@@ -88,6 +81,39 @@ String buildScheduleShareText(Event event) {
   }
 
   return buffer.toString().trimRight();
+}
+
+/// O repertório, com uma seção por culto quando há mais de um.
+///
+/// Com um culto só, o rótulo não entra: a linha "Culto às 09:00" já está lá
+/// em cima e repeti-la sobre a única lista de músicas seria ruído numa
+/// mensagem que se lê no celular. Com dois, o rótulo é o que impede o
+/// vocalista da noite de ensaiar o repertório da manhã.
+void _writeSongs(StringBuffer buffer, Event event, String timezone) {
+  final grupos = event.songsByService
+      .where((grupo) => _songLines(grupo.songs).isNotEmpty)
+      .toList();
+  if (grupos.isEmpty) return;
+
+  buffer.writeln();
+  buffer.writeln('🎶 Músicas');
+
+  final separar = grupos.length > 1;
+  for (final grupo in grupos) {
+    if (separar) {
+      buffer.writeln();
+      buffer.writeln(
+        '${grupo.service.label} '
+        '${formatEventTime(grupo.service.startsAt, timezone)}',
+      );
+    }
+    // A numeração recomeça em cada culto: "a 3ª da noite" é como a equipe
+    // fala, e continuar contando de 4 a 6 obrigaria a subtrair de cabeça.
+    final linhas = _songLines(grupo.songs);
+    for (var i = 0; i < linhas.length; i++) {
+      buffer.writeln('${i + 1}. ${linhas[i]}');
+    }
+  }
 }
 
 List<String> _songLines(List<EventSong> songs) {

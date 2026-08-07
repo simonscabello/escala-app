@@ -188,8 +188,12 @@ class EventRepository {
               .map(
                 (song) => {
                   'songId': song.songId,
+                  // Em qual culto ela entra. Obrigatório: o servidor não
+                  // escolhe por nós entre a manhã e a noite.
+                  'serviceId': song.serviceId,
                   // A posição não vai: quem numera é o servidor, a partir da
-                  // ordem. Mandar índice abriria espaço para buraco e repetido.
+                  // ordem — agora dentro de cada culto. Mandar índice abriria
+                  // espaço para buraco e repetido.
                   if (song.keyOverride != null &&
                       song.keyOverride!.isNotEmpty)
                     'keyOverride': song.keyOverride,
