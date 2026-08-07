@@ -250,25 +250,7 @@ class _EventDetailBody extends StatelessWidget {
                   },
                 ),
               const SizedBox(height: AppSpacing.xl),
-              AppCard(
-                color: scheme.surfaceContainerLow,
-                child: ListTile(
-                  leading: Icon(
-                    Icons.music_note_outlined,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  title: Text(
-                    'Músicas',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Em breve — repertório da escala.',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ),
+              _SongsSection(event: event, canManage: canManage),
             ],
           ),
         ),
@@ -825,3 +807,136 @@ class _AssignedMemberRow extends StatelessWidget {
   }
 }
 
+
+/// Repertório da escala, na ordem em que será tocado.
+///
+/// O tom aparece ao lado de cada música porque é a informação que o músico
+/// procura primeiro. Quando esta escala mudou o tom, ele vem destacado — a
+/// mesma canção sobe ou desce conforme quem canta.
+class _SongsSection extends StatelessWidget {
+  const _SongsSection({required this.event, required this.canManage});
+
+  final Event event;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                event.songs.isEmpty
+                    ? 'Músicas'
+                    : 'Músicas (${event.songs.length})',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            if (canManage)
+              TextButton.icon(
+                onPressed: () => context.push(
+                  '/agenda/${event.id}/repertorio',
+                  extra: event,
+                ),
+                icon: Icon(
+                  event.songs.isEmpty
+                      ? Icons.add_rounded
+                      : Icons.edit_outlined,
+                  size: 18,
+                ),
+                label: Text(event.songs.isEmpty ? 'Montar' : 'Editar'),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (event.songs.isEmpty)
+          AppCard(
+            color: scheme.surfaceContainerLow,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(
+              canManage
+                  ? 'Nenhuma música escolhida ainda.'
+                  : 'O repertório ainda não foi definido.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Column(
+              children: [
+                for (var i = 0; i < event.songs.length; i++)
+                  _SongRow(song: event.songs[i], position: i + 1),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SongRow extends StatelessWidget {
+  const _SongRow({required this.song, required this.position});
+
+  final EventSong song;
+  final int position;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return ListTile(
+      dense: true,
+      leading: Text(
+        '$position',
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      title: Text(song.title, style: theme.textTheme.bodyLarge),
+      subtitle: song.artist == null && song.note == null
+          ? null
+          : Text(
+              [
+                if (song.artist != null && song.artist!.isNotEmpty)
+                  song.artist!,
+                if (song.note != null && song.note!.isNotEmpty) song.note!,
+              ].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+      trailing: song.key == null || song.key!.isEmpty
+          ? null
+          : Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: song.hasCustomKey
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Text(
+                song.key!,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: song.hasCustomKey
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+    );
+  }
+}

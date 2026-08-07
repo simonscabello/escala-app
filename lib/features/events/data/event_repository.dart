@@ -172,6 +172,38 @@ class EventRepository {
     });
   }
 
+  /// Substitui o repertório inteiro, na ordem da lista.
+  ///
+  /// Bulk como a escalação: a pessoa arrasta, tira, acrescenta e salva de uma
+  /// vez. Item a item deixaria a escala pela metade se a rede caísse no meio.
+  Future<Event> replaceSongs(
+    String eventId,
+    List<EventSong> songs,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.put<Map<String, dynamic>>(
+        '/events/$eventId/songs',
+        data: {
+          'songs': songs
+              .map(
+                (song) => {
+                  'songId': song.songId,
+                  // A posição não vai: quem numera é o servidor, a partir da
+                  // ordem. Mandar índice abriria espaço para buraco e repetido.
+                  if (song.keyOverride != null &&
+                      song.keyOverride!.isNotEmpty)
+                    'keyOverride': song.keyOverride,
+                  if (song.note != null && song.note!.isNotEmpty)
+                    'note': song.note,
+                },
+              )
+              .toList(),
+        },
+      );
+      return Event.fromJson(response.data!);
+    });
+  }
+
   Future<T> _guard<T>(Future<T> Function() request) async {
     try {
       return await request();

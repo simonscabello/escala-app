@@ -31,6 +31,64 @@ class AssignmentMember {
 /// Quem conduz a ministração do louvor nesta escala.
 ///
 /// Um por escala, não por função: é quem lê os versículos, fala antes das
+/// Uma música dentro da escala.
+///
+/// O `key` já vem resolvido pelo servidor: é o tom desta escala quando alguém
+/// o definiu, senão o tom da equipe. A tela não precisa refazer essa escolha,
+/// e o texto compartilhado também não.
+class EventSong {
+  const EventSong({
+    required this.songId,
+    required this.title,
+    this.artist,
+    this.key,
+    this.keyOverride,
+    this.defaultKey,
+    this.note,
+    this.chordsUrl,
+    this.lyricsUrl,
+    this.youtubeUrl,
+    this.spotifyUrl,
+  });
+
+  final String songId;
+  final String title;
+  final String? artist;
+
+  /// O tom que vale nesta escala.
+  final String? key;
+
+  /// Só quando esta escala mudou o tom -- a tela sinaliza a diferença.
+  final String? keyOverride;
+  final String? defaultKey;
+
+  /// Recado da música ("entra só o teclado", "repetir o refrão").
+  final String? note;
+
+  final String? chordsUrl;
+  final String? lyricsUrl;
+  final String? youtubeUrl;
+  final String? spotifyUrl;
+
+  bool get hasCustomKey => keyOverride != null && keyOverride!.isNotEmpty;
+
+  factory EventSong.fromJson(Map<String, dynamic> json) {
+    return EventSong(
+      songId: json['songId'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String?,
+      key: json['key'] as String?,
+      keyOverride: json['keyOverride'] as String?,
+      defaultKey: json['defaultKey'] as String?,
+      note: json['note'] as String?,
+      chordsUrl: json['chordsUrl'] as String?,
+      lyricsUrl: json['lyricsUrl'] as String?,
+      youtubeUrl: json['youtubeUrl'] as String?,
+      spotifyUrl: json['spotifyUrl'] as String?,
+    );
+  }
+}
+
 /// músicas e delega. Está escalado em alguma função, mas o papel não pertence
 /// à função.
 class EventMinister {
@@ -203,7 +261,10 @@ class Event {
       minister: json['minister'] is Map<String, dynamic>
           ? EventMinister.fromJson(json['minister'] as Map<String, dynamic>)
           : null,
-      songs: (json['songs'] as List<dynamic>? ?? const []).cast<Object?>(),
+      songs: (json['songs'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventSong.fromJson)
+          .toList(),
       unavailable: (json['unavailable'] as List<dynamic>? ?? const [])
           .map((e) => UnavailableMember.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -229,7 +290,11 @@ class Event {
   final String status;
   final String timezone;
   final List<AssignmentGroup> assignments;
-  final List<Object?> songs;
+
+  /// Repertório desta escala, na ordem em que será tocado. Vem preenchido no
+  /// detalhe; a listagem da agenda devolve vazio, porque nenhum card mostra
+  /// músicas e carregá-las multiplicaria a resposta por evento.
+  final List<EventSong> songs;
 
   /// Horários de culto desta escala, do mais cedo para o mais tarde.
   final List<EventService> services;

@@ -12,6 +12,8 @@ import '../../features/events/presentation/agenda_screen.dart';
 import '../../features/events/presentation/event_detail_screen.dart';
 import '../../features/events/presentation/event_form_screen.dart';
 import '../../features/events/presentation/main_shell.dart';
+import '../../features/events/presentation/setlist_form_screen.dart';
+import '../../features/events/domain/event_models.dart';
 import '../../features/health/presentation/health_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
@@ -203,6 +205,19 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'escalar',
                     builder: (_, state) => AssignmentFormScreen(
                       eventId: state.pathParameters['eventId']!,
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'repertorio',
+                    builder: (_, state) => _withActiveTeam(
+                      ref,
+                      (id) => SetlistFormScreen(
+                        teamId: id,
+                        eventId: state.pathParameters['eventId']!,
+                        // A escala vem por `extra` para a tela abrir já com o
+                        // repertório atual, sem uma segunda ida ao servidor.
+                        event: state.extra as Event?,
+                      ),
                     ),
                   ),
                 ],

@@ -90,20 +90,19 @@ String buildScheduleShareText(Event event) {
   return buffer.toString().trimRight();
 }
 
-List<String> _songLines(List<Object?> songs) {
+List<String> _songLines(List<EventSong> songs) {
   final lines = <String>[];
-  for (final raw in songs) {
-    if (raw is! Map) continue;
-    final title = raw['title']?.toString() ?? raw['songTitle']?.toString();
-    if (title == null || title.isEmpty) continue;
-    final artist = raw['artist']?.toString();
-    final key = raw['keyOverride']?.toString() ?? raw['defaultKey']?.toString();
-    final parts = <String>[title];
-    if (artist != null && artist.isNotEmpty) {
-      parts.add('— $artist');
+  for (final song in songs) {
+    if (song.title.isEmpty) continue;
+
+    final parts = <String>[song.title];
+    if (song.artist != null && song.artist!.isNotEmpty) {
+      parts.add('— ${song.artist}');
     }
-    if (key != null && key.isNotEmpty) {
-      parts.add('($key)');
+    // O tom já vem resolvido: o desta escala quando existe, senão o da
+    // equipe. É a informação que o músico procura no grupo do WhatsApp.
+    if (song.key != null && song.key!.isNotEmpty) {
+      parts.add('(${song.key})');
     }
     lines.add(parts.join(' '));
   }

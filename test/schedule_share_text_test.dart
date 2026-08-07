@@ -139,16 +139,43 @@ void main() {
     final text = buildScheduleShareText(
       sampleEvent(
         songs: [
+          // Formato que a API devolve: o `key` já vem resolvido pelo
+          // servidor -- o desta escala quando existe, senão o da equipe.
           {
+            'songId': 's1',
             'title': 'Grande é o Senhor',
             'artist': 'Adoração',
+            'key': 'G',
             'keyOverride': 'G',
+            'defaultKey': 'E',
+          },
+          {
+            'songId': 's2',
+            'title': 'Aclame ao Senhor',
+            'artist': 'Diante do Trono',
+            'key': 'A',
+            'defaultKey': 'A',
           },
         ],
       ),
     );
 
     expect(text, contains('Músicas'));
+    // Numeradas: a ordem do repertório é o que a equipe vai tocar.
     expect(text, contains('1. Grande é o Senhor — Adoração (G)'));
+    expect(text, contains('2. Aclame ao Senhor — Diante do Trono (A)'));
+  });
+
+  test('música sem tom não ganha parênteses vazios', () {
+    final text = buildScheduleShareText(
+      sampleEvent(
+        songs: [
+          {'songId': 's1', 'title': 'Corinho da igreja'},
+        ],
+      ),
+    );
+
+    expect(text, contains('1. Corinho da igreja'));
+    expect(text, isNot(contains('()')));
   });
 }
