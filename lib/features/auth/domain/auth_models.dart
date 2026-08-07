@@ -4,12 +4,17 @@ class AuthUser {
     required this.name,
     required this.email,
     required this.mustChangePassword,
+    this.avatarUrl,
   });
 
   final String id;
   final String name;
   final String email;
   final bool mustChangePassword;
+
+  /// Caminho da foto relativo ao host da API ("/uploads/avatars/x.jpg"), ou
+  /// null. Quem monta o endereco completo e o AppAvatar.
+  final String? avatarUrl;
 
   /// Primeiro nome, usado nas saudacoes da interface.
   String get firstName => name.split(' ').first;
@@ -20,6 +25,7 @@ class AuthUser {
       name: json['name'] as String,
       email: json['email'] as String,
       mustChangePassword: json['mustChangePassword'] as bool? ?? false,
+      avatarUrl: json['avatarUrl'] as String?,
     );
   }
 }

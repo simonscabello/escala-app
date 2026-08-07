@@ -42,6 +42,17 @@ void main() {
       expect(Member.fromJson(memberJson(role: 'MEMBER')).roleLabel, 'Membro');
     });
 
+    test('foto so existe para quem tem conta', () {
+      final semConta = Member.fromJson(memberJson(hasAccount: false));
+      expect(semConta.avatarUrl, isNull);
+
+      final comFoto = Member.fromJson({
+        ...memberJson(),
+        'avatarUrl': '/uploads/avatars/abc.jpg',
+      });
+      expect(comFoto.avatarUrl, '/uploads/avatars/abc.jpg');
+    });
+
     test('um membro pode acumular funções', () {
       final member = Member.fromJson(
         memberJson(

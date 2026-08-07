@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
-/// Obrigatoria depois que o líder redefine a senha do membro (regra 27).
-/// Enquanto a troca não acontece, o backend bloqueia as demais rotas.
+/// Troca de senha, nos dois caminhos que existem:
+///
+/// - `forced` (rota /trocar-senha): depois que o líder redefine a senha do
+///   membro (regra 27). Enquanto a troca não acontece, o backend bloqueia as
+///   demais rotas e o redirect do router prende o app aqui -- por isso não há
+///   como voltar, só "Sair".
+/// - voluntária (rota /perfil/senha): o próprio usuário decide trocar. Tem
+///   AppBar, volta para o perfil e não oferece sair.
 class ChangePasswordScreen extends ConsumerStatefulWidget {
-  const ChangePasswordScreen({super.key});
+  const ChangePasswordScreen({super.key, this.forced = true});
+
+  final bool forced;
 
   @override
   ConsumerState<ChangePasswordScreen> createState() =>
@@ -46,6 +55,15 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             currentPassword: _current.text,
             newPassword: _next.text,
           );
+
+      // No caminho obrigatorio quem tira o usuario daqui e o redirect do
+      // router, assim que o estado deixa de ser mustChangePassword.
+      if (!widget.forced && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Senha alterada.')),
+        );
+        context.pop();
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -56,11 +74,15 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return FormScaffold(
-      showBrand: true,
-      title: 'Defina uma nova senha',
-      subtitle:
-          'Sua senha foi redefinida pelo líder da equipe. Escolha uma nova '
-          'para continuar.',
+      appBar: widget.forced
+          ? null
+          : AppBar(title: const Text('Alterar senha')),
+      showBrand: widget.forced,
+      title: widget.forced ? 'Defina uma nova senha' : 'Alterar senha',
+      subtitle: widget.forced
+          ? 'Sua senha foi redefinida pelo líder da equipe. Escolha uma nova '
+              'para continuar.'
+          : 'Trocar a senha desconecta o app nos outros aparelhos.',
       children: [
         Form(
           key: _formKey,
@@ -69,8 +91,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             children: [
               TextFormField(
                 controller: _current,
-                decoration: const InputDecoration(
-                  labelText: 'Senha atual (a que você recebeu)',
+                decoration: InputDecoration(
+                  labelText: widget.forced
+                      ? 'Senha atual (a que você recebeu)'
+                      : 'Senha atual',
                 ),
                 obscureText: true,
                 textInputAction: TextInputAction.next,
@@ -118,15 +142,17 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Salvar e continuar'),
+              : Text(widget.forced ? 'Salvar e continuar' : 'Salvar'),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        TextButton(
-          onPressed: _loading
-              ? null
-              : () => ref.read(authControllerProvider.notifier).logout(),
-          child: const Text('Sair'),
-        ),
+        if (widget.forced) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextButton(
+            onPressed: _loading
+                ? null
+                : () => ref.read(authControllerProvider.notifier).logout(),
+            child: const Text('Sair'),
+          ),
+        ],
       ],
     );
   }

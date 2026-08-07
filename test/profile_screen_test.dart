@@ -50,6 +50,8 @@ void main() {
 
     expect(find.text('Samuel'), findsWidgets);
     expect(find.text('samuel@teste.com'), findsOneWidget);
+    expect(find.text('Meus dados'), findsOneWidget);
+    expect(find.text('Alterar senha'), findsOneWidget);
 
     // O seletor de tema empurrou "Sair" para fora da viewport padrao do
     // teste; ListView so monta o que esta visivel.

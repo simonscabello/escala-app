@@ -40,6 +40,7 @@ class Member {
     required this.positions,
     this.phone,
     this.email,
+    this.avatarUrl,
   });
 
   final String id;
@@ -54,6 +55,10 @@ class Member {
   final List<Position> positions;
   final String? phone;
   final String? email;
+
+  /// Foto da conta, quando o integrante tem uma. Membro sem conta cai na
+  /// inicial do nome.
+  final String? avatarUrl;
 
   bool get isOwner => role == 'OWNER';
   bool get canManage => role == 'OWNER' || role == 'LEADER';
@@ -73,6 +78,7 @@ class Member {
       isGuest: json['isGuest'] as bool? ?? false,
       phone: json['phone'] as String?,
       email: json['email'] as String?,
+      avatarUrl: json['avatarUrl'] as String?,
       positions: (json['positions'] as List<dynamic>? ?? [])
           .map((e) => Position.fromJson(e as Map<String, dynamic>))
           .toList(),

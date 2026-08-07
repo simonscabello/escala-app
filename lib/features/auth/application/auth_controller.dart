@@ -112,6 +112,31 @@ class AuthController extends StateNotifier<AuthState> {
     await _applySession(session);
   }
 
+  /// Edicao dos proprios dados. Depois de mudar o nome recarrega as equipes:
+  /// o backend acerta junto o nome exibido na equipe (quando ninguem o
+  /// personalizou), e o menu do app mostra esse nome.
+  Future<void> updateProfile({String? name, String? email}) async {
+    final user = await _repository.updateProfile(name: name, email: email);
+    _replaceUser(user);
+    if (name != null) {
+      unawaited(_loadTeams());
+    }
+  }
+
+  Future<void> updateAvatar(String filePath) async {
+    _replaceUser(await _repository.uploadAvatar(filePath));
+  }
+
+  Future<void> removeAvatar() async {
+    _replaceUser(await _repository.removeAvatar());
+  }
+
+  void _replaceUser(AuthUser user) {
+    if (mounted) {
+      state = AuthState.signedIn(user, state.teams);
+    }
+  }
+
   Future<void> logout() async {
     final refreshToken = await _storage.readRefreshToken();
     if (refreshToken != null) {

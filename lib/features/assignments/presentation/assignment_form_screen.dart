@@ -689,7 +689,11 @@ class _SelectedChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppAvatar(name: member.displayName, radius: 12),
+          AppAvatar(
+            name: member.displayName,
+            imageUrl: member.avatarUrl,
+            radius: 12,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Text(
             member.displayName,
@@ -1044,7 +1048,11 @@ class _PickerTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              AppAvatar(name: member.displayName, radius: 18),
+              AppAvatar(
+                name: member.displayName,
+                imageUrl: member.avatarUrl,
+                radius: 18,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(

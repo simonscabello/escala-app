@@ -16,6 +16,7 @@ import '../../features/health/presentation/health_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
 import '../../features/unavailability/presentation/my_unavailability_screen.dart';
+import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/team/data/team_repository.dart';
 import '../../features/team/domain/team_models.dart';
@@ -168,7 +169,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           // Perfil dentro da casca: é uma das abas, então precisa da barra.
-          GoRoute(path: '/perfil', builder: (_, __) => const ProfileScreen()),
+          GoRoute(
+            path: '/perfil',
+            builder: (_, __) => const ProfileScreen(),
+            routes: [
+              GoRoute(
+                path: 'dados',
+                builder: (_, __) => const EditProfileScreen(),
+              ),
+              // Troca voluntária. A obrigatória continua em /trocar-senha, que
+              // fica fora da casca porque o redirect prende o app nela.
+              GoRoute(
+                path: 'senha',
+                builder: (_, __) =>
+                    const ChangePasswordScreen(forced: false),
+              ),
+            ],
+          ),
           GoRoute(
             path: '/equipe',
             builder: (_, __) =>

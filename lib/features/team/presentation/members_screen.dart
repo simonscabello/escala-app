@@ -161,7 +161,10 @@ class _MemberTile extends ConsumerWidget {
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.xs,
         ),
-        leading: AppAvatar(name: member.displayName),
+        leading: AppAvatar(
+          name: member.displayName,
+          imageUrl: member.avatarUrl,
+        ),
         title: Row(
           children: [
             Flexible(child: Text(member.displayName)),

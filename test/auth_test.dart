@@ -44,6 +44,19 @@ void main() {
         'email': 'samuel@teste.com',
       });
       expect(user.mustChangePassword, isFalse);
+      // Conta sem foto: o avatar cai na inicial do nome.
+      expect(user.avatarUrl, isNull);
+    });
+
+    test('fromJson le o caminho da foto como a API devolve', () {
+      final user = AuthUser.fromJson({
+        'id': 'u1',
+        'name': 'Samuel',
+        'email': 'samuel@teste.com',
+        'avatarUrl': '/uploads/avatars/abc.jpg',
+      });
+      // Relativo de proposito: o host muda entre emulador e producao.
+      expect(user.avatarUrl, '/uploads/avatars/abc.jpg');
     });
   });
 

@@ -25,7 +25,8 @@ class MainShell extends ConsumerWidget {
     // A barra só aparece nas telas de topo; em formulários e detalhes ela
     // atrapalharia o caminho de volta.
     final showNav = index != -1;
-    final name = ref.watch(authControllerProvider).user?.firstName ?? '?';
+    final user = ref.watch(authControllerProvider).user;
+    final name = user?.firstName ?? '?';
 
     return Scaffold(
       body: child,
@@ -47,7 +48,11 @@ class MainShell extends ConsumerWidget {
                 NavigationDestination(
                   // O avatar como ícone: a aba é sobre a própria pessoa, e
                   // isso identifica melhor que um boneco genérico.
-                  icon: AppAvatar(name: name, radius: 13),
+                  icon: AppAvatar(
+                    name: name,
+                    imageUrl: user?.avatarUrl,
+                    radius: 13,
+                  ),
                   label: 'Perfil',
                 ),
               ],
