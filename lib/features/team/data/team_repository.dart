@@ -226,6 +226,10 @@ class TeamRepository {
     String? displayName,
     String? phone,
     List<String>? positionIds,
+
+    /// `LEADER` ou `MEMBER`. `OWNER` o servidor não aceita: o dono é quem criou
+    /// a equipe, e isso não se atribui.
+    String? role,
   }) async {
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
@@ -234,6 +238,7 @@ class TeamRepository {
           if (displayName != null) 'displayName': displayName,
           if (phone != null) 'phone': phone,
           if (positionIds != null) 'positionIds': positionIds,
+          if (role != null) 'role': role,
         },
       );
       return Member.fromJson(response.data!);

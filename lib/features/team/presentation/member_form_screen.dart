@@ -6,6 +6,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/position_icon.dart';
+import '../../auth/application/auth_controller.dart';
+import '../../auth/domain/auth_models.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -29,6 +31,9 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
   late final TextEditingController _phone;
   late final Set<String> _selected;
 
+  /// `LEADER` ou `MEMBER`. Nulo enquanto não há membro (cadastro novo).
+  late String? _role;
+
   bool _loading = false;
   String? _error;
 
@@ -38,6 +43,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     _name = TextEditingController(text: widget.member?.displayName ?? '');
     _phone = TextEditingController(text: widget.member?.phone ?? '');
     _selected = {...?widget.member?.positions.map((p) => p.id)};
+    _role = widget.member?.role;
   }
 
   @override
@@ -65,6 +71,9 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           displayName: _name.text.trim(),
           phone: _phone.text.trim(),
           positionIds: _selected.toList(),
+          // Só quando mudou de fato. Reenviar o papel do dono daria
+          // CANNOT_DEMOTE_OWNER mesmo sem ninguém ter tocado no campo.
+          role: _role != widget.member!.role ? _role : null,
         );
       } else {
         await repository.addMember(
@@ -162,6 +171,22 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             }),
           ),
         ),
+        if (widget.isEditing) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          _RoleField(
+            member: widget.member!,
+            value: _role,
+            enabled: !_loading,
+            // Quem está mexendo. Vem da equipe DESTA tela, e não da primeira
+            // da lista: quem participa de duas veria a regra da equipe errada.
+            actor: ref
+                .watch(authControllerProvider)
+                .teams
+                .where((t) => t.teamId == widget.teamId)
+                .firstOrNull,
+            onChanged: (v) => setState(() => _role = v),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
         FilledButton(
@@ -175,6 +200,205 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
               : Text(widget.isEditing ? 'Salvar' : 'Adicionar'),
         ),
       ],
+    );
+  }
+}
+
+/// Papel na equipe: membro ou líder.
+///
+/// Líder faz tudo o que o dono faz — cria e edita escalas, escala a equipe,
+/// convida, mexe no repertório, nas funções, na grade de cultos e nos dados da
+/// equipe. É o caminho para quem lidera junto.
+///
+/// Três casos o servidor recusa, e a tela explica em vez de deixar tentar:
+/// o dono (o papel dele não se altera), você mesmo (ninguém se promove) e o
+/// convidado (não é integrante da equipe).
+class _RoleField extends StatelessWidget {
+  const _RoleField({
+    required this.member,
+    required this.value,
+    required this.enabled,
+    required this.actor,
+    required this.onChanged,
+  });
+
+  final Member member;
+  final String? value;
+  final bool enabled;
+
+  /// A participação de quem está editando, nesta equipe.
+  final TeamSummary? actor;
+
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final bloqueio = switch (member) {
+      _ when member.isOwner =>
+        'Quem criou a equipe é sempre o dono, e isso não se transfere por aqui.',
+      _ when member.isGuest =>
+        'Convidado toca numa ocasião e não é integrante da equipe.',
+      _ when actor != null && actor!.membershipId == member.id =>
+        'Ninguém muda o próprio papel. Peça a quem criou a equipe.',
+      _ => null,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Papel na equipe', style: theme.textTheme.titleMedium),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            bloqueio ??
+                'Líder faz tudo o que você faz: escalas, convites, repertório '
+                    'e dados da equipe.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (bloqueio != null)
+          // Sem opções para escolher: mostra o que a pessoa é hoje e para por
+          // aí. Um seletor desabilitado convidaria a insistir.
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  member.isOwner
+                      ? Icons.workspace_premium_rounded
+                      : Icons.lock_outline_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(member.roleLabel, style: theme.textTheme.bodyLarge),
+              ],
+            ),
+          )
+        else ...[
+          _RoleOption(
+            label: 'Membro',
+            description: 'Vê as escalas e onde está escalado.',
+            icon: Icons.person_outline_rounded,
+            selected: value == 'MEMBER',
+            enabled: enabled,
+            onTap: () => onChanged('MEMBER'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _RoleOption(
+            label: 'Líder',
+            description: 'Monta escalas, convida e cuida da equipe — como '
+                'quem criou.',
+            icon: Icons.shield_outlined,
+            selected: value == 'LEADER',
+            enabled: enabled,
+            onTap: () => onChanged('LEADER'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RoleOption extends StatelessWidget {
+  const _RoleOption({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final String description;
+  final IconData icon;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? scheme.primaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(
+                color: selected ? scheme.primary : scheme.outline,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurface,
+                        ),
+                      ),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // A marca de selecionado não pode ser só a cor: quem não
+                // distingue azul de cinza precisa de uma forma.
+                if (selected)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 20,
+                    color: scheme.onPrimaryContainer,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
