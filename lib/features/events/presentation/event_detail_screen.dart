@@ -22,6 +22,7 @@ import '../domain/schedule_share_text.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_song_sheet.dart';
+import 'event_times.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -309,38 +310,11 @@ class _EventSummaryCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpacing.md),
-          // Na largura do cartão, e não na coluna à direita do selo: ali cada
-          // etiqueta caía numa linha própria por falta de espaço.
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: 6,
-            children: [
-              // Um por culto: no domingo da equipe são dois, manhã e noite.
-              // Só o horário -- a data está no selo acima.
-              for (final service in event.displayServices)
-                _TimePill(
-                  // Mesmo ícone das pílulas do cartão da agenda.
-                  icon: Icons.church_rounded,
-                  label: '${service.label} '
-                      '${formatEventTime(service.startsAt, timezone)}',
-                  emphasized: true,
-                ),
-              if (event.rehearsalAt != null)
-                _TimePill(
-                  icon: Icons.music_note_rounded,
-                  // O ensaio às vezes é em outro dia; a data só aparece
-                  // quando realmente difere da do culto.
-                  label: isSameLocalDay(
-                    event.rehearsalAt!,
-                    event.startsAt,
-                    timezone,
-                  )
-                      ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
-                      : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
-                          '${formatEventTime(event.rehearsalAt!, timezone)}',
-                ),
-            ],
-          ),
+          Divider(color: scheme.outlineVariant, height: 1),
+          const SizedBox(height: AppSpacing.md),
+          // Uma linha por culto, mais o ensaio. Em coluna e não em etiquetas:
+          // os horários ficam alinhados na vertical e comparáveis de relance.
+          EventTimesList(event: event, timezone: timezone),
           // Fora do Wrap: um endereço longo não caberia numa etiqueta e
           // estouraria a linha. Aqui ele tem a largura toda e corta com "…".
           if (hasLocation) ...[
@@ -378,56 +352,6 @@ class _EventSummaryCard extends StatelessWidget {
                 maxLines: 4,
               ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Etiqueta de horário: ícone e texto numa linha só.
-class _TimePill extends StatelessWidget {
-  const _TimePill({
-    required this.icon,
-    required this.label,
-    this.emphasized = false,
-  });
-
-  final IconData icon;
-  final String label;
-
-  /// O horário do culto é a informação que se procura primeiro.
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final foreground =
-        emphasized ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 5,
-      ),
-      decoration: BoxDecoration(
-        color: emphasized
-            ? scheme.primaryContainer
-            : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: foreground),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
         ],
       ),
     );

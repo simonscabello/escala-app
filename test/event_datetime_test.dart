@@ -68,4 +68,47 @@ void main() {
     expect(atual.contains('$thisYear'), isFalse, reason: atual);
     expect(antigo.contains('${thisYear - 1}'), isTrue, reason: antigo);
   });
+
+  group('horario do ensaio', () {
+    const tzName = 'America/Sao_Paulo';
+    // Domingo, 9 de agosto de 2026, 09:00 em Sao Paulo.
+    final culto = DateTime.parse('2026-08-09T12:00:00.000Z');
+
+    test('no mesmo dia do culto, so a hora', () {
+      final ensaio = DateTime.parse('2026-08-09T16:00:00.000Z');
+
+      expect(formatRehearsalTime(ensaio, culto, tzName), '13:00');
+    });
+
+    test('em outro dia, o dia da semana abreviado antes da hora', () {
+      // Sabado, 8 de agosto, 19:00.
+      final ensaio = DateTime.parse('2026-08-08T22:00:00.000Z');
+
+      final label = formatRehearsalTime(ensaio, culto, tzName);
+
+      expect(label, 'sáb 19:00');
+    });
+
+    test('nunca traz a data por extenso, que estourava o cartao', () {
+      final ensaio = DateTime.parse('2026-08-10T03:30:00.000Z');
+
+      final label = formatRehearsalTime(ensaio, culto, tzName);
+
+      // O formato antigo era "Segunda-feira, 10 de agosto 00:30" -- 33
+      // caracteres numa etiqueta que cabia em 15, e o layout quebrava.
+      expect(label, 'seg 00:30');
+      expect(label.length, lessThan(12));
+      expect(label, isNot(contains('agosto')));
+      expect(label, isNot(contains('-feira')));
+    });
+
+    test('dia abreviado vem minusculo e sem ponto', () {
+      final label = formatEventShortWeekday(
+        DateTime.parse('2026-08-08T22:00:00.000Z'),
+        tzName,
+      );
+
+      expect(label, 'sáb');
+    });
+  });
 }

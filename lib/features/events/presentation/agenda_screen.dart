@@ -15,6 +15,7 @@ import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import 'duplicate_event_dialog.dart';
+import 'event_times.dart';
 
 /// Saudação por horário. Detalhe pequeno, mas é o que separa uma tela de
 /// listagem de um app que parece ter sido feito para aquela pessoa.
@@ -547,40 +548,11 @@ class _FeaturedEventCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          // Fora da coluna à direita do selo: ali sobravam ~250px e cada
-          // etiqueta pedia ~150, então as três caíam uma por linha. Na largura
-          // do cartão elas cabem em uma ou duas.
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: 6,
-            children: [
-              for (final service in event.displayServices)
-                _HeroTimePill(
-                  icon: Icons.church_rounded,
-                  label: '${service.label} '
-                      '${formatEventTime(service.startsAt, timezone)}',
-                  emphasized: true,
-                ),
-              if (event.rehearsalAt != null)
-                _HeroTimePill(
-                  icon: Icons.music_note_rounded,
-                  label: isSameLocalDay(
-                    event.rehearsalAt!,
-                    event.startsAt,
-                    timezone,
-                  )
-                      ? 'Ensaio ${formatEventTime(event.rehearsalAt!, timezone)}'
-                      : 'Ensaio ${formatEventWeekdayDate(event.rehearsalAt!, timezone)} '
-                          '${formatEventTime(event.rehearsalAt!, timezone)}',
-                )
-              else
-                // Ausência de ensaio é informação, não vazio.
-                const _HeroTimePill(
-                  icon: Icons.music_off_rounded,
-                  label: 'Sem ensaio',
-                ),
-            ],
-          ),
+          Divider(color: scheme.outlineVariant, height: 1),
+          const SizedBox(height: AppSpacing.md),
+          // Mesmas linhas do resumo do detalhe: abrir a escala não deve
+          // reapresentar a mesma informação num formato diferente.
+          EventTimesList(event: event, timezone: timezone),
           if (youPositions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Align(
@@ -617,53 +589,6 @@ class _HeroMenu extends ConsumerWidget {
       itemBuilder: (_) => const [
         PopupMenuItem(value: 'duplicate', child: Text('Duplicar escala')),
       ],
-    );
-  }
-}
-
-class _HeroTimePill extends StatelessWidget {
-  const _HeroTimePill({
-    required this.icon,
-    required this.label,
-    this.emphasized = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final foreground =
-        emphasized ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 5,
-      ),
-      decoration: BoxDecoration(
-        color: emphasized
-            ? scheme.primaryContainer
-            : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: foreground),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -732,8 +657,10 @@ class _EventTile extends ConsumerWidget {
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        // "Manhã 08:30 · Noite 19:00 · Ensaio 13:00". Com um
-                        // culto só a linha fica igual à de antes.
+                        // "Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00".
+                        // No item da lista os horários seguem em linha: aqui a
+                        // pergunta é "qual escala é esta?", e a coluna alinhada
+                        // do cartão gastaria três linhas por item.
                         [
                           for (final service in event.displayServices)
                             '${service.label} '
@@ -741,9 +668,17 @@ class _EventTile extends ConsumerWidget {
                           if (event.rehearsalAt == null)
                             'Sem ensaio'
                           else
-                            'Ensaio '
-                                '${formatEventTime(event.rehearsalAt!, timezone)}',
+                            // Com o dia abreviado quando o ensaio é em outro
+                            // dia: antes esta linha mostrava só a hora, e um
+                            // ensaio de sábado parecia ser no dia do culto.
+                            'Ensaio ${formatRehearsalTime(
+                              event.rehearsalAt!,
+                              event.startsAt,
+                              timezone,
+                            )}',
                         ].join('  ·  '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall,
                       ),
                     ),

@@ -44,3 +44,29 @@ String formatEventTime(DateTime utc, String timezone) {
   final localTime = eventLocalTime(utc, timezone);
   return DateFormat('HH:mm', 'pt_BR').format(localTime);
 }
+
+/// Dia da semana abreviado e em minúscula: "sáb", "qui".
+///
+/// Minúscula porque nunca aparece sozinho -- entra dentro de um rótulo
+/// ("Ensaio sáb 19:00"), e ali a maiúscula parece começo de frase. O ponto que
+/// o pt_BR acrescenta ("sáb.") sai: encosta no horário e vira sujeira.
+String formatEventShortWeekday(DateTime utc, String timezone) {
+  final localTime = eventLocalTime(utc, timezone);
+  return DateFormat('EEE', 'pt_BR').format(localTime).replaceAll('.', '');
+}
+
+/// O horário do ensaio, curto o suficiente para caber numa linha.
+///
+/// No mesmo dia da escala: só a hora. Em outro dia: o dia da semana abreviado
+/// antes dela. A data por extenso ("Segunda-feira, 10 de agosto 00:30")
+/// estourava o cartão e não acrescentava nada de útil -- o ensaio acontece na
+/// semana da escala, e ninguém marca um três semanas antes.
+String formatRehearsalTime(
+  DateTime rehearsalAt,
+  DateTime startsAt,
+  String timezone,
+) {
+  final hora = formatEventTime(rehearsalAt, timezone);
+  if (isSameLocalDay(rehearsalAt, startsAt, timezone)) return hora;
+  return '${formatEventShortWeekday(rehearsalAt, timezone)} $hora';
+}
