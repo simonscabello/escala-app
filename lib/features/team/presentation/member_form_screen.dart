@@ -283,7 +283,12 @@ class _PositionTile extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               border: Border.all(
-                color: selected ? scheme.primary : scheme.outlineVariant,
+                // `outline` e não `outlineVariant`: este cartão é selecionável,
+                // e a borda é a única coisa que diz onde ele começa e se está
+                // marcado. Isso pede os 3:1 do WCAG 1.4.11 — com o fio
+                // decorativo, quem enxerga pouco não achava a borda do que
+                // ainda não tinha escolhido.
+                color: selected ? scheme.primary : scheme.outline,
                 width: selected ? 1.5 : 1,
               ),
             ),

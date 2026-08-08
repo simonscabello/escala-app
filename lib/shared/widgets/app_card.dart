@@ -6,7 +6,13 @@ import '../../core/theme/app_spacing.dart';
 ///
 /// Duas variantes: `elevated` (sombra suave, sem borda) para o conteúdo
 /// principal e `outlined` para blocos secundários. A sombra cria hierarquia
-/// sem gastar mais cor — a tela já é bastante verde.
+/// sem gastar mais cor.
+///
+/// **A sombra não é o que faz o cartão existir.** Ela é sutil de propósito, e
+/// sozinha não segurava a forma: o que separa o cartão da página é a diferença
+/// entre a cor dele e a do fundo, garantida na paleta (ver `AppColors`). A
+/// sombra só arredonda a transição. Por isso o cartão continua legível com
+/// "reduzir transparência/animações" ligado no sistema, e em impressão.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -30,7 +36,7 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(borderRadius ?? AppSpacing.radiusXl);
+    final radius = BorderRadius.circular(borderRadius ?? AppSpacing.radiusLg);
     final background = color ?? scheme.surfaceContainerLowest;
 
     final content =

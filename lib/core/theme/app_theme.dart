@@ -93,6 +93,10 @@ class AppTheme {
       fontFamily: fontFamily,
       scaffoldBackgroundColor: scheme.surface,
       textTheme: textTheme,
+      // Foco visível para quem navega por teclado, teclado externo ou controle
+      // adaptativo. O padrão do Flutter é um preto translúcido, que some no
+      // tema escuro -- e foco invisível é o mesmo que não ter foco.
+      focusColor: scheme.primary.withValues(alpha: 0.12),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -107,7 +111,9 @@ class AppTheme {
         color: scheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          // O mesmo raio do `AppCard`: os dois desenham "um cartão", e raios
+          // diferentes faziam a mesma coisa parecer duas.
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
           side: BorderSide(color: scheme.outlineVariant),
         ),
         margin: EdgeInsets.zero,
@@ -201,7 +207,11 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
         ),
-        side: BorderSide(color: scheme.outlineVariant),
+        // `outline` e não `outlineVariant`: chip aqui é sempre tocável
+        // (escolher tipo, andamento, abrir a cifra), e a borda é o que diz onde
+        // ele começa. Isso pede os 3:1 do WCAG 1.4.11, que o fio decorativo
+        // não tem.
+        side: BorderSide(color: scheme.outline),
         selectedColor: scheme.primaryContainer,
         checkmarkColor: scheme.onPrimaryContainer,
         labelStyle: textTheme.labelMedium,
@@ -239,6 +249,12 @@ class AppTheme {
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
+          // O ícone tem 20-24px; sem piso, a área tocável ficava do tamanho
+          // dele. Quem usa o app está com o instrumento na mão.
+          minimumSize: const Size(
+            AppSpacing.touchTarget,
+            AppSpacing.touchTarget,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
@@ -250,6 +266,10 @@ class AppTheme {
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.xs,
         ),
+        // Piso de altura mesmo em `dense`, que é onde as linhas encolhiam para
+        // ~40 e escapavam do dedo.
+        minVerticalPadding: AppSpacing.sm,
+        minTileHeight: AppSpacing.touchTarget,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),

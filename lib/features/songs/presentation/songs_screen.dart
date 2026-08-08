@@ -279,8 +279,13 @@ class _SongTile extends StatelessWidget {
   }
 }
 
-/// Tom da equipe. Sem ele, mostra o tom da gravação em cinza — não é a
-/// decisão de vocês, e a cor diz isso sem precisar de legenda.
+/// Tom da equipe. Sem ele, mostra o tom da gravação em âmbar — não é a decisão
+/// de vocês, e a cor diz isso sem precisar de legenda.
+///
+/// Âmbar e não cinza: das 286 músicas importadas, a maioria chegou sem tom, e
+/// em cinza esse buraco lia-se como "está tudo certo". O âmbar é o papel de
+/// **atenção** da paleta: algo a resolver, sem o susto do vermelho, que aqui
+/// significa erro.
 class _KeyBadge extends StatelessWidget {
   const _KeyBadge({required this.song});
 
@@ -301,14 +306,15 @@ class _KeyBadge extends StatelessWidget {
       height: 46,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: isOwn ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+        color: isOwn ? scheme.primaryContainer : scheme.tertiaryContainer,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
       child: Text(
         label,
         style: theme.textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.w700,
-          color: isOwn ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+          color:
+              isOwn ? scheme.onPrimaryContainer : scheme.onTertiaryContainer,
         ),
       ),
     );
