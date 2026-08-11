@@ -13,7 +13,7 @@ import '../../core/theme/app_spacing.dart';
 Future<TimeOfDay?> showQuarterHourPicker({
   required BuildContext context,
   required TimeOfDay initialTime,
-  String title = 'Escolha o horario',
+  String title = 'Escolha o horário',
 }) {
   return showModalBottomSheet<TimeOfDay>(
     context: context,
@@ -92,7 +92,16 @@ class _QuarterHourSheetState extends State<_QuarterHourSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SizedBox(
+            // As duas rodas são praticamente mudas para um leitor de tela: o
+            // `ListWheelScrollView` não anuncia o item que ficou no centro. O
+            // `liveRegion` em volta fala a hora inteira a cada mudança, que é a
+            // única coisa que importa aqui.
+            Semantics(
+              liveRegion: true,
+              label: 'Horário escolhido: '
+                  '${_hour.toString().padLeft(2, '0')}:'
+                  '${_minutes[_minuteIndex].toString().padLeft(2, '0')}',
+              child: SizedBox(
               height: 180,
               child: Stack(
                 children: [
@@ -134,6 +143,7 @@ class _QuarterHourSheetState extends State<_QuarterHourSheet> {
                     ],
                   ),
                 ],
+              ),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),

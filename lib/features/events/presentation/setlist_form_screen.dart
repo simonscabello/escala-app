@@ -4,8 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
+import '../../../shared/widgets/form_scaffold.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/presentation/add_song_screen.dart';
@@ -93,9 +99,15 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
       if (widget.isNewSchedule) {
         context.pushReplacement('/agenda/${widget.eventId}');
+        showAppSnackBar(
+          context,
+          'Escala pronta. Compartilhe com a equipe pelo ícone no topo.',
+          tone: AppTone.success,
+        );
         return;
       }
       context.pop();
+      showAppSnackBar(context, 'Repertório salvo.', tone: AppTone.success);
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -174,6 +186,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     final keyController = TextEditingController(text: song.keyOverride ?? '');
     final noteController = TextEditingController(text: song.note ?? '');
 
+    // "Música nova" não está aqui: é a marca que mais se mexe e a que menos
+    // precisa de formulário. Ela mora no chip da própria linha, a um toque.
     final salvou = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -231,6 +245,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         keyOverride: novoTom.isEmpty ? null : novoTom,
         defaultKey: song.defaultKey,
         note: novoRecado.isEmpty ? null : novoRecado,
+        isNew: song.isNew,
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
         youtubeUrl: song.youtubeUrl,
@@ -257,77 +272,106 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
 
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Repertório da escala'),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Salvar'),
+      // "Salvar" saiu da barra do topo e virou o botão de baixo, do tamanho da
+      // tela — igual ao da escalação, que é o passo imediatamente anterior no
+      // mesmo fluxo. Como link de texto no canto superior ele tinha o peso de
+      // uma ação secundária, ficava longe do polegar e desaparecia atrás do
+      // teclado ao editar o tom de uma música.
+      appBar: AppBar(title: const Text('Repertório da escala')),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLowest,
+          border: Border(top: BorderSide(color: scheme.outlineVariant)),
+        ),
+        child: SafeArea(
+          child: AppContentWidth(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: AppSubmitButton(
+                  label: widget.isNewSchedule
+                      ? 'Salvar e ver a escala'
+                      : 'Salvar repertório',
+                  loading: _saving,
+                  onPressed: _save,
+                ),
+              ),
+            ),
           ),
-        ],
+        ),
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+        child: AppContentWidth(
+          child: Column(
+            children: [
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                    AppSpacing.screenPadding,
+                    0,
+                  ),
+                  child: FormErrorBanner(message: _error!),
                 ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.screenPadding,
-                  AppSpacing.md,
-                  AppSpacing.screenPadding,
-                  AppSpacing.xxl,
-                ),
-                children: [
-                  if (_total == 0)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-                      child: Text(
-                        _cultos.length > 1
-                            ? 'Cada culto tem o próprio repertório. A ordem aqui '
-                                'é a ordem que vocês vão tocar.'
-                            : 'Escolha do repertório da equipe. A ordem aqui é a '
-                                'ordem que vocês vão tocar.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color:
-                                  Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    AppSpacing.md,
+                    AppSpacing.screenPadding,
+                    AppSpacing.xxl,
+                  ),
+                  children: [
+                    if (_total == 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                        child: Text(
+                          _cultos.length > 1
+                              ? 'Cada culto tem o próprio repertório. A ordem '
+                                  'aqui é a ordem que vocês vão tocar.'
+                              : 'Escolha do repertório da equipe. A ordem aqui '
+                                  'é a ordem que vocês vão tocar.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                        ),
                       ),
-                    ),
-                  for (final culto in _cultos)
-                    _ServiceSetlist(
-                      culto: culto,
-                      timezone: timezone,
-                      songs: _lista(culto.id),
-                      saving: _saving,
-                      onAdd: () => _addSongs(culto),
-                      onEdit: (index) => _editItem(culto.id, index),
-                      onRemove: (index) =>
-                          setState(() => _lista(culto.id).removeAt(index)),
-                      onReorder: (oldIndex, newIndex) => setState(() {
-                        final lista = _lista(culto.id);
-                        lista.insert(newIndex, lista.removeAt(oldIndex));
-                      }),
-                    ),
-                ],
+                    for (final culto in _cultos)
+                      _ServiceSetlist(
+                        culto: culto,
+                        timezone: timezone,
+                        songs: _lista(culto.id),
+                        saving: _saving,
+                        onAdd: () => _addSongs(culto),
+                        onEdit: (index) => _editItem(culto.id, index),
+                        onRemove: (index) =>
+                            setState(() => _lista(culto.id).removeAt(index)),
+                        onReorder: (oldIndex, newIndex) => setState(() {
+                          final lista = _lista(culto.id);
+                          lista.insert(newIndex, lista.removeAt(oldIndex));
+                        }),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -486,11 +530,25 @@ class _SetlistTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
+                // A etiqueta é só leitura, aqui e em toda parte: quem responde
+                // "a equipe já tocou esta?" é o histórico, não quem monta.
+                // Aparece nesta tela porque quem escolhe o repertório precisa
+                // ver quanta novidade está pedindo para um domingo só.
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        song.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    if (song.isNew) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      const AppBadge(label: 'Nova', tone: AppTone.info),
+                    ],
+                  ],
                 ),
                 Text(
                   [

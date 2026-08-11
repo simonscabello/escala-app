@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
@@ -50,9 +54,11 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
   final _chordsUrl = TextEditingController();
   final _youtubeUrl = TextEditingController();
   final _spotifyUrl = TextEditingController();
+  final _hymnNumber = TextEditingController();
 
   String? _kind;
   String? _pace;
+  bool _isNew = false;
   bool _populated = false;
   bool _saving = false;
   String? _error;
@@ -74,6 +80,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       _chordsUrl,
       _youtubeUrl,
       _spotifyUrl,
+      _hymnNumber,
     ]) {
       controller.dispose();
     }
@@ -86,6 +93,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _key.text = song.defaultKey ?? '';
     _kind = song.kind;
     _pace = song.pace;
+    _isNew = song.isNew;
     _artist.text = song.artist ?? '';
     _composer.text = song.composer ?? '';
     _originalKey.text = song.originalKey ?? '';
@@ -94,12 +102,22 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _chordsUrl.text = song.chordsUrl ?? '';
     _youtubeUrl.text = song.youtubeUrl ?? '';
     _spotifyUrl.text = song.spotifyUrl ?? '';
+    _hymnNumber.text = song.hymnNumber?.toString() ?? '';
   }
 
   Future<void> _save(Song song) async {
     final title = _title.text.trim();
     if (title.length < 2) {
       setState(() => _error = 'Informe o nome da música.');
+      return;
+    }
+
+    // Só validado quando o campo existe (hino). Fora da faixa o servidor
+    // recusaria de qualquer jeito; avisar aqui evita a ida perdida à rede.
+    final numeroTexto = _hymnNumber.text.trim();
+    final numero = numeroTexto.isEmpty ? null : int.tryParse(numeroTexto);
+    if (song.isHymn && (numero == null || numero < 1 || numero > 581)) {
+      setState(() => _error = 'O número do hino vai de 1 a 581.');
       return;
     }
 
@@ -118,6 +136,8 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           'defaultKey': _key.text.trim(),
           'kind': _kind,
           'pace': _pace,
+          'isNew': _isNew,
+          if (song.isHymn) 'hymnNumber': numero,
           'artist': _artist.text.trim(),
           'composer': _composer.text.trim(),
           'originalKey': _originalKey.text.trim(),
@@ -137,7 +157,10 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       // O título, o artista e o tom aparecem na lista: sem isto ela mostraria
       // o valor antigo até alguém puxar para atualizar.
       ref.invalidate(songsProvider(SongQuery(teamId: widget.teamId)));
-      if (mounted) context.pop();
+      if (mounted) {
+        context.pop();
+        showAppSnackBar(context, '"$title" foi salva.', tone: AppTone.success);
+      }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -157,7 +180,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     if (song == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Editar música')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const AppLoading(),
       );
     }
 
@@ -175,6 +198,22 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(labelText: 'Nome da música'),
         ),
+        // Só em hino, e só para corrigir. Oferecer "número do hino" em todo
+        // cântico seria um campo vazio a mais em centenas de telas, para uma
+        // pergunta que quase nunca tem resposta — quem cadastra hino faz isso
+        // pelo import, não um a um.
+        if (song.isHymn) ...[
+          const SizedBox(height: AppSpacing.lg),
+          TextField(
+            controller: _hymnNumber,
+            enabled: !_saving,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Número no Cantor Cristão',
+              helperText: 'De 1 a 581',
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         TextField(
           controller: _key,
@@ -219,6 +258,21 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           hint: song.bpm != null ? 'A gravação tem ${song.bpm} bpm' : null,
           onChanged: _saving ? null : (v) => setState(() => _pace = v),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        // Onde a novidade termina.
+        //
+        // É este o interruptor que fecha o ciclo: liga no cadastro, desliga
+        // aqui quando a equipe domina e a igreja já canta junto. Nenhuma conta
+        // do app sabe esse momento — tocar uma vez não encerra nada, e o
+        // cadastro só diz quando a MÚSICA entrou no app, não quando a EQUIPE a
+        // aprendeu. Fica junto de tom, tipo e andamento porque é da mesma
+        // natureza: o que a equipe sabe e nenhuma API responde.
+        SwitchListTile(
+          value: _isNew,
+          onChanged: _saving ? null : (v) => setState(() => _isNew = v),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Música nova'),
+        ),
         const SizedBox(height: AppSpacing.xl),
         _ExternalFields(
           expanded: _showExternal,
@@ -235,15 +289,10 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
         ),
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _saving ? null : () => _save(song),
-          child: _saving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Salvar'),
+        AppSubmitButton(
+          label: 'Salvar',
+          loading: _saving,
+          onPressed: () => _save(song),
         ),
       ],
     );

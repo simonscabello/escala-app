@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -59,10 +62,12 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       // No caminho obrigatorio quem tira o usuario daqui e o redirect do
       // router, assim que o estado deixa de ser mustChangePassword.
       if (!widget.forced && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Senha alterada.')),
-        );
         context.pop();
+        showAppSnackBar(
+          context,
+          'Senha alterada. Os outros aparelhos foram desconectados.',
+          tone: AppTone.success,
+        );
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -134,15 +139,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(widget.forced ? 'Salvar e continuar' : 'Salvar'),
+        AppSubmitButton(
+          label: widget.forced ? 'Salvar e continuar' : 'Salvar',
+          loading: _loading,
+          onPressed: _submit,
         ),
         if (widget.forced) ...[
           const SizedBox(height: AppSpacing.sm),

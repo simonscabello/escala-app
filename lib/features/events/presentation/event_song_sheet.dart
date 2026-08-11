@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../songs/data/song_repository.dart';
 import '../domain/event_models.dart';
 
@@ -57,7 +61,22 @@ class _EventSongSheet extends ConsumerWidget {
           AppSpacing.xxl,
         ),
         children: [
-          Text(song.title, style: theme.textTheme.headlineSmall),
+          // `Wrap` e não `Row`: título longo em `headlineSmall` ocupa duas
+          // linhas, e a etiqueta desce inteira em vez de espremer o nome.
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text(song.title, style: theme.textTheme.headlineSmall),
+              if (song.isNew)
+                const AppBadge(
+                  label: 'Nova',
+                  tone: AppTone.info,
+                  semanticsLabel: 'Música nova: a equipe ainda não tocou esta',
+                ),
+            ],
+          ),
           if (song.artist?.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -188,8 +207,10 @@ class _Links extends StatelessWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o link.')),
+      showAppSnackBar(
+        context,
+        'Não foi possível abrir o link.',
+        tone: AppTone.danger,
       );
     }
   }
@@ -272,8 +293,10 @@ class _Lyrics extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Letra', style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.sm),
+            const SectionHeader(
+              title: 'Letra',
+              padding: EdgeInsets.only(bottom: AppSpacing.sm),
+            ),
             SelectableText(
               value.lyrics!,
               style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),

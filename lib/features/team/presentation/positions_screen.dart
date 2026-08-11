@@ -3,9 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/position_icon.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -41,21 +47,23 @@ class PositionsScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: positions.when(
-          loading: () => const AppLoading(),
-          error: (error, _) => AppErrorState(
-            message: error is ApiException
-                ? error.message
-                : 'Não foi possível carregar as funções.',
-            onRetry: () => ref.invalidate(allPositionsProvider(teamId)),
-          ),
-          data: (list) => RefreshIndicator(
-            onRefresh: () async =>
-                ref.refresh(allPositionsProvider(teamId).future),
-            child: _PositionList(
-              teamId: teamId,
-              positions: list,
-              onEdit: (p) => _openEditor(context, ref, position: p),
+        child: AppContentWidth(
+          child: positions.when(
+            loading: () => const AppListSkeleton(itemCount: 5),
+            error: (error, _) => AppErrorState(
+              message: error is ApiException
+                  ? error.message
+                  : 'Não foi possível carregar as funções.',
+              onRetry: () => ref.invalidate(allPositionsProvider(teamId)),
+            ),
+            data: (list) => RefreshIndicator(
+              onRefresh: () async =>
+                  ref.refresh(allPositionsProvider(teamId).future),
+              child: _PositionList(
+                teamId: teamId,
+                positions: list,
+                onEdit: (p) => _openEditor(context, ref, position: p),
+              ),
             ),
           ),
         ),
@@ -149,23 +157,14 @@ class _PositionList extends StatelessWidget {
           ],
         if (inactive.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Desativadas',
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+          const SectionHeader(
+            title: 'Desativadas',
+            subtitle: 'Não aparecem ao escalar. As escalas antigas que as '
+                'usaram continuam como estão.',
+            padding: EdgeInsets.only(bottom: AppSpacing.sm),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Não aparecem ao escalar. As escalas antigas que as usaram '
-            'continuam como estão.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
           AppCard(
-            elevated: false,
+            surface: CardSurface.sunken,
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.xs,
@@ -269,28 +268,15 @@ class _PositionRow extends ConsumerWidget {
   }
 
   Future<void> _confirmDeactivate(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Desativar ${position.name}?'),
-        content: const Text(
-          'Ela some da tela de escalar e do cadastro de integrantes. As '
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Desativar ${position.name}?',
+      message: 'Ela some da tela de escalar e do cadastro de integrantes. As '
           'escalas que já a usaram continuam como estão, e dá para reativar '
           'depois.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Desativar'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Desativar',
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
 
     await _run(
       context,
@@ -298,6 +284,7 @@ class _PositionRow extends ConsumerWidget {
       () => ref
           .read(teamRepositoryProvider)
           .deactivatePosition(teamId, position.id),
+      done: '${position.name} foi desativada.',
     );
   }
 
@@ -308,22 +295,26 @@ class _PositionRow extends ConsumerWidget {
       () => ref
           .read(teamRepositoryProvider)
           .updatePosition(teamId, position.id, isActive: true),
+      done: '${position.name} voltou para a lista.',
     );
   }
 
   Future<void> _run(
     BuildContext context,
     WidgetRef ref,
-    Future<void> Function() action,
-  ) async {
+    Future<void> Function() action, {
+    required String done,
+  }) async {
     try {
       await action();
       ref.invalidate(allPositionsProvider(teamId));
       ref.invalidate(positionsProvider(teamId));
+      if (context.mounted) {
+        showAppSnackBar(context, done, tone: AppTone.success);
+      }
     } on ApiException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
       }
     }
   }
@@ -469,15 +460,10 @@ class _PositionEditorSheetState extends ConsumerState<_PositionEditorSheet> {
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Salvar'),
+            AppSubmitButton(
+              label: 'Salvar',
+              loading: _saving,
+              onPressed: _save,
             ),
           ],
         ),

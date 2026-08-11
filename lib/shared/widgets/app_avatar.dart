@@ -48,7 +48,10 @@ class AppAvatar extends StatelessWidget {
           ),
     );
 
-    return CircleAvatar(
+    // A inicial é decoração: o nome dela vem sempre escrito ao lado, e sem isto
+    // o leitor de tela anunciava "S" antes de "Samuel" em cada linha da lista.
+    return ExcludeSemantics(
+      child: CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor ?? scheme.primaryContainer,
       foregroundColor: foregroundColor ?? scheme.onPrimaryContainer,
@@ -67,6 +70,7 @@ class AppAvatar extends StatelessWidget {
                 errorBuilder: (_, __, ___) => initial,
               ),
             ),
+      ),
     );
   }
 }

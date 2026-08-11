@@ -268,29 +268,43 @@ class _DayCell extends StatelessWidget {
         ? scheme.onPrimary
         : (isPast ? scheme.onSurfaceVariant.withValues(alpha: 0.4) : null);
 
-    return Center(
+    // O círculo continua com 40px — mas **o que se toca é a célula inteira**
+    // da grade (~51px numa tela de 360dp). Antes o alvo era o próprio círculo,
+    // abaixo dos 48dp que o resto do app respeita, num calendário de dias
+    // vizinhos: errar por três pixels aqui significa avisar a equipe que você
+    // não pode no domingo errado.
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      enabled: !isPast,
+      label: capitalizeWeekday(
+        DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(day),
+      ),
+      excludeSemantics: true,
       child: InkWell(
         // Dia passado não é marcável: o backend recusa e não haveria o que
         // avisar sobre uma escala que já aconteceu.
         onTap: isPast ? null : onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected ? scheme.primary : null,
-            border: isToday && !isSelected
-                ? Border.all(color: scheme.primary)
-                : null,
-          ),
-          child: Text(
-            '${day.day}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: color,
-              fontWeight:
-                  isSelected || isToday ? FontWeight.w700 : FontWeight.w400,
+        child: Center(
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected ? scheme.primary : null,
+              border: isToday && !isSelected
+                  ? Border.all(color: scheme.primary)
+                  : null,
+            ),
+            child: Text(
+              '${day.day}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: color,
+                fontWeight:
+                    isSelected || isToday ? FontWeight.w700 : FontWeight.w400,
+              ),
             ),
           ),
         ),

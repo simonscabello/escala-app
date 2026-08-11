@@ -6,7 +6,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../shared/widgets/app_card.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_pressable.dart';
+import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
@@ -14,11 +19,14 @@ import '../domain/song_models.dart';
 
 /// Repertório da equipe.
 ///
-/// O filtro "faltando dados" é o coração desta tela. O acervo chega dos
-/// serviços externos com artista, links, tom original e andamento, mas tom da
-/// equipe, hino/cântico e "calma ou agitada" **nenhuma API responde** -- são
-/// decisão de quem canta. Em vez de uma tarefa de centenas de linhas, isso
-/// vira alguns toques quando a música entra numa escala.
+/// O filtro "Novas" é o modo de trabalho desta tela: mostra o que a equipe está
+/// aprendendo, e é por ele que a marca se gerencia — a lista fica curta e dá
+/// para tirar de uma vez as que a igreja já canta junto, em vez de lembrar de
+/// música por música.
+///
+/// Havia também um filtro "faltando dados", por tom da equipe, hino/cântico e
+/// andamento. Saiu a pedido: essas três decisões continuam existindo na edição,
+/// mas cobrá-las numa aba não era o jeito desta equipe trabalhar.
 class SongsScreen extends ConsumerStatefulWidget {
   const SongsScreen({super.key, required this.teamId});
 
@@ -33,7 +41,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
   Timer? _debounce;
 
   String _search = '';
-  SongFilter _filter = SongFilter.todas;
+  SongFilter _filter = SongFilter.canticos;
 
   @override
   void dispose() {
@@ -58,8 +66,13 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
       filter: _filter,
     );
     final songs = ref.watch(songsProvider(query));
-    final canManage =
-        ref.watch(authControllerProvider).teams.firstOrNull?.canManage ?? false;
+    final canManage = ref
+            .watch(authControllerProvider)
+            .teams
+            .where((t) => t.teamId == widget.teamId)
+            .firstOrNull
+            ?.canManage ??
+        false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Repertório')),
@@ -72,74 +85,89 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
           : null,
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenPadding,
-                AppSpacing.md,
-                AppSpacing.screenPadding,
-                AppSpacing.sm,
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Buscar por título, artista ou compositor',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            _searchController.clear();
-                            _onSearchChanged('');
-                          },
-                        ),
+        child: AppContentWidth(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenPadding,
+                  AppSpacing.md,
+                  AppSpacing.screenPadding,
+                  AppSpacing.md,
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenPadding,
-              ),
-              child: Row(
-                children: [
-                  for (final option in SongFilter.values) ...[
-                    ChoiceChip(
-                      label: Text(
-                        option == SongFilter.todas ? 'Todas' : 'Faltando dados',
-                      ),
-                      selected: _filter == option,
-                      onSelected: (_) => setState(() => _filter = option),
+                // `ListenableBuilder` no controlador: o botão de limpar era
+                // desenhado a partir de `_searchController.text`, que só era
+                // relido quando o `setState` do debounce disparava. Resultado:
+                // o X aparecia 350ms depois da primeira letra, e por um
+                // instante depois de limpar o campo ele continuava lá.
+                child: ListenableBuilder(
+                  listenable: _searchController,
+                  builder: (context, _) => TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por título, artista ou compositor',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Limpar busca',
+                              icon: const Icon(Icons.close_rounded),
+                              onPressed: () {
+                                _searchController.clear();
+                                _onSearchChanged('');
+                              },
+                            ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenPadding,
+                ),
+                child: AppChoiceBar<SongFilter>(
+                  value: _filter,
+                  onChanged: (value) => setState(() => _filter = value),
+                  options: const [
+                    AppChoice(value: SongFilter.canticos, label: 'Cânticos'),
+                    AppChoice(value: SongFilter.hinos, label: 'Hinos'),
+                    AppChoice(value: SongFilter.novas, label: 'Novas'),
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: songs.when(
-                loading: () => const AppLoading(),
-                error: (error, _) => AppErrorState(
-                  message: error is ApiException
-                      ? error.message
-                      : 'Não foi possível carregar o repertório.',
-                  onRetry: () => ref.invalidate(songsProvider(query)),
-                ),
-                data: (list) => _SongList(
-                  songs: list,
-                  teamId: widget.teamId,
-                  query: query,
-                  filter: _filter,
-                  hasSearch: _search.trim().isNotEmpty,
-                  canManage: canManage,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: songs.when(
+                  loading: () => const AppListSkeleton(
+                    itemCount: 6,
+                    leadingBlock: true,
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.screenPadding,
+                      0,
+                      AppSpacing.screenPadding,
+                      AppSpacing.xl,
+                    ),
+                  ),
+                  error: (error, _) => AppErrorState(
+                    message: error is ApiException
+                        ? error.message
+                        : 'Não foi possível carregar o repertório.',
+                    onRetry: () => ref.invalidate(songsProvider(query)),
+                  ),
+                  data: (list) => _SongList(
+                    songs: list,
+                    teamId: widget.teamId,
+                    query: query,
+                    filter: _filter,
+                    hasSearch: _search.trim().isNotEmpty,
+                    canManage: canManage,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -166,51 +194,83 @@ class _SongList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (songs.isEmpty) {
-      return RefreshIndicator(
+      // A ação só existe quando ela é possível: antes o callback era passado
+      // sempre, e só o rótulo era condicional -- um integrante sem permissão
+      // via a tela sem saída, e a ação ficava presa a um botão invisível.
+      final canAdd = !hasSearch && filter == SongFilter.canticos && canManage;
+
+      return RefreshableMessage(
         onRefresh: () async => ref.refresh(songsProvider(query).future),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.5,
-              child: AppEmptyState(
-                icon: Icons.library_music_outlined,
-                title: hasSearch
-                    ? 'Nada encontrado'
-                    : filter == SongFilter.faltandoDados
-                        ? 'Está tudo preenchido'
-                        : 'Nenhuma música',
-                message: hasSearch
-                    ? 'Tente outro trecho do título ou o nome do artista.'
-                    : filter == SongFilter.faltandoDados
-                        ? 'Todas as músicas já têm tom, tipo e andamento.'
-                        : 'Adicione as músicas que a equipe canta.',
-                actionLabel: !hasSearch &&
-                        filter == SongFilter.todas &&
-                        canManage
-                    ? 'Adicionar'
-                    : null,
-                onAction: () => context.push('/equipe/musicas/nova'),
-              ),
-            ),
-          ],
+        child: AppEmptyState(
+          icon: hasSearch
+              ? Icons.search_off_rounded
+              : Icons.library_music_outlined,
+          tone: filter == SongFilter.novas && !hasSearch
+              ? AppTone.success
+              : AppTone.primary,
+          title: hasSearch
+              ? 'Nada encontrado'
+              : switch (filter) {
+                  // Lista vazia aqui é boa notícia, e não um buraco: quer
+                  // dizer que a equipe já domina tudo o que canta.
+                  SongFilter.novas => 'Nada em aprendizado',
+                  SongFilter.hinos => 'Nenhum hino',
+                  SongFilter.canticos => 'Nenhum cântico',
+                },
+          // Com a busca preenchida, a mensagem diz em qual acervo se procurou.
+          // Sem isso, quem digita "142" em Cânticos vê "Nada encontrado" e
+          // conclui que o hino não existe -- quando ele está na aba do lado.
+          message: hasSearch
+              ? switch (filter) {
+                  SongFilter.canticos =>
+                    'Procuramos só nos cânticos. Se for hino, toque em Hinos.',
+                  SongFilter.hinos =>
+                    'Procuramos só nos hinos. Se for cântico, toque em Cânticos.',
+                  SongFilter.novas =>
+                    'Nenhuma música em aprendizado com esse nome.',
+                }
+              : switch (filter) {
+                  SongFilter.novas =>
+                    'Marque uma música como nova ao adicioná-la, ou na edição.',
+                  SongFilter.hinos =>
+                    'O Cantor Cristão ainda não foi importado nesta equipe.',
+                  SongFilter.canticos => canManage
+                      ? 'Adicione as músicas que a equipe canta.'
+                      : 'Quando o líder cadastrar as músicas, elas aparecem '
+                          'aqui com letra, cifra e tom.',
+                },
+          actionLabel: canAdd ? 'Adicionar música' : null,
+          onAction:
+              canAdd ? () => context.push('/equipe/musicas/nova') : null,
         ),
       );
     }
 
+    // Linhas com fio na página, e **não** um grupo de superfície única como no
+    // Perfil ou em Gerenciar equipe. A regra que separa os dois casos:
+    //
+    //   grupo fechado  → conjunto finito e curto, que se lê inteiro
+    //   linhas na página → lista longa, que se percorre e se filtra
+    //
+    // O repertório desta igreja tem 286 músicas. Envolvê-las numa moldura só
+    // seria uma moldura de dois metros de altura — e, pior, exigiria construir
+    // as 286 linhas de uma vez, porque uma `Column` dentro de moldura não é
+    // preguiçosa. Aqui o `ListView.separated` continua construindo só o que
+    // aparece.
     return RefreshIndicator(
       onRefresh: () async => ref.refresh(songsProvider(query).future),
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          0,
-          AppSpacing.screenPadding,
-          AppSpacing.xxl * 2,
-        ),
+        padding: const EdgeInsets.only(bottom: AppSpacing.xxl * 2),
         itemCount: songs.length,
-        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (_, index) => _SongTile(
+        separatorBuilder: (context, __) => Divider(
+          height: 1,
+          thickness: 1,
+          indent: AppSpacing.screenPadding + 46 + AppSpacing.md,
+          endIndent: AppSpacing.screenPadding,
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+        itemBuilder: (_, index) => _SongRow(
           song: songs[index],
           teamId: teamId,
         ),
@@ -219,8 +279,8 @@ class _SongList extends ConsumerWidget {
   }
 }
 
-class _SongTile extends StatelessWidget {
-  const _SongTile({required this.song, required this.teamId});
+class _SongRow extends StatelessWidget {
+  const _SongRow({required this.song, required this.teamId});
 
   final Song song;
   final String teamId;
@@ -228,52 +288,74 @@ class _SongTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    return AppCard(
+    return AppPressable(
       onTap: () => context.push('/equipe/musicas/${song.id}'),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          // O tom é a informação que o músico procura primeiro. Vazio, vira
-          // um convite a preencher em vez de um espaço em branco.
-          _KeyBadge(song: song),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                Text(
-                  song.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            // No hino, o número toma o lugar do tom neste bloco: é por ele que
+            // se percorre o hinário, e é o que o pastor anuncia no culto. O tom
+            // desce para a linha de baixo, onde continua legível.
+            if (song.isHymn)
+              _HymnNumber(song: song)
+            else
+              // O tom é a informação que o músico procura primeiro. Vazio, vira
+              // um convite a preencher em vez de um espaço em branco.
+              _KeyBadge(song: song),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          song.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      ),
+                      // Também fora do filtro "Novas": percorrendo o repertório
+                      // inteiro é assim que se lembra do que ainda está sendo
+                      // aprendido.
+                      if (song.isNew) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        const AppBadge(label: 'Nova', tone: AppTone.info),
+                      ],
+                    ],
                   ),
-                ),
-                if (song.kind != null || song.pace != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: 1),
                   Text(
                     [
-                      if (song.kind != null) kindLabel(song.kind),
-                      if (song.pace != null) paceLabel(song.pace),
+                      song.subtitle,
+                      // "Hino" ao lado de um número seria repetir em palavra o
+                      // que o número já diz. No hino entra o tom, que saiu do
+                      // bloco da esquerda.
+                      if (song.isHymn) ...[
+                        if (song.defaultKey != null) 'Tom ${song.defaultKey}',
+                      ] else ...[
+                        if (song.kind != null) kindLabel(song.kind),
+                        if (song.pace != null) paceLabel(song.pace),
+                      ],
                     ].join(' · '),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          _LinkDots(song: song),
-        ],
+            const SizedBox(width: AppSpacing.sm),
+            _LinkDots(song: song),
+          ],
+        ),
       ),
     );
   }
@@ -286,6 +368,11 @@ class _SongTile extends StatelessWidget {
 /// em cinza esse buraco lia-se como "está tudo certo". O âmbar é o papel de
 /// **atenção** da paleta: algo a resolver, sem o susto do vermelho, que aqui
 /// significa erro.
+///
+/// **A cor não pode ser o único sinal** (WCAG 1.4.1): para quem não distingue
+/// o âmbar do azul, os dois estados eram a mesma caixa com "F#" dentro. O lápis
+/// abaixo do tom diz "isto ainda é para preencher" sem depender de cor, e o
+/// `Semantics` diz a frase inteira para quem usa leitor de tela.
 class _KeyBadge extends StatelessWidget {
   const _KeyBadge({required this.song});
 
@@ -295,26 +382,93 @@ class _KeyBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final status = AppStatusColors.of(context);
     final own = song.defaultKey;
     final suggestion = song.originalKey;
 
     final label = own ?? suggestion ?? '?';
     final isOwn = own != null;
+    final palette = isOwn
+        ? status.resolve(AppTone.primary, scheme)
+        : status.warning;
 
-    return Container(
-      width: 46,
-      height: 46,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isOwn ? scheme.primaryContainer : scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    return Semantics(
+      label: isOwn
+          ? 'Tom da equipe: $label'
+          : suggestion != null
+              ? 'Sem tom definido. A gravação está em $suggestion.'
+              : 'Sem tom definido.',
+      excludeSemantics: true,
+      child: Container(
+        width: 46,
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: palette.container,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: palette.onContainer,
+                height: 1.1,
+              ),
+            ),
+            if (!isOwn)
+              Icon(
+                Icons.edit_outlined,
+                size: 11,
+                color: palette.onContainer.withValues(alpha: 0.8),
+              ),
+          ],
+        ),
       ),
-      child: Text(
-        label,
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color:
-              isOwn ? scheme.onPrimaryContainer : scheme.onTertiaryContainer,
+    );
+  }
+}
+
+/// Número do hino, no mesmo bloco onde o cântico mostra o tom.
+///
+/// Mesma medida e mesmo raio do [_KeyBadge] de propósito: as duas abas rolam
+/// com o olho na mesma coluna, e um bloco de tamanho diferente faria a lista
+/// tremer ao trocar de aba.
+///
+/// Tinta neutra, e não a `primary` do tom: aqui não há nada a decidir nem a
+/// preencher. O número é fato impresso no hinário — ele identifica, não cobra.
+class _HymnNumber extends StatelessWidget {
+  const _HymnNumber({required this.song});
+
+  final Song song;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Semantics(
+      label: 'Cantor Cristão, hino ${song.hymnNumber}',
+      excludeSemantics: true,
+      child: Container(
+        width: 46,
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        child: Text(
+          // Com zero à esquerda, como o hinário imprime: além de fiel, alinha
+          // a coluna de números de uma a três casas.
+          song.hymnNumber!.toString().padLeft(3, '0'),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: scheme.onSurfaceVariant,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ),
     );
@@ -331,24 +485,28 @@ class _LinkDots extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    final icons = <IconData>[
-      if (song.chordsUrl != null) Icons.music_note_rounded,
-      if (song.lyricsUrl != null) Icons.article_outlined,
-      if (song.youtubeUrl != null) Icons.play_circle_outline_rounded,
-      if (song.spotifyUrl != null) Icons.headphones_rounded,
+    final links = <(IconData, String)>[
+      if (song.chordsUrl != null) (Icons.music_note_rounded, 'cifra'),
+      if (song.lyricsUrl != null) (Icons.article_outlined, 'letra'),
+      if (song.youtubeUrl != null) (Icons.play_circle_outline_rounded, 'vídeo'),
+      if (song.spotifyUrl != null) (Icons.headphones_rounded, 'áudio'),
     ];
 
-    if (icons.isEmpty) return const SizedBox.shrink();
+    if (links.isEmpty) return const SizedBox.shrink();
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final icon in icons)
-          Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: Icon(icon, size: 15, color: scheme.onSurfaceVariant),
-          ),
-      ],
+    return Semantics(
+      label: 'Tem ${links.map((l) => l.$2).join(', ')}',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final link in links)
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Icon(link.$1, size: 15, color: scheme.onSurfaceVariant),
+            ),
+        ],
+      ),
     );
   }
 }

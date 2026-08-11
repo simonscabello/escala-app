@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -86,7 +87,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 textInputAction: TextInputAction.next,
                 enabled: !_loading,
                 validator: (v) => (v == null || !v.contains('@'))
-                    ? 'Informe um e-mail valido.'
+                    ? 'Informe um e-mail válido.'
                     : null,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -116,20 +117,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Criar conta'),
+        AppSubmitButton(
+          label: 'Criar conta',
+          loading: _loading,
+          loadingLabel: 'Criando sua conta',
+          onPressed: _submit,
         ),
         const SizedBox(height: AppSpacing.sm),
         TextButton(
           onPressed: _loading ? null : () => context.go('/login'),
-          child: const Text('Ja tenho conta. Entrar'),
+          child: const Text('Já tenho conta. Entrar'),
         ),
       ],
     );

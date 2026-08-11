@@ -4,7 +4,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../auth/application/auth_controller.dart';
 
 /// Foto de perfil com o gesto de troca embutido.
@@ -36,17 +38,24 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
     if (picked == null) return;
     await _run(
       () => ref.read(authControllerProvider.notifier).updateAvatar(picked.path),
+      done: 'Foto atualizada.',
     );
   }
 
   Future<void> _remove() {
-    return _run(() => ref.read(authControllerProvider.notifier).removeAvatar());
+    return _run(
+      () => ref.read(authControllerProvider.notifier).removeAvatar(),
+      done: 'Foto removida.',
+    );
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(Future<void> Function() action, {required String done}) async {
     setState(() => _busy = true);
     try {
       await action();
+      if (mounted) {
+        showAppSnackBar(context, done, tone: AppTone.success);
+      }
     } on ApiException catch (error) {
       _warn(error.message);
     } catch (_) {
@@ -60,9 +69,7 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
 
   void _warn(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showAppSnackBar(context, message, tone: AppTone.danger);
   }
 
   Future<void> _openOptions() async {

@@ -4,8 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_skeleton.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/position_icon.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_models.dart';
 import '../data/team_repository.dart';
@@ -85,7 +90,17 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
       }
 
       ref.invalidate(membersProvider(widget.teamId));
-      if (mounted) context.pop(true);
+      if (mounted) {
+        final name = _name.text.trim();
+        context.pop(true);
+        showAppSnackBar(
+          context,
+          widget.isEditing
+              ? 'Dados de $name atualizados.'
+              : '$name entrou na equipe.',
+          tone: AppTone.success,
+        );
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -139,25 +154,28 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Funções',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+        const SectionHeader(
+          title: 'Funções',
+          subtitle: 'O que esta pessoa toca ou faz. Pode marcar mais de uma.',
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Pode marcar mais de uma.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
         positions.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Text('$e'),
+          loading: () => const Row(
+            children: [
+              AppSkeleton(width: 96, height: 40, radius: AppSpacing.radiusPill),
+              SizedBox(width: AppSpacing.sm),
+              AppSkeleton(width: 76, height: 40, radius: AppSpacing.radiusPill),
+              SizedBox(width: AppSpacing.sm),
+              AppSkeleton(width: 110, height: 40, radius: AppSpacing.radiusPill),
+            ],
+          ),
+          // Era `Text('$e')`: o objeto de exceção do Dart impresso no meio do
+          // formulário, sem nada que a pessoa pudesse fazer a respeito.
+          error: (error, _) => _InlineError(
+            message: error is ApiException
+                ? error.message
+                : 'Não foi possível carregar as funções da equipe.',
+            onRetry: () => ref.invalidate(positionsProvider(widget.teamId)),
+          ),
           data: (list) => _PositionGrid(
             positions: list,
             selected: _selected,
@@ -189,17 +207,57 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
         ],
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(widget.isEditing ? 'Salvar' : 'Adicionar'),
+        AppSubmitButton(
+          label: widget.isEditing ? 'Salvar' : 'Adicionar',
+          loading: _loading,
+          onPressed: _submit,
         ),
       ],
+    );
+  }
+}
+
+/// Falha de um pedaço da tela, sem derrubar o resto do formulário.
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = AppStatusColors.of(context).danger;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.container,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 20,
+            color: palette.onContainer,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: palette.onContainer,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(foregroundColor: palette.onContainer),
+            child: const Text('Tentar de novo'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -130,6 +130,13 @@ List<String> _songLines(List<EventSong> songs) {
     if (song.key != null && song.key!.isNotEmpty) {
       parts.add('(${song.key})');
     }
+    // No fim da linha e em palavra, não em emoji: a regra desta mensagem é um
+    // emoji por seção, e um "🆕" por música devolveria o ruído que o cabeçalho
+    // 🎶 existe para evitar. Depois do tom porque é o tom que o músico procura
+    // primeiro; "nova" é recado, e recado se lê no fim.
+    if (song.isNew) {
+      parts.add('(nova)');
+    }
     lines.add(parts.join(' '));
   }
   return lines;

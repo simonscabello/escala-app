@@ -4,9 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
@@ -169,14 +174,16 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         warnings.add('$names também está em outra escala no mesmo dia.');
       }
 
-      if (warnings.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 6),
-            content: Text('Escala salva. ${warnings.join(' ')}'),
-          ),
-        );
-      }
+      // Salvar sem avisos também precisa responder. Antes, a tela simplesmente
+      // fechava: dava para não ter certeza se o toque tinha pegado, e o líder
+      // reabria a escala para conferir.
+      showAppSnackBar(
+        context,
+        warnings.isEmpty
+            ? 'Escala salva.'
+            : 'Escala salva. ${warnings.join(' ')}',
+        tone: warnings.isEmpty ? AppTone.success : AppTone.warning,
+      );
 
       // `pushReplacement` e não `push`: a escalação já foi salva, e voltar para
       // ela do repertório só ofereceria salvá-la de novo. O que fica embaixo é
@@ -229,8 +236,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       return guest;
     } on ApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
       }
       return null;
     }
@@ -297,66 +303,69 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Escalar equipe')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl,
-          AppSpacing.md,
-          AppSpacing.xl,
-          AppSpacing.xxxl,
-        ),
-        children: [
-          Text(event.describe(), style: theme.textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.lg),
-          _SummaryBar(
-            people: _distinctPeople,
-            filled: _filledPositions,
-            total: activePositions.length,
+      body: AppContentWidth(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.md,
+            AppSpacing.xl,
+            AppSpacing.xxxl,
           ),
-          if (_error != null) ...[
+          children: [
+            Text(event.describe(), style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
-            FormErrorBanner(message: _error!),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          for (final position in activePositions) ...[
-            _PositionCard(
-              position: position,
-              members: members,
-              selected: _selected[position.id] ?? const <String>{},
-              unavailableIds: unavailableIds,
-              onTap: () => _openPicker(
+            _SummaryBar(
+              people: _distinctPeople,
+              filled: _filledPositions,
+              total: activePositions.length,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              FormErrorBanner(message: _error!),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            for (final position in activePositions) ...[
+              _PositionCard(
                 position: position,
                 members: members,
-                positions: activePositions,
+                selected: _selected[position.id] ?? const <String>{},
                 unavailableIds: unavailableIds,
-                teamId: event.teamId,
+                onTap: () => _openPicker(
+                  position: position,
+                  members: members,
+                  positions: activePositions,
+                  unavailableIds: unavailableIds,
+                  teamId: event.teamId,
+                ),
+                onRemove: (membershipId) => setState(() {
+                  final next = {...?_selected[position.id]}
+                    ..remove(membershipId);
+                  _selected[position.id] = next;
+                  _dropMinisterIfUnassigned();
+                }),
               ),
-              onRemove: (membershipId) => setState(() {
-                final next = {...?_selected[position.id]}..remove(membershipId);
-                _selected[position.id] = next;
-                _dropMinisterIfUnassigned();
-              }),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            // Depois das funções de propósito: só dá para escolher o
+            // ministrante entre quem já foi escalado.
+            _MinisterPicker(
+              members: members,
+              assignedIds: _assignedIds,
+              ministerId: _ministerId,
+              enabled: !_saving,
+              onChanged: (id) => setState(() => _ministerId = id),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Salvar substitui toda a equipe escalada.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          // Depois das funções de propósito: só dá para escolher o ministrante
-          // entre quem já foi escalado.
-          _MinisterPicker(
-            members: members,
-            assignedIds: _assignedIds,
-            ministerId: _ministerId,
-            enabled: !_saving,
-            onChanged: (id) => setState(() => _ministerId = id),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Salvar substitui toda a equipe escalada.',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -364,26 +373,24 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           border: Border(top: BorderSide(color: scheme.outlineVariant)),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              AppSpacing.md,
-              AppSpacing.xl,
-              AppSpacing.md,
-            ),
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      widget.nextIsSetlist
-                          ? 'Salvar e escolher músicas'
-                          : 'Salvar escala',
-                    ),
+          child: AppContentWidth(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: AppSubmitButton(
+                  label: widget.nextIsSetlist
+                      ? 'Salvar e escolher músicas'
+                      : 'Salvar escala',
+                  loading: _saving,
+                  onPressed: _save,
+                ),
+              ),
             ),
           ),
         ),
@@ -693,59 +700,86 @@ class _SelectedChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    // Indisponível pesa mais que "fora do cadastro": a pessoa avisou que não
-    // estará lá, então o chip vai em vermelho.
-    final warn = outsideRegistration || unavailable;
+    final status = AppStatusColors.of(context);
 
-    final background = unavailable
-        ? scheme.errorContainer
-        : (warn
-            ? scheme.primaryContainer
-            : scheme.surfaceContainerHigh);
-    final foreground = unavailable
-        ? scheme.onErrorContainer
-        : (warn ? scheme.onPrimaryContainer : scheme.onSurface);
+    // O chip de "fora do cadastro" saía **no azul da marca** — a mesma cor que
+    // o app usa para "é aqui que você toca" e para tudo que está certo. Ou
+    // seja: a única pista de que aquela pessoa não tem a função cadastrada era
+    // ela ficar mais bonita que as outras. Âmbar é o papel de atenção da
+    // paleta, e é o que o resto do app já usa para isto.
+    final tone = unavailable
+        ? AppTone.danger
+        : outsideRegistration
+            ? AppTone.warning
+            : AppTone.neutral;
+    final palette = status.resolve(tone, scheme);
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppAvatar(
-            name: member.displayName,
-            imageUrl: member.avatarUrl,
-            radius: 12,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            member.displayName,
-            style: theme.textTheme.labelLarge?.copyWith(color: foreground),
-          ),
-          if (unavailable) ...[
-            const SizedBox(width: 4),
-            Icon(Icons.event_busy_rounded, size: 15, color: foreground),
-          ] else if (warn) ...[
-            const SizedBox(width: 4),
-            Icon(Icons.info_outline_rounded, size: 15, color: foreground),
-          ],
-          const SizedBox(width: 2),
-          InkWell(
-            onTap: onRemove,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: scheme.onSurfaceVariant,
+    final hint = unavailable
+        ? '${member.displayName} avisou que não pode neste dia'
+        : outsideRegistration
+            ? '${member.displayName} não tem esta função no cadastro'
+            : null;
+
+    return Semantics(
+      label: hint ?? member.displayName,
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: palette.container,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppAvatar(
+              name: member.displayName,
+              imageUrl: member.avatarUrl,
+              radius: 12,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              member.displayName,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: palette.onContainer,
               ),
             ),
-          ),
-        ],
+            if (unavailable) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.event_busy_rounded,
+                size: 15,
+                color: palette.onContainer,
+              ),
+            ] else if (outsideRegistration) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.info_outline_rounded,
+                size: 15,
+                color: palette.onContainer,
+              ),
+            ],
+            const SizedBox(width: 2),
+            // O "x" herdava `onSurfaceVariant` seja qual fosse o fundo do chip
+            // -- cinza sobre o vermelho de indisponível.
+            Semantics(
+              button: true,
+              label: 'Tirar ${member.displayName} da escala',
+              child: InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: palette.onContainer,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1063,8 +1097,10 @@ class _PickerTile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final blocked = blockedReason != null && !checked;
 
-    return Opacity(
-      opacity: blocked ? 0.45 : 1,
+    // A linha inteira é **um** controle: sem `MergeSemantics` o leitor de tela
+    // lia o nome e a caixa de seleção como dois itens separados, e o estado
+    // ficava longe de quem ele descreve.
+    return MergeSemantics(
       child: InkWell(
         onTap: blocked ? null : onTap,
         child: Padding(
@@ -1074,10 +1110,17 @@ class _PickerTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              AppAvatar(
-                name: member.displayName,
-                imageUrl: member.avatarUrl,
-                radius: 18,
+              // O esmaecido cobre só a identificação da pessoa. Antes ele
+              // envolvia a linha toda a 45%, **inclusive o motivo do bloqueio**
+              // -- justamente a frase que explica por que aquele nome não pode
+              // ser marcado, apagada até quase sumir.
+              Opacity(
+                opacity: blocked ? 0.5 : 1,
+                child: AppAvatar(
+                  name: member.displayName,
+                  imageUrl: member.avatarUrl,
+                  radius: 18,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -1087,9 +1130,12 @@ class _PickerTile extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            member.displayName,
-                            style: theme.textTheme.bodyLarge,
+                          child: Opacity(
+                            opacity: blocked ? 0.5 : 1,
+                            child: Text(
+                              member.displayName,
+                              style: theme.textTheme.bodyLarge,
+                            ),
                           ),
                         ),
                         // Continua na lista e continua selecionável: o líder às
@@ -1109,13 +1155,17 @@ class _PickerTile extends StatelessWidget {
                         blockedReason!,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
                         ),
                       )
                     else if (outsideRegistration && checked)
+                      // Âmbar, não azul: é uma ressalva, e o azul é a cor do
+                      // que está certo no app inteiro.
                       Text(
                         'Fora do cadastro desta função',
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.primary,
+                          color: AppStatusColors.of(context).warning.foreground,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                   ],
@@ -1140,25 +1190,11 @@ class _GuestBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Text(
-        'Convidado',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: scheme.onSecondaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return const AppBadge(
+      label: 'Convidado',
+      tone: AppTone.info,
+      semanticsLabel: 'Convidado de fora: não tem conta no app e recebe a '
+          'escala pelo texto compartilhado',
     );
   }
 }

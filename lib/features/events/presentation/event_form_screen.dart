@@ -6,9 +6,13 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/service_template.dart';
 import '../data/event_repository.dart';
@@ -189,10 +193,26 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     final selected = await showQuarterHourPicker(
       context: context,
       initialTime: _services[index].time,
-      title: 'Horario de ${_services[index].label}',
+      title: 'Horário de ${_services[index].label}',
     );
     if (selected == null || !mounted) return;
     setState(() => _services[index].time = selected);
+  }
+
+  /// Tirar um culto da escala apaga o repertório dele junto (a FK é cascade),
+  /// e isso não estava dito em lugar nenhum: era um "x" sem aviso.
+  Future<void> _removeService(int index) async {
+    final service = _services[index];
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Tirar ${service.label} desta escala?',
+      message: 'O horário sai da escala. Se já houver repertório escolhido '
+          'para ele, as músicas saem junto.',
+      confirmLabel: 'Tirar',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _services = [..._services]..removeAt(index));
   }
 
   Future<void> _addService() async {
@@ -225,7 +245,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     final time = await showQuarterHourPicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(current),
-      title: 'Horario do ensaio',
+      title: 'Horário do ensaio',
     );
     if (time == null || !mounted) return;
 
@@ -422,8 +442,10 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Dia', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.sm),
+              const SectionHeader(
+                title: 'Dia',
+                padding: EdgeInsets.only(bottom: AppSpacing.sm),
+              ),
               _DateButton(
                 date: _date,
                 enabled: !_loading,
@@ -437,28 +459,22 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                 loadingTemplates: templatesAsync.isLoading,
                 enabled: !_loading,
                 onPickTime: _pickServiceTime,
-                onRemove: (index) =>
-                    setState(() => _services = [..._services]..removeAt(index)),
+                onRemove: _removeService,
                 onAdd: _addService,
               ),
               const SizedBox(height: AppSpacing.xl),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Ensaio (opcional)',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  if (_rehearsalAt != null)
-                    IconButton(
-                      tooltip: 'Limpar ensaio',
-                      onPressed: _loading
-                          ? null
-                          : () => setState(() => _rehearsalAt = null),
-                      icon: const Icon(Icons.clear),
-                    ),
-                ],
+              SectionHeader(
+                title: 'Ensaio (opcional)',
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                trailing: _rehearsalAt == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Limpar ensaio',
+                        onPressed: _loading
+                            ? null
+                            : () => setState(() => _rehearsalAt = null),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
               ),
               if (_rehearsalAt == null)
                 OutlinedButton.icon(
@@ -509,15 +525,10 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         ),
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(_isEditing ? 'Salvar' : 'Criar escala'),
+        AppSubmitButton(
+          label: _isEditing ? 'Salvar' : 'Criar escala',
+          loading: _loading,
+          onPressed: _submit,
         ),
       ],
     );
@@ -603,30 +614,19 @@ class _ServicesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text('Cultos', style: theme.textTheme.titleMedium),
-            ),
-            if (services.isNotEmpty)
-              Text(
-                services.length == 1 ? '1 culto' : '${services.length} cultos',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          hasGradeForDay
-              ? 'Vieram da grade da igreja. Desmarque o que não vai ter.'
+        SectionHeader(
+          title: 'Cultos',
+          subtitle: hasGradeForDay
+              ? 'Vieram da grade da igreja. Remova o que não vai ter.'
               : 'Não há grade para este dia da semana. Adicione o horário.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
+          trailing: services.isEmpty
+              ? null
+              : AppBadge(
+                  label: services.length == 1
+                      ? '1 culto'
+                      : '${services.length} cultos',
+                ),
         ),
-        const SizedBox(height: AppSpacing.md),
         if (loadingTemplates)
           const Padding(
             padding: EdgeInsets.all(AppSpacing.lg),
@@ -799,7 +799,7 @@ class _ExtraServiceSheetState extends State<_ExtraServiceSheet> {
                 final picked = await showQuarterHourPicker(
                   context: context,
                   initialTime: _time,
-                  title: 'Horario do culto',
+                  title: 'Horário do culto',
                 );
                 if (picked != null) setState(() => _time = picked);
               },

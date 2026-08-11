@@ -34,31 +34,42 @@ class YouHighlight extends StatelessWidget {
         ? Icon(Icons.star_rounded, size: 15, color: foreground)
         : PositionIcon(single, size: 13, color: foreground);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          marker,
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              youAssignmentLabel(positionNames) ?? '',
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
+    // O rótulo na tela é curto ("VOCÊ: Bateria") porque cabe numa linha de
+    // cartão. Para quem ouve, a frase inteira: é a única informação pessoal da
+    // escala, e "VOCÊ dois pontos bateria" não é como se diz isso.
+    return Semantics(
+      label: positionNames.isEmpty
+          ? null
+          : positionNames.length == 1
+              ? 'Você está escalado em ${positionNames.first}'
+              : 'Você está escalado em ${positionNames.join(' e ')}',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            marker,
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                youAssignmentLabel(positionNames) ?? '',
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/team_repository.dart';
@@ -53,7 +56,14 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
       // O nome da equipe aparece na saudação da agenda, que vem do estado de
       // autenticação -- sem recarregar, a agenda continuaria com o nome antigo.
       await ref.read(authControllerProvider.notifier).reloadTeams();
-      if (mounted) context.pop();
+      if (mounted) {
+        context.pop();
+        showAppSnackBar(
+          context,
+          'Nome da equipe atualizado.',
+          tone: AppTone.success,
+        );
+      }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -97,15 +107,10 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
         ),
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Salvar'),
+        AppSubmitButton(
+          label: 'Salvar',
+          loading: _saving,
+          onPressed: _save,
         ),
       ],
     );

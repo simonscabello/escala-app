@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/theme/app_colors.dart';
+import 'package:louvor_app/core/theme/app_status_colors.dart';
 
 /// Contraste é a parte da acessibilidade que se mede.
 ///
@@ -47,13 +48,48 @@ void main() {
   }
 
   for (final entry in {
-    'claro': AppColors.lightScheme(),
-    'escuro': AppColors.darkScheme(),
+    'claro': (AppColors.lightScheme(), AppStatusColors.light),
+    'escuro': (AppColors.darkScheme(), AppStatusColors.dark),
   }.entries) {
     final tema = entry.key;
-    final s = entry.value;
+    final s = entry.value.$1;
+    final status = entry.value.$2;
 
     group('contraste no tema $tema', () {
+      // Os quatro papéis de estado passam pelo mesmo crivo das cores antigas.
+      // Sem isto, acrescentar um verde "que parece bom" repetiria exatamente o
+      // erro que criou este arquivo.
+      test('os quatro papéis de estado são legíveis', () {
+        for (final papel in {
+          'sucesso': status.success,
+          'atenção': status.warning,
+          'erro': status.danger,
+          'informação': status.info,
+        }.entries) {
+          final nome = papel.key;
+          final p = papel.value;
+          expectContrast(
+            '$nome sobre o cartão',
+            p.foreground,
+            s.surfaceContainerLowest,
+            4.5,
+          );
+          expectContrast('$nome sobre a página', p.foreground, s.surface, 4.5);
+          expectContrast(
+            'texto do $nome sobre a faixa',
+            p.onContainer,
+            p.container,
+            4.5,
+          );
+          expectContrast(
+            'texto sobre o $nome preenchido',
+            p.onForeground,
+            p.foreground,
+            4.5,
+          );
+        }
+      });
+
       test('texto sobre a página e sobre o cartão', () {
         expectContrast('principal/página', s.onSurface, s.surface, 4.5);
         expectContrast(

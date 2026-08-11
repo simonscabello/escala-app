@@ -55,6 +55,39 @@ String formatEventShortWeekday(DateTime utc, String timezone) {
   return DateFormat('EEE', 'pt_BR').format(localTime).replaceAll('.', '');
 }
 
+/// O dia da semana por extenso e em minúscula, **sem o "-feira"**: "sábado",
+/// "quinta".
+///
+/// É como se fala. "Ensaio na quinta-feira" está correto e ninguém diz — o
+/// sufixo só aparece em texto formal, e aqui a frase é a de um recado.
+String formatEventWeekdayName(DateTime utc, String timezone) {
+  final localTime = eventLocalTime(utc, timezone);
+  final name = DateFormat('EEEE', 'pt_BR').format(localTime);
+  return name.replaceAll('-feira', '');
+}
+
+/// "no sábado", "na quinta" — o dia do ensaio dentro de uma frase.
+///
+/// Devolve vazio quando o ensaio é no mesmo dia da escala: ali dizer o dia
+/// seria repetir a data que está logo acima.
+///
+/// O artigo muda com o gênero do dia: sábado e domingo são masculinos ("no"),
+/// e de segunda a sexta o substantivo é "feira", feminino ("na"). Sai errado em
+/// metade da semana se for fixo.
+String formatRehearsalDayPhrase(
+  DateTime rehearsalAt,
+  DateTime startsAt,
+  String timezone,
+) {
+  if (isSameLocalDay(rehearsalAt, startsAt, timezone)) return '';
+
+  final localTime = eventLocalTime(rehearsalAt, timezone);
+  final masculine = localTime.weekday == DateTime.saturday ||
+      localTime.weekday == DateTime.sunday;
+  final article = masculine ? 'no' : 'na';
+  return '$article ${formatEventWeekdayName(rehearsalAt, timezone)}';
+}
+
 /// O horário do ensaio, curto o suficiente para caber numa linha.
 ///
 /// No mesmo dia da escala: só a hora. Em outro dia: o dia da semana abreviado

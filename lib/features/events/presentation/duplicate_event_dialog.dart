@@ -6,6 +6,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../domain/event_datetime.dart';
 import '../data/event_repository.dart';
 import '../domain/event_models.dart';
@@ -56,6 +58,9 @@ Future<void> showDuplicateEventDialog({
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
+                          // O resto do app abre o calendário em português; sem
+                          // isto, só este vinha em inglês.
+                          locale: const Locale('pt', 'BR'),
                           initialDate: DateTime(
                             pickedLocal.year,
                             pickedLocal.month,
@@ -134,10 +139,13 @@ Future<void> showDuplicateEventDialog({
     ref.invalidate(eventsProvider((source.teamId, 'past')));
     if (!context.mounted) return;
     context.push('/agenda/${created.id}');
+    showAppSnackBar(
+      context,
+      'Escala duplicada. Confira os horários e o repertório.',
+      tone: AppTone.success,
+    );
   } on ApiException catch (error) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.message)),
-    );
+    showAppSnackBar(context, error.message, tone: AppTone.danger);
   }
 }

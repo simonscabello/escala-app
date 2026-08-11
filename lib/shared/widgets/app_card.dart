@@ -1,18 +1,37 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_spacing.dart';
+import 'app_pressable.dart';
+
+/// Como o cartão se separa da página.
+enum CardSurface {
+  /// **O padrão.** Superfície de cartão, fio de cabelo, nenhuma sombra.
+  plain,
+
+  /// Preenchimento discreto, sem borda — para blocos de apoio dentro de uma
+  /// tela que já tem cartões, quando mais um contorno viraria ruído.
+  sunken,
+
+  /// Sombra de verdade. Só para o que realmente paira sobre o conteúdo.
+  floating,
+}
 
 /// Superfície padrão de conteúdo.
 ///
-/// Duas variantes: `elevated` (sombra suave, sem borda) para o conteúdo
-/// principal e `outlined` para blocos secundários. A sombra cria hierarquia
-/// sem gastar mais cor.
+/// **O cartão perdeu a sombra, e isso foi a maior mudança visual do app.** Cada
+/// cartão trazia duas camadas de sombra; uma agenda com seis escalas empilhava
+/// doze, e a tela lia-se como peças soltas pairando em cima de um fundo — o
+/// efeito "tudo flutuando" que dá a qualquer app cara de modelo pronto.
 ///
-/// **A sombra não é o que faz o cartão existir.** Ela é sutil de propósito, e
-/// sozinha não segurava a forma: o que separa o cartão da página é a diferença
-/// entre a cor dele e a do fundo, garantida na paleta (ver `AppColors`). A
-/// sombra só arredonda a transição. Por isso o cartão continua legível com
-/// "reduzir transparência/animações" ligado no sistema, e em impressão.
+/// O que separa o cartão da página agora é **cor** (a página desceu um passo em
+/// `AppColors` para pagar por isso) mais um fio de `outlineVariant`, que no tema
+/// claro faz o branco sobre quase-branco existir sem depender de sombra. É a
+/// mesma razão de sempre — a sombra nunca foi o que fazia o cartão existir —
+/// levada até o fim.
+///
+/// Uma consequência que vale nomear: o cartão continua legível com "reduzir
+/// transparência" ligado no sistema, e em impressão.
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -21,7 +40,7 @@ class AppCard extends StatelessWidget {
     this.padding,
     this.color,
     this.margin,
-    this.elevated = true,
+    this.surface = CardSurface.plain,
     this.borderRadius,
   });
 
@@ -30,14 +49,20 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final Color? color;
   final EdgeInsetsGeometry? margin;
-  final bool elevated;
+  final CardSurface surface;
   final double? borderRadius;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(borderRadius ?? AppSpacing.radiusLg);
-    final background = color ?? scheme.surfaceContainerLowest;
+
+    final background = color ??
+        switch (surface) {
+          CardSurface.plain => scheme.surfaceContainerLowest,
+          CardSurface.sunken => scheme.surfaceContainerLow,
+          CardSurface.floating => scheme.surfaceContainerLowest,
+        };
 
     final content =
         padding == null ? child : Padding(padding: padding!, child: child);
@@ -47,28 +72,22 @@ class AppCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: radius,
-        border: elevated ? null : Border.all(color: scheme.outlineVariant),
-        boxShadow: elevated
-            ? [
-                BoxShadow(
-                  color: scheme.shadow.withValues(alpha: 0.05),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: scheme.shadow.withValues(alpha: 0.03),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
-                ),
-              ]
-            : null,
+        border: switch (surface) {
+          CardSurface.plain => Border.all(color: scheme.outlineVariant),
+          CardSurface.sunken => null,
+          CardSurface.floating => null,
+        },
+        boxShadow: surface == CardSurface.floating
+            ? AppElevation.floating(scheme)
+            : AppElevation.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: onTap == null
           ? content
-          : Material(
-              color: Colors.transparent,
-              child: InkWell(onTap: onTap, child: content),
+          : AppPressable(
+              onTap: onTap,
+              borderRadius: radius,
+              child: content,
             ),
     );
   }

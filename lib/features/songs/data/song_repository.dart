@@ -81,11 +81,17 @@ class SongRepository {
     });
   }
 
-  Future<Song> copyFromCatalog(String teamId, String sourceSongId) async {
+  Future<Song> copyFromCatalog(
+    String teamId,
+    String sourceSongId, {
+    bool isNew = false,
+  }) async {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/teams/$teamId/songs/from-catalog',
-        data: {'sourceSongId': sourceSongId},
+        // `isNew` é de quem está adicionando, não da música de origem: que a
+        // outra equipe já domine a canção não diz nada sobre esta.
+        data: {'sourceSongId': sourceSongId, 'isNew': isNew},
       );
       return Song.fromJson(response.data!);
     });
@@ -111,8 +117,9 @@ class SongRepository {
   /// outras chamadas.
   Future<Song> createFromExternal(
     String teamId,
-    ExternalCandidate candidate,
-  ) async {
+    ExternalCandidate candidate, {
+    bool isNew = false,
+  }) async {
     return _guard(
       () async {
         final response = await _dio.post<Map<String, dynamic>>(
@@ -120,6 +127,7 @@ class SongRepository {
           data: {
             'title': candidate.title,
             'artist': candidate.artist,
+            'isNew': isNew,
             if (candidate.spotifyUrl.isNotEmpty)
               'spotifyUrl': candidate.spotifyUrl,
           },
@@ -143,15 +151,25 @@ final songRepositoryProvider = Provider<SongRepository>((ref) {
   return SongRepository(ref.watch(dioProvider));
 });
 
-/// Filtro da lista. "Faltando dados" é o modo de trabalho: mostra só o que
-/// ainda depende de uma decisão da equipe (tom, hino/cântico, andamento).
-enum SongFilter { todas, faltandoDados }
+/// Filtro da lista. **São dois acervos, não um.**
+///
+/// O Cantor Cristão entrou inteiro: 581 hinos num repertório de 861 músicas.
+/// Numa lista só, dois terços de tudo o que se rola é hino, e procurar um
+/// cântico vira garimpo — por isso não existe mais uma aba "Todas". A primeira
+/// aba é "Cânticos", e ela **exclui** os hinos.
+///
+/// "Hinos" percorre por número, que é a ordem do hinário impresso e a única
+/// que serve para quem sabe o hino de cor pelo número.
+///
+/// "Novas" atravessa os dois: um hino pode estar sendo aprendido tanto quanto
+/// um cântico.
+enum SongFilter { canticos, hinos, novas }
 
 class SongQuery {
   const SongQuery({
     required this.teamId,
     this.search = '',
-    this.filter = SongFilter.todas,
+    this.filter = SongFilter.canticos,
   });
 
   final String teamId;
@@ -177,9 +195,14 @@ final songsProvider =
 
   // O filtro é local: a lista inteira já veio, e ir ao servidor de novo só
   // para esconder linhas gastaria uma volta de rede à toa.
-  return query.filter == SongFilter.faltandoDados
-      ? songs.where((s) => s.isIncomplete).toList()
-      : songs;
+  return switch (query.filter) {
+    SongFilter.canticos => songs.where((s) => !s.isHymn).toList(),
+    SongFilter.novas => songs.where((s) => s.isNew).toList(),
+    // Por número, e não por título: é a ordem do hinário impresso, e é assim
+    // que se procura um hino que se sabe de cor pelo número.
+    SongFilter.hinos => songs.where((s) => s.isHymn).toList()
+      ..sort((a, b) => a.hymnNumber!.compareTo(b.hymnNumber!)),
+  };
 });
 
 final songProvider = FutureProvider.autoDispose

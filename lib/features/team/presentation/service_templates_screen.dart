@@ -3,8 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
@@ -33,39 +39,36 @@ class ServiceTemplatesScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: templates.when(
-          loading: () => const AppLoading(),
-          error: (error, _) => AppErrorState(
-            message: error is ApiException
-                ? error.message
-                : 'Não foi possível carregar os cultos.',
-            onRetry: () => ref.invalidate(serviceTemplatesProvider(teamId)),
-          ),
-          data: (list) => RefreshIndicator(
-            onRefresh: () async =>
-                ref.refresh(serviceTemplatesProvider(teamId).future),
-            child: list.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      SizedBox(
-                        height: MediaQuery.sizeOf(context).height * 0.55,
-                        child: AppEmptyState(
-                          icon: Icons.church_outlined,
-                          title: 'Nenhum culto cadastrado',
-                          message:
-                              'Cadastre os horários que se repetem toda semana. '
-                              'Eles aparecem prontos ao criar uma escala.',
-                          actionLabel: 'Adicionar',
-                          onAction: () => _openEditor(context, ref),
-                        ),
-                      ),
-                    ],
+        child: AppContentWidth(
+          child: templates.when(
+            loading: () => const AppListSkeleton(itemCount: 4),
+            error: (error, _) => AppErrorState(
+              message: error is ApiException
+                  ? error.message
+                  : 'Não foi possível carregar os cultos.',
+              onRetry: () => ref.invalidate(serviceTemplatesProvider(teamId)),
+            ),
+            data: (list) => list.isEmpty
+                ? RefreshableMessage(
+                    onRefresh: () async =>
+                        ref.refresh(serviceTemplatesProvider(teamId).future),
+                    child: AppEmptyState(
+                      icon: Icons.church_outlined,
+                      title: 'Nenhum culto cadastrado',
+                      message: 'Cadastre os horários que se repetem toda '
+                          'semana. Eles aparecem prontos ao criar uma escala.',
+                      actionLabel: 'Adicionar culto',
+                      onAction: () => _openEditor(context, ref),
+                    ),
                   )
-                : _TemplateList(
-                    teamId: teamId,
-                    templates: list,
-                    onEdit: (t) => _openEditor(context, ref, template: t),
+                : RefreshIndicator(
+                    onRefresh: () async =>
+                        ref.refresh(serviceTemplatesProvider(teamId).future),
+                    child: _TemplateList(
+                      teamId: teamId,
+                      templates: list,
+                      onEdit: (t) => _openEditor(context, ref, template: t),
+                    ),
                   ),
           ),
         ),
@@ -186,68 +189,57 @@ class _TemplateRow extends ConsumerWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onEdit,
-      leading: Container(
-        width: 56,
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: scheme.primaryContainer,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
+      // A hora como texto, e não dentro de um bloco azul. Era o mesmo ladrilho
+      // tingido que saiu das outras telas — e aqui ele era pior: pintava de
+      // azul-marca uma informação puramente factual, repetida em toda linha da
+      // grade. Em algarismos tabulares as horas caem na mesma vertical, que é o
+      // que se quer numa grade semanal.
+      leading: SizedBox(
+        width: 58,
         child: Text(
           template.timeLabel,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: scheme.onPrimaryContainer,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTypography.time(context),
         ),
       ),
-      title: Text(template.label),
+      title: Text(template.label, style: theme.textTheme.titleSmall),
       trailing: IconButton(
-        tooltip: 'Remover',
-        icon: Icon(Icons.delete_outline_rounded, color: scheme.onSurfaceVariant),
+        tooltip: 'Remover ${template.label}',
+        icon: Icon(
+          Icons.delete_outline_rounded,
+          color: scheme.onSurfaceVariant,
+        ),
         onPressed: () => _confirmRemove(context, ref),
       ),
     );
   }
 
   Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
-    final scheme = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Remover ${template.label}?'),
-        content: Text(
-          'Sai da grade de ${weekdayName(template.weekday).toLowerCase()}. '
-          'As escalas já montadas continuam com o horário que têm hoje.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: scheme.error,
-              foregroundColor: scheme.onError,
-            ),
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remover'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Remover ${template.label}?',
+      message: 'Sai da grade de '
+          '${weekdayName(template.weekday).toLowerCase()}. As escalas já '
+          'montadas continuam com o horário que têm hoje.',
+      confirmLabel: 'Remover',
+      destructive: true,
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
 
     try {
       await ref
           .read(teamRepositoryProvider)
           .removeServiceTemplate(teamId, template.id);
       ref.invalidate(serviceTemplatesProvider(teamId));
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          '${template.label} saiu da grade.',
+          tone: AppTone.success,
+        );
+      }
     } on ApiException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
       }
     }
   }
@@ -439,7 +431,7 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
                       final picked = await showQuarterHourPicker(
                         context: context,
                         initialTime: _time,
-                        title: 'Horario do culto',
+                        title: 'Horário do culto',
                       );
                       if (picked != null) setState(() => _time = picked);
                     },
@@ -459,15 +451,10 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
               ),
             ],
             const SizedBox(height: AppSpacing.xl),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Salvar'),
+            AppSubmitButton(
+              label: 'Salvar',
+              loading: _saving,
+              onPressed: _save,
             ),
           ],
         ),

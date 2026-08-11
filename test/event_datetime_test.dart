@@ -111,4 +111,68 @@ void main() {
       expect(label, 'sáb');
     });
   });
+
+  /// A frase dos horários ("Ensaio no sábado às 19:00") precisa do dia por
+  /// extenso e do artigo certo. Português não perdoa: "no sábado" e "na quinta"
+  /// não trocam de lugar, e um artigo fixo erra metade da semana.
+  group('o dia do ensaio dentro da frase', () {
+    const tzName = 'America/Sao_Paulo';
+    // Domingo, 9 de agosto de 2026, 09:00 em Sao Paulo.
+    final culto = DateTime.parse('2026-08-09T12:00:00.000Z');
+
+    test('sabado e domingo levam "no"', () {
+      // Sabado, 8 de agosto, 19:00.
+      expect(
+        formatRehearsalDayPhrase(
+          DateTime.parse('2026-08-08T22:00:00.000Z'),
+          culto,
+          tzName,
+        ),
+        'no sábado',
+      );
+    });
+
+    test('de segunda a sexta levam "na", porque o substantivo e "feira"', () {
+      // Quinta, 6 de agosto, 19:00.
+      expect(
+        formatRehearsalDayPhrase(
+          DateTime.parse('2026-08-06T22:00:00.000Z'),
+          culto,
+          tzName,
+        ),
+        'na quinta',
+      );
+      // Segunda, 10 de agosto, 00:30.
+      expect(
+        formatRehearsalDayPhrase(
+          DateTime.parse('2026-08-10T03:30:00.000Z'),
+          culto,
+          tzName,
+        ),
+        'na segunda',
+      );
+    });
+
+    test('o "-feira" nao entra: ninguem diz "na quinta-feira as 19"', () {
+      final phrase = formatRehearsalDayPhrase(
+        DateTime.parse('2026-08-06T22:00:00.000Z'),
+        culto,
+        tzName,
+      );
+
+      expect(phrase, isNot(contains('-feira')));
+    });
+
+    test('no mesmo dia do culto a frase fica vazia', () {
+      // Dizer o dia aqui repetiria a data que está logo acima, no título.
+      expect(
+        formatRehearsalDayPhrase(
+          DateTime.parse('2026-08-09T16:00:00.000Z'),
+          culto,
+          tzName,
+        ),
+        isEmpty,
+      );
+    });
+  });
 }

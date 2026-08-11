@@ -179,6 +179,42 @@ void main() {
     expect(text, isNot(contains('()')));
   });
 
+  test('música nova sai marcada no texto, depois do tom', () {
+    final text = buildScheduleShareText(
+      sampleEvent(
+        songs: [
+          {
+            'songId': 's1',
+            'title': 'Bondade de Deus',
+            'artist': 'Isaias Saad',
+            'key': 'G',
+            'isNew': true,
+          },
+          {'songId': 's2', 'title': 'Aclame ao Senhor', 'key': 'A'},
+        ],
+      ),
+    );
+
+    // O tom vem primeiro porque é o que o músico procura; "nova" é recado.
+    expect(text, contains('1. Bondade de Deus — Isaias Saad (G) (nova)'));
+    // Só a marcada: a etiqueta perde o sentido se aparecer em todas.
+    expect(text, contains('2. Aclame ao Senhor (A)\n'));
+    expect('(nova)'.allMatches(text).length, 1);
+  });
+
+  test('música nova sem tom não ganha parênteses vazios antes do recado', () {
+    final text = buildScheduleShareText(
+      sampleEvent(
+        songs: [
+          {'songId': 's1', 'title': 'Corinho novo', 'isNew': true},
+        ],
+      ),
+    );
+
+    expect(text, contains('1. Corinho novo (nova)'));
+    expect(text, isNot(contains('()')));
+  });
+
   /// Escala de domingo com manhã e noite, cada culto com o próprio repertório.
   Event doisCultos({required List<Object?> songs}) {
     return Event.fromJson({

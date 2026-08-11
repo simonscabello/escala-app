@@ -81,10 +81,13 @@ void main() {
       const ProviderScope(child: MaterialApp(home: LoginScreen())),
     );
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Entrar'));
+    // O rótulo vive dentro do `AppSubmitButton`, que empilha o texto com o
+    // indicador de carregamento -- o `FilledButton` deixou de ter o texto como
+    // filho direto, mas continua sendo o botão que responde ao toque.
+    await tester.tap(find.byType(FilledButton));
     await tester.pump();
 
-    expect(find.text('Informe um e-mail valido.'), findsOneWidget);
+    expect(find.text('Informe um e-mail válido.'), findsOneWidget);
     expect(find.text('Informe sua senha.'), findsOneWidget);
   });
 }

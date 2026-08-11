@@ -41,6 +41,27 @@ void main() {
       expect(semTom.hasCustomKey, isFalse);
       expect(semTom.artist, isNull);
     });
+
+    test('a marca de musica nova vem da linha da escala', () {
+      final nova = EventSong.fromJson({
+        'songId': 's4',
+        'title': 'Bondade de Deus',
+        'isNew': true,
+      });
+
+      expect(nova.isNew, isTrue);
+    });
+
+    test('sem o campo, a musica nao e nova', () {
+      // Cache gravado antes desta versao, e a maioria das linhas para sempre:
+      // ausente vale falso, e a escala continua abrindo.
+      final semCampo = EventSong.fromJson({
+        'songId': 's5',
+        'title': 'Aclame ao Senhor',
+      });
+
+      expect(semCampo.isNew, isFalse);
+    });
   });
 
   group('Event', () {

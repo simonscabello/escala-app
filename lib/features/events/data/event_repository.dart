@@ -199,6 +199,9 @@ class EventRepository {
                     'keyOverride': song.keyOverride,
                   if (song.note != null && song.note!.isNotEmpty)
                     'note': song.note,
+                  // `isNew` não vai: quem decide isso é o histórico da equipe,
+                  // no servidor. Mandá-lo daqui seria deixar a tela opinar
+                  // sobre um fato que ela não tem como conhecer.
                 },
               )
               .toList(),

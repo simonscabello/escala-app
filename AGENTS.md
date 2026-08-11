@@ -124,7 +124,7 @@ Qualquer integrante **lê** (o músico precisa achar a cifra e o tom antes do
 ensaio); só `OWNER`/`LEADER` escreve.
 
 No app, em `Equipe → Gerenciar → Repertório` (`/equipe/musicas`): lista com
-busca e o filtro **"faltando dados"**, detalhe com letra e os quatro links, e
+busca e o filtro **"Novas"**, detalhe com letra e os quatro links, e
 `/equipe/musicas/nova` — **uma caixa de busca, duas fontes**: primeiro o que
 outras equipes já cadastraram (instantâneo e com letra), depois o Spotify.
 A pessoa escolhe; casar automático erraria calado, porque "Aleluia" existe em
@@ -135,14 +135,21 @@ hino/cântico e andamento. Por isso a lista mostra o tom da gravação em cinza
 ao lado do campo vazio e a edição tem um "Usar F#": o preenchimento vira um
 toque em vez de pesquisa, feito quando a música entra numa escala.
 
+**`isNew` é estado do repertório, marcado à mão.** Liga no cadastro ("Música
+nova"), aparece como etiqueta na lista, no detalhe, na escala e no texto do
+WhatsApp, e desliga na edição quando a equipe domina e a igreja já canta junto.
+Não é deduzido de nada: cadastro só diz quando a música entrou no **app**, e
+tocar uma vez não encerra a novidade. Por isso mora na música, e não na linha
+da escala — uma escala não pode discordar da outra sobre o mesmo fato.
+
 Campos: `title`, `artist`, `composer`, `kind` (`HYMN`/`SONG`), `pace`
-(`CALM`/`MODERATE`/`UPBEAT`), `defaultKey` e quatro links — `lyricsUrl`,
+(`CALM`/`MODERATE`/`UPBEAT`), `defaultKey`, `isNew` e quatro links — `lyricsUrl`,
 `chordsUrl`, `youtubeUrl`, `spotifyUrl`. A letra fica no banco (`lyrics`),
 não só o link: site de letra sai do ar e não abre no meio do culto.
 
 - **A lista não devolve `lyrics`** (são centenas de músicas); o `GET` de uma
-  música devolve. Os campos que faltam preencher vêm na lista, porque é por
-  eles que a tela vai filtrar.
+  música devolve. Os campos que faltam preencher vêm na lista, porque é a
+  lista que mostra o tom da gravação quando o da equipe está vazio.
 - **`search_text`** é título + artista + compositor em minúsculas e sem
   acento, montado no serviço. É o que a busca compara: sem isso, procurar
   "coracao" não acha "Coração" — que é como o título está gravado e não é
@@ -448,10 +455,71 @@ escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
 
 ## Identidade visual e acessibilidade
 
-Azul (`#1D4ED8`) é a marca. Âmbar (`tertiary`) é o papel de **atenção**: algo a
-resolver, sem o susto do vermelho, que significa erro. Hoje marca a música sem
-tom na lista do repertório — das 286 importadas a maioria chegou assim, e em
-cinza o buraco lia-se como "está tudo certo".
+Azul (`#1D4ED8`) é a marca.
+
+### A direção: "programa impresso"
+
+A tela deve se ler como um programa de culto bem composto. Disso saem quatro
+regras, e elas explicam a maior parte das decisões visuais do app:
+
+1. **A tipografia carrega a hierarquia, não a moldura.** Antes de acrescentar um
+   cartão, uma borda ou uma cor, veja se tamanho e peso já resolvem.
+2. **Superfície é cara.** Cada retângulo desenhado é uma promessa de que ali
+   dentro há um assunto diferente. Lista de linhas do mesmo assunto = **uma**
+   superfície (ver `AppGroup`), nunca uma por linha.
+3. **A hora é a âncora.** Em qualquer lugar onde apareça horário, ele vem
+   primeiro, grande e em algarismo tabular. A pergunta de quem abre este app é
+   "que horas eu preciso estar lá".
+4. **O azul é racionado.** Ele significa **você** e **agora** — onde você entra
+   na escala, qual aba está aberta, qual botão é a ação principal. Ícone tingido
+   de azul só porque é um ícone foi removido de todas as telas: multiplicar a
+   cor da marca por linha de lista é o que a faz parar de significar algo.
+
+O que **não** existe no app, de propósito: sombra em cartão, gradiente fora da
+marca, ladrilho colorido atrás de ícone, e mais de um raio de canto para o mesmo
+tamanho de peça.
+
+### Sombra: só o que flutua (`app_elevation.dart`)
+
+Cartão não flutua — ele é a lista. Flutuam o botão flutuante, o menu, a folha, o
+snackbar e a barra presa no rodapé. Quem separa o cartão da página é **cor**
+(por isso a página desceu um passo) mais um fio de `outlineVariant`. Cor e
+elevação são o mesmo orçamento: gastar menos numa exige gastar mais na outra.
+
+### Raio: proporcional ao tamanho (`app_spacing.dart`)
+
+`radius ≈ altura / 3.5`. Selo 8 · campo e chip 12 · botão 14 · cartão 20 ·
+folha e diálogo 28. A consequência é que peça dentro de peça sempre decresce, e
+é isso que faz o encaixe parecer desenhado em vez de sorteado.
+
+### Tipografia (`app_typography.dart`)
+
+Escala própria, não a do Material com remendos. Espacejamento **negativo cresce
+com o tamanho** (~-0.03em no display, zero no corpo do texto); maiúscula pequena
+leva espacejamento **positivo**; número é sempre tabular. Quatro pesos, quatro
+degraus: 400 lê, 500 apoia, 600 titula, 700 destaca.
+
+### Os quatro papéis de estado vivem em `app_status_colors.dart`
+
+O `ColorScheme` do Material nomeia as cores pela posição na paleta (`primary`,
+`tertiary`, `error`), não pelo que significam — e isso espalhava a decisão pelo
+app: uma tela escrevia `scheme.tertiary` querendo dizer "atenção", outra usava
+`secondaryContainer` querendo dizer "aviso do sistema". **`AppStatusColors` é a
+superfície de leitura; o `ColorScheme` continua sendo a encanação.**
+
+- **`success`** (verde) — deu certo. Só depois de uma ação, **nunca como
+  enfeite**: nada nasce verde. Era o buraco da paleta — "escala salva" e "não
+  foi possível carregar" saíam na mesma barra cinza.
+- **`warning`** (âmbar) — algo a resolver, sem o susto do vermelho. Música sem
+  tom, pessoa escalada fora do cadastro.
+- **`danger`** (vermelho) — erro de verdade e ação destrutiva.
+- **`info`** (ardósia) — o sistema contando algo ("sem conexão, atualizado às
+  10:32"). **De propósito sem cor nova:** informação neutra não disputa atenção.
+
+`AppStatusColors.of(context).resolve(tone, scheme)` é o ponto único de "que
+cores este elemento usa", e é o que `AppBadge`, `showAppSnackBar`, `AppNavTile`
+e os estados vazios consultam. Escolher `AppTone` é escolher o **significado**,
+não um valor de cor.
 
 Três regras sustentam `app_colors.dart`, e cada uma existe porque a versão
 anterior falhava nela:
@@ -467,10 +535,10 @@ anterior falhava nela:
 3. **Fundo e cartão se distinguem sem depender da borda.** O par antigo era
    1,055:1 no claro e 1,034:1 no escuro — a mesma cor.
 
-**`test/theme_contrast_test.dart` mede tudo isso a cada `flutter test`.** Foi
-verificado que ele falha ao restaurar o `outline` antigo. Se mexer na paleta e
-ele reclamar, o número está certo e a cor está errada — olho não mede razão de
-luminância.
+**`test/theme_contrast_test.dart` mede tudo isso a cada `flutter test`** —
+inclusive os quatro papéis de estado. Foi verificado que ele falha ao restaurar
+o `outline` antigo. Se mexer na paleta e ele reclamar, o número está certo e a
+cor está errada — olho não mede razão de luminância.
 
 Outros pontos do tema (`app_theme.dart`):
 
@@ -486,6 +554,50 @@ Outros pontos do tema (`app_theme.dart`):
 - A **sombra do `AppCard` não é o que faz o cartão existir**; é a cor. A sombra
   só arredonda a transição, e por isso o cartão continua legível com "reduzir
   animações" ligado.
+- A **`AppBar` tem um fio embaixo**, não sombra. Ela tem a cor da página, então
+  sem separação o conteúdo sumia por baixo dela ao rolar; com
+  `scrolledUnderElevation` a linha só apareceria **depois** de rolar, e a
+  fronteira do cabeçalho não deveria depender disso.
+
+### Componentes: uma resposta por pergunta
+
+A regra do design system é essa. Antes existiam três controles de "escolha uma
+opção" (pílulas à mão, `ChoiceChip`, `SegmentedButton`), duas famílias de cartão
+(`AppCard` e o `Card` do Material), cinco receitas de etiqueta e nove cópias do
+botão que troca o rótulo por uma rodinha. **Se a resposta já existe em
+`shared/widgets/`, use-a; se precisar de uma nova, ela nasce lá.**
+
+| Pergunta | Componente |
+| --- | --- |
+| Escolher uma de N opções | `AppChoiceBar` |
+| Etiqueta curta (papel, tom, aviso) | `AppBadge` (tom via `AppTone`) |
+| Linha que leva a outra tela | `AppNavTile` |
+| Título de bloco (+ ação à direita) | `SectionHeader` |
+| Botão que salva | `AppSubmitButton` |
+| Confirmar algo sem volta | `showConfirmDialog` |
+| Avisar que a ação terminou | `showAppSnackBar` |
+| Lista carregando | `AppListSkeleton` |
+| Vazio / erro | `AppEmptyState`, `AppErrorState`, `RefreshableMessage` |
+| Segurar a largura em tela grande | `AppContentWidth` |
+| Tempo e curva de animação | `AppMotion` |
+
+Duas coisas que **não** se fazem à mão:
+
+- **`ScaffoldMessenger...showSnackBar`** direto. `showAppSnackBar` dá cor e
+  ícone ao desfecho e substitui a barra anterior em vez de enfileirar.
+- **`AlertDialog` de confirmação** montado na tela. `showConfirmDialog` guarda a
+  regra de que ação destrutiva é vermelha e nunca é o padrão.
+
+### Acessibilidade além do contraste
+
+- **A cor nunca é o único sinal** (WCAG 1.4.1). O tom sugerido pela gravação
+  leva um lápis além do âmbar; a etiqueta de indisponível leva ícone; todo
+  elemento tingido carrega `semanticsLabel` com a frase inteira.
+- **Alvo de toque**: a célula do calendário de indisponibilidade é a **célula da
+  grade**, não o círculo de 40px desenhado dentro dela.
+- **`liveRegion`** no erro de formulário, na faixa de cache e no seletor de
+  hora — os três lugares onde algo muda sem o foco se mexer.
+- O **esqueleto para de pulsar** com `MediaQuery.disableAnimations` ligado.
 
 ## Os horários da escala na tela
 
@@ -719,11 +831,11 @@ executado.
 
 ## Dívidas conhecidas
 
-- **Strings sem acento.** As mensagens de UI e os comentários estão sem acentos
-  ("Voce", "Funcoes") por causa de problemas de encoding no shell do Windows
-  durante o desenvolvimento inicial. Flutter e Postgres lidam com UTF-8 sem
-  problema — vale uma passada acertando os acentos das strings visíveis ao
-  usuário. Faça isso de uma vez só, não etapa por etapa.
+- **Comentários sem acento.** As **strings visíveis ao usuário já foram
+  acertadas**; o que sobrou sem acento são comentários e nomes internos, que não
+  chegam à tela. Rotas (`/equipe/funcoes`, `/equipe/musicas`) e as chaves de
+  busca de `position_visuals.dart` são **sem acento de propósito** — mexer nelas
+  quebra links já compartilhados e a correspondência de ícones.
 - **Transferência de posse de equipe** não existe. `PATCH` de membro só aceita
   `LEADER`/`MEMBER`; promover a `OWNER` exigiria operação atômica própria por
   causa do índice único parcial `memberships_one_active_owner_per_team`.

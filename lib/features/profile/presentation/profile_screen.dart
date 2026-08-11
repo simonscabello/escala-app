@@ -3,8 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/theme_mode_controller.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_models.dart';
 import 'profile_photo.dart';
@@ -27,133 +33,140 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Perfil')),
       body: SafeArea(
         top: false,
-        child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        children: [
-          Row(
+        child: AppContentWidth(
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.screenPadding),
             children: [
-              const ProfilePhoto(radius: 36),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(user.name, style: theme.textTheme.titleLarge),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      user.email,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+              // O nome sobe para o tamanho de manchete. É a única coisa nesta
+              // tela que identifica de quem ela é, e estava no mesmo corpo dos
+              // títulos de bloco logo abaixo.
+              Row(
+                children: [
+                  const ProfilePhoto(radius: 34),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.name,
+                          style: theme.textTheme.headlineSmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          user.email,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+
+              // "Minha disponibilidade" abre a tela e saiu de "Equipe". Não é
+              // uma configuração: é a única coisa que um integrante **faz**
+              // neste app além de ler a escala, e estava enterrada abaixo de
+              // "Meus dados" e "Alterar senha" — dois itens que se mexe uma
+              // vez na vida.
+              AppGroup(
+                title: 'Minha participação',
+                children: [
+                  AppGroupRow(
+                    icon: Icons.event_busy_outlined,
+                    title: 'Minha disponibilidade',
+                    subtitle: 'Os dias em que você não pode ser escalado',
+                    onTap: () => context.push('/disponibilidade'),
+                  ),
+                  _TeamRow(teams: auth.teams),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xxl),
+              AppGroup(
+                title: 'Conta',
+                children: [
+                  AppGroupRow(
+                    icon: Icons.badge_outlined,
+                    title: 'Meus dados',
+                    // A foto se troca tocando no avatar aqui em cima, que já
+                    // tem o selo de câmera. Repeti-la dentro de "Meus dados"
+                    // daria dois caminhos para o mesmo gesto.
+                    subtitle: 'Nome e e-mail',
+                    onTap: () => context.push('/perfil/dados'),
+                  ),
+                  AppGroupRow(
+                    icon: Icons.lock_outline_rounded,
+                    title: 'Alterar senha',
+                    subtitle: 'Você precisa da senha atual',
+                    onTap: () => context.push('/perfil/senha'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xxl),
+              const SectionHeader(
+                title: 'Aparência',
+                subtitle: 'Vale só neste aparelho.',
+                padding: EdgeInsets.only(
+                  left: AppSpacing.xs,
+                  bottom: AppSpacing.md,
                 ),
+              ),
+              const _ThemeModeCard(),
+
+              const SizedBox(height: AppSpacing.xxl),
+              // Sair e diagnóstico viraram linhas de um grupo, no fim da tela.
+              // Como botão vermelho de largura inteira, "Sair" era o elemento
+              // mais pesado do Perfil — e ele é a coisa que menos se faz ali. O
+              // vermelho fica no texto, que basta para avisar o que é.
+              AppGroup(
+                dividerIndent: AppGroup.iconIndent,
+                children: [
+                  AppGroupRow(
+                    icon: Icons.wifi_tethering_rounded,
+                    title: 'Diagnóstico de conexão',
+                    onTap: () => context.push('/diagnostico'),
+                  ),
+                  AppGroupRow(
+                    icon: Icons.logout_rounded,
+                    title: 'Sair da conta',
+                    tone: AppTone.danger,
+                    showChevron: false,
+                    onTap: () => _confirmLogout(context, ref),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xxl),
-          Text('Conta', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          _NavigationCard(
-            icon: Icons.badge_outlined,
-            title: 'Meus dados',
-            subtitle: 'Nome e e-mail',
-            onTap: () => context.push('/perfil/dados'),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _NavigationCard(
-            icon: Icons.lock_outline_rounded,
-            title: 'Alterar senha',
-            subtitle: 'Você precisa da senha atual',
-            onTap: () => context.push('/perfil/senha'),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          Text('Equipe', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: _TeamDetails(teams: auth.teams),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _NavigationCard(
-            icon: Icons.event_busy_outlined,
-            title: 'Minha disponibilidade',
-            subtitle: 'Avise os dias em que você não pode ser escalado',
-            onTap: () => context.push('/disponibilidade'),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          Text('Aparência', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          const _ThemeModeCard(),
-          const SizedBox(height: AppSpacing.xxl),
-          // Contornado e em vermelho: como botão tonal claro, "Sair" parecia
-          // desabilitado.
-          OutlinedButton.icon(
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-            icon: const Icon(Icons.logout_rounded, size: 20),
-            label: const Text('Sair da conta'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: scheme.error,
-              side: BorderSide(color: scheme.error.withValues(alpha: 0.5)),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          TextButton(
-            onPressed: () => context.push('/diagnostico'),
-            child: const Text('Diagnóstico de conexão'),
-          ),
-        ],
         ),
       ),
     );
   }
-}
 
-/// Linha do perfil que leva a outra tela. Mesma forma para dados, senha e
-/// disponibilidade -- as tres sao o mesmo gesto.
-class _NavigationCard extends StatelessWidget {
-  const _NavigationCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          Icon(icon, color: scheme.primary),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: theme.textTheme.titleSmall),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
-        ],
-      ),
+  /// Sair passou a perguntar.
+  ///
+  /// Era um toque só, num botão que fica logo abaixo de "Tema" — e voltar custa
+  /// digitar e-mail e senha, que é justamente o que quem usa o app no meio do
+  /// culto não vai querer fazer. A pergunta também lembra que a sessão é do
+  /// aparelho, não da equipe.
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Sair da conta?',
+      message: 'Para voltar você vai precisar do e-mail e da senha. As escalas '
+          'da equipe continuam onde estão.',
+      confirmLabel: 'Sair',
+      destructive: true,
     );
+    if (!confirmed) return;
+    await ref.read(authControllerProvider.notifier).logout();
   }
 }
 
@@ -167,43 +180,26 @@ class _ThemeModeCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final mode = ref.watch(themeModeProvider);
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Tema', style: theme.textTheme.titleSmall),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Vale só neste aparelho.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<ThemeMode>(
-              segments: [
-                for (final option in ThemeMode.values)
-                  ButtonSegment(
-                    value: option,
-                    icon: Icon(_iconFor(option), size: 18),
-                    label: Text(themeModeLabel(option)),
-                  ),
-              ],
-              selected: {mode},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) => ref
-                  .read(themeModeProvider.notifier)
-                  .select(selection.first),
-            ),
-          ),
-        ],
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<ThemeMode>(
+          segments: [
+            for (final option in ThemeMode.values)
+              ButtonSegment(
+                value: option,
+                icon: Icon(_iconFor(option), size: 18),
+                label: Text(themeModeLabel(option)),
+              ),
+          ],
+          selected: {mode},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) =>
+              ref.read(themeModeProvider.notifier).select(selection.first),
+        ),
       ),
     );
   }
@@ -215,44 +211,46 @@ class _ThemeModeCard extends ConsumerWidget {
       };
 }
 
-class _TeamDetails extends StatelessWidget {
-  const _TeamDetails({required this.teams});
+/// A equipe da pessoa, como linha do mesmo grupo.
+///
+/// Era um cartão só para si, logo abaixo de outro cartão — dois retângulos para
+/// duas informações do mesmo assunto.
+class _TeamRow extends StatelessWidget {
+  const _TeamRow({required this.teams});
 
   final List<TeamSummary> teams;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
     if (teams.isEmpty) {
-      return Text(
-        'Sem equipe',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: scheme.onSurfaceVariant,
-        ),
+      return const AppGroupRow(
+        icon: Icons.groups_outlined,
+        title: 'Sem equipe',
+        subtitle: 'Você ainda não faz parte de uma equipe.',
+        showChevron: false,
       );
     }
 
     final team = teams.first;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(team.name, style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          roleLabel(team.role),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+    return AppGroupRow(
+      icon: Icons.groups_outlined,
+      title: team.name,
+      subtitle: 'Sua equipe',
+      showChevron: false,
+      // O papel virou etiqueta: era uma segunda linha de texto cinza com o
+      // mesmo peso do nome da equipe, e "Dono" precisa ser lido como um
+      // atributo do vínculo, não como uma informação solta.
+      trailing: AppBadge(
+        label: roleLabel(team.role),
+        tone: team.role == 'MEMBER' ? AppTone.neutral : AppTone.primary,
+        semanticsLabel: 'Seu papel na equipe: ${roleLabel(team.role)}',
+      ),
     );
   }
 }
 
 String roleLabel(String role) => switch (role) {
-  'OWNER' => 'Dono',
-  'LEADER' => 'Lider',
-  _ => 'Membro',
-};
+      'OWNER' => 'Dono',
+      'LEADER' => 'Líder',
+      _ => 'Membro',
+    };

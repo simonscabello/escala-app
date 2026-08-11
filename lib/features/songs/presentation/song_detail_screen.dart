@@ -5,8 +5,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
@@ -25,8 +30,15 @@ class SongDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final args = (teamId: teamId, songId: songId);
     final song = ref.watch(songProvider(args));
-    final canManage =
-        ref.watch(authControllerProvider).teams.firstOrNull?.canManage ?? false;
+    // A equipe DESTA música, e não a primeira da lista: quem participa de duas
+    // veria o lápis de editar num repertório onde é apenas membro.
+    final canManage = ref
+            .watch(authControllerProvider)
+            .teams
+            .where((t) => t.teamId == teamId)
+            .firstOrNull
+            ?.canManage ??
+        false;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,15 +57,17 @@ class SongDetailScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: song.when(
-          loading: () => const AppLoading(),
-          error: (error, _) => AppErrorState(
-            message: error is ApiException
-                ? error.message
-                : 'Não foi possível carregar a música.',
-            onRetry: () => ref.invalidate(songProvider(args)),
+        child: AppContentWidth(
+          child: song.when(
+            loading: () => const AppLoading(),
+            error: (error, _) => AppErrorState(
+              message: error is ApiException
+                  ? error.message
+                  : 'Não foi possível carregar a música.',
+              onRetry: () => ref.invalidate(songProvider(args)),
+            ),
+            data: (value) => _Body(song: value),
           ),
-          data: (value) => _Body(song: value),
         ),
       ),
     );
@@ -73,7 +87,27 @@ class _Body extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
       children: [
-        Text(song.title, style: theme.textTheme.headlineSmall),
+        // `Wrap` e não `Row`: título longo em `headlineSmall` ocupa duas linhas,
+        // e a etiqueta desce inteira em vez de espremer o nome.
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            Text(
+              // O número antes do nome, como o hinário e o púlpito dizem:
+              // "cento e quarenta e dois, Pão da Vida".
+              song.isHymn ? '${song.hymnNumber} · ${song.title}' : song.title,
+              style: theme.textTheme.headlineSmall,
+            ),
+            if (song.isNew)
+              const AppBadge(
+                label: 'Nova',
+                tone: AppTone.info,
+                semanticsLabel: 'A equipe está aprendendo esta música',
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           song.subtitle,
@@ -96,8 +130,10 @@ class _Body extends StatelessWidget {
         _Links(song: song),
         if (song.hasLyrics) ...[
           const SizedBox(height: AppSpacing.xxl),
-          Text('Letra', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
+          const SectionHeader(
+            title: 'Letra',
+            padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          ),
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: SelectableText(
@@ -215,8 +251,10 @@ class _Links extends StatelessWidget {
       mode: LaunchMode.externalApplication,
     );
     if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível abrir o link.')),
+      showAppSnackBar(
+        context,
+        'Não foi possível abrir o link.',
+        tone: AppTone.danger,
       );
     }
   }

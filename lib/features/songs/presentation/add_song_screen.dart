@@ -6,8 +6,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
 
@@ -47,6 +51,14 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
   bool _adding = false;
   bool _searched = false;
   String? _error;
+
+  /// Se a equipe vai **aprender** esta música.
+  ///
+  /// Nasce ligado: quem abre esta tela quase sempre está atrás de uma canção
+  /// que a equipe ainda não canta — é essa a razão de procurar. Quem está
+  /// cadastrando o acervo antigo desliga uma vez e a escolha vale para as
+  /// próximas desta sessão, que é como o cadastro em lote acontece.
+  bool _isNew = true;
 
   @override
   void dispose() {
@@ -112,8 +124,10 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       // em cache não tem.
       ref.invalidate(songsProvider(SongQuery(teamId: widget.teamId)));
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${song.title}" entrou no repertório.')),
+      showAppSnackBar(
+        context,
+        '"${song.title}" entrou no repertório.',
+        tone: AppTone.success,
       );
 
       final onCreated = widget.onCreated;
@@ -131,70 +145,94 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final repository = ref.read(songRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Adicionar música')),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: TextField(
-                controller: _controller,
-                onChanged: _onChanged,
-                autofocus: true,
-                enabled: !_adding,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Nome da música e artista',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searching
-                      ? const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : null,
-                ),
-              ),
-            ),
-            if (_error != null)
+        child: AppContentWidth(
+          child: Column(
+            children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding,
-                ),
-                child: Text(
-                  _error!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: TextField(
+                  controller: _controller,
+                  onChanged: _onChanged,
+                  autofocus: true,
+                  enabled: !_adding,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'Nome da música e artista',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _searching
+                        ? const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
                   ),
                 ),
               ),
-            Expanded(
-              child: _adding
-                  ? const AppLoading(message: 'Buscando cifra e tom...')
-                  : _Results(
-                      catalog: _catalog,
-                      external: _external,
-                      searched: _searched,
-                      onPickCatalog: (c) => _add(
-                        () => repository.copyFromCatalog(
-                          widget.teamId,
-                          c.sourceSongId,
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.screenPadding,
+                  ),
+                  child: FormErrorBanner(message: _error!),
+                ),
+              // Só quando há o que escolher: antes da busca não existe música a
+              // que a marca possa se aplicar, e um controle solto na tela vazia
+              // seria uma pergunta sem assunto. Aqui ela fica logo acima dos
+              // cartões, no caminho do olho de quem vai tocar em um deles.
+              if (!_adding && (_catalog.isNotEmpty || _external.isNotEmpty))
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.screenPadding,
+                    right: AppSpacing.screenPadding,
+                    bottom: AppSpacing.sm,
+                  ),
+                  child: CheckboxListTile(
+                    value: _isNew,
+                    onChanged: (v) => setState(() => _isNew = v ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    title: const Text('Música nova'),
+                  ),
+                ),
+              Expanded(
+                child: _adding
+                    ? const AppLoading(
+                        message: 'Procurando a cifra, a letra e o tom.\n'
+                            'Pode levar alguns segundos.',
+                      )
+                    : _Results(
+                        catalog: _catalog,
+                        external: _external,
+                        searched: _searched,
+                        onPickCatalog: (c) => _add(
+                          () => repository.copyFromCatalog(
+                            widget.teamId,
+                            c.sourceSongId,
+                            isNew: _isNew,
+                          ),
+                        ),
+                        onPickExternal: (c) => _add(
+                          () => repository.createFromExternal(
+                            widget.teamId,
+                            c,
+                            isNew: _isNew,
+                          ),
                         ),
                       ),
-                      onPickExternal: (c) => _add(
-                        () => repository.createFromExternal(widget.teamId, c),
-                      ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

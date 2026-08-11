@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 
@@ -71,7 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 textInputAction: TextInputAction.next,
                 enabled: !_loading,
                 validator: (v) => (v == null || !v.contains('@'))
-                    ? 'Informe um e-mail valido.'
+                    ? 'Informe um e-mail válido.'
                     : null,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -80,8 +81,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'Senha',
                   suffixIcon: IconButton(
+                    // Sem `tooltip` o leitor de tela anunciava só "botão": não
+                    // dizia o que ele faz nem em que estado a senha está.
+                    tooltip: _obscure ? 'Mostrar senha' : 'Ocultar senha',
                     icon: Icon(
-                      _obscure ? Icons.visibility_off : Icons.visibility,
+                      _obscure
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                     ),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
@@ -99,15 +105,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Entrar'),
+        AppSubmitButton(
+          label: 'Entrar',
+          loading: _loading,
+          loadingLabel: 'Entrando',
+          onPressed: _submit,
         ),
         const SizedBox(height: AppSpacing.sm),
         TextButton(

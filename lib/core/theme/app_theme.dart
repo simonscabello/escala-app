@@ -2,84 +2,27 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_spacing.dart';
+import 'app_status_colors.dart';
+import 'app_typography.dart';
 
 class AppTheme {
   const AppTheme._();
 
   /// Empacotada em assets/fonts (ver pubspec). Nao ha download em runtime:
   /// a tipografia precisa estar correta ja no primeiro frame, mesmo offline.
-  static const String fontFamily = 'PlusJakartaSans';
+  static const String fontFamily = AppTypography.fontFamily;
 
-  static ThemeData get light => _build(AppColors.lightScheme());
-  static ThemeData get dark => _build(AppColors.darkScheme());
+  static ThemeData get light =>
+      _build(AppColors.lightScheme(), AppStatusColors.light);
+  static ThemeData get dark =>
+      _build(AppColors.darkScheme(), AppStatusColors.dark);
 
-  static ThemeData _build(ColorScheme scheme) {
-    final baseText = (scheme.brightness == Brightness.dark
-            ? Typography.material2021().white
-            : Typography.material2021().black)
-        .apply(fontFamily: fontFamily);
-    final textTheme = baseText
-        .apply(
-          bodyColor: scheme.onSurface,
-          displayColor: scheme.onSurface,
-        )
-        .copyWith(
-          displaySmall: baseText.displaySmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-            color: scheme.onSurface,
-          ),
-          headlineMedium: baseText.headlineMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-            color: scheme.onSurface,
-          ),
-          headlineSmall: baseText.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-            color: scheme.onSurface,
-          ),
-          titleLarge: baseText.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-          titleMedium: baseText.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-          titleSmall: baseText.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-          bodyLarge: baseText.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.5,
-            color: scheme.onSurface,
-          ),
-          bodyMedium: baseText.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.5,
-            color: scheme.onSurface,
-          ),
-          bodySmall: baseText.bodySmall?.copyWith(
-            fontWeight: FontWeight.w400,
-            height: 1.45,
-            color: scheme.onSurfaceVariant,
-          ),
-          labelLarge: baseText.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.1,
-            color: scheme.onSurface,
-          ),
-          labelMedium: baseText.labelMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: scheme.onSurfaceVariant,
-          ),
-          labelSmall: baseText.labelSmall?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: scheme.onSurfaceVariant,
-          ),
-        );
+  static ThemeData _build(ColorScheme scheme, AppStatusColors status) {
+    // A escala inteira vem de `AppTypography`, e não da do Material com
+    // remendos por cima. Antes eram treze `copyWith` sobre `material2021()`
+    // ajustando peso e cor mas herdando tamanho e espacejamento — ou seja, a
+    // voz continuava sendo a do Material.
+    final textTheme = AppTypography.textTheme(scheme);
 
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -88,6 +31,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      extensions: [status],
       // Tambem no ThemeData: widgets que nao passam pelo textTheme (tooltip,
       // menus do sistema) herdam a familia daqui.
       fontFamily: fontFamily,
@@ -100,10 +44,18 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        // Fio no lugar de sombra. A barra tem a cor da página, então sem
+        // separação o conteúdo simplesmente **sumia por baixo dela** ao rolar:
+        // não havia nem borda nem sombra dizendo onde a barra termina. Com
+        // `scrolledUnderElevation` a linha só apareceria depois de rolar, e a
+        // fronteira do cabeçalho não deveria depender de o usuário ter rolado.
+        // O fio também sobrevive a "reduzir transparência" do sistema, que
+        // apaga tinta de superfície.
+        scrolledUnderElevation: 0,
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
-        surfaceTintColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: Border(bottom: BorderSide(color: scheme.outlineVariant)),
         titleTextStyle: textTheme.titleLarge,
       ),
       cardTheme: CardThemeData(
@@ -122,9 +74,13 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainerLow,
+        // Campo mais alto: 12 de folga vertical dava um campo de ~44px, mais
+        // baixo que o botão logo abaixo dele no mesmo formulário. Campo e botão
+        // encostados com alturas diferentes é o detalhe que faz um formulário
+        // parecer montado em vez de desenhado.
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
+          vertical: AppSpacing.lg,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -147,6 +103,16 @@ class AppTheme {
           borderSide: BorderSide(color: scheme.error, width: 2),
         ),
       ),
+      // A hierarquia dos botões, de cima para baixo:
+      //
+      //   primária    `FilledButton`        azul cheio — uma por tela
+      //   secundária  `FilledButton.tonal`  ardósia — alternativa de igual peso
+      //   terciária   `TextButton`          só texto — ação de apoio
+      //   destrutiva  vermelho, e só onde já houve confirmação
+      //
+      // Contornado saiu do caminho principal: borda sem preenchimento fica
+      // entre o tonal e o texto sem ser melhor que nenhum dos dois, e três
+      // níveis intermediários é o que apaga a hierarquia.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           // Só altura mínima. `Size.fromHeight` significa largura infinita, e
@@ -154,7 +120,8 @@ class AppTheme {
           // motivo de "Copiar convite" não aparecer na tela de convites.
           // Nos formulários a largura total continua vindo do
           // `CrossAxisAlignment.stretch` do FormScaffold.
-          minimumSize: const Size(0, AppSpacing.touchTarget),
+          minimumSize: const Size(0, AppSpacing.buttonHeight),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
@@ -163,7 +130,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, AppSpacing.touchTarget),
+          minimumSize: const Size(0, AppSpacing.buttonHeight),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
@@ -173,22 +141,35 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          minimumSize: const Size(0, AppSpacing.touchTarget),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
           textStyle: textTheme.labelLarge,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
-        elevation: 2,
+        // O botão flutuante é uma das poucas coisas que **de fato** flutua, e
+        // por isso continua sendo uma das poucas com sombra.
+        elevation: 3,
+        focusElevation: 3,
+        hoverElevation: 5,
+        highlightElevation: 1,
+        extendedTextStyle: textTheme.labelLarge,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 72,
+        height: 68,
         elevation: 0,
         backgroundColor: scheme.surfaceContainerLowest,
         indicatorColor: scheme.primaryContainer,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        ),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return textTheme.labelMedium?.copyWith(
@@ -236,11 +217,16 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
+        // `radiusXl`, como a folha: os dois cobrem a tela, e o que cobre a tela
+        // tem o canto mais aberto da escala. Um diálogo com o raio do cartão
+        // parece um cartão que escapou da lista.
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
         ),
         titleTextStyle: textTheme.titleLarge,
-        contentTextStyle: textTheme.bodyMedium,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
       ),
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant,
@@ -270,13 +256,18 @@ class AppTheme {
         // ~40 e escapavam do dedo.
         minVerticalPadding: AppSpacing.sm,
         minTileHeight: AppSpacing.touchTarget,
+        titleTextStyle: textTheme.titleSmall,
+        subtitleTextStyle: textTheme.bodySmall,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: scheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shadowColor: scheme.shadow,
+        labelTextStyle: WidgetStatePropertyAll(textTheme.bodyMedium),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           side: BorderSide(color: scheme.outlineVariant),
@@ -284,6 +275,43 @@ class AppTheme {
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: scheme.primary,
+      ),
+      // As folhas (adicionar culto, editar função, abrir a cifra) herdavam o
+      // padrão do Material: cantos e cor diferentes dos cartões da mesma tela.
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: scheme.outline,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusXl),
+          ),
+        ),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        ),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: scheme.inverseSurface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+        textStyle: textTheme.bodySmall?.copyWith(
+          color: scheme.onInverseSurface,
+        ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: scheme.primary,
+        selectionColor: scheme.primary.withValues(alpha: 0.24),
+        selectionHandleColor: scheme.primary,
       ),
     );
   }

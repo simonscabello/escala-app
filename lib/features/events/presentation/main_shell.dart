@@ -28,34 +28,50 @@ class MainShell extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final name = user?.firstName ?? '?';
 
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: child,
+      // Fio em cima da barra, como no cabeçalho. Sem ele a barra tem a cor do
+      // cartão e o conteúdo passa por baixo sem fronteira nenhuma — e agora que
+      // os cartões não projetam sombra, não sobrou nada separando os dois.
       bottomNavigationBar: showNav
-          ? NavigationBar(
-              selectedIndex: index,
-              onDestinationSelected: (selected) => context.go(_tabs[selected]),
-              destinations: [
-                const NavigationDestination(
-                  icon: Icon(Icons.calendar_month_outlined),
-                  selectedIcon: Icon(Icons.calendar_month_rounded),
-                  label: 'Agenda',
-                ),
-                const NavigationDestination(
-                  icon: Icon(Icons.groups_outlined),
-                  selectedIcon: Icon(Icons.groups_rounded),
-                  label: 'Equipe',
-                ),
-                NavigationDestination(
-                  // O avatar como ícone: a aba é sobre a própria pessoa, e
-                  // isso identifica melhor que um boneco genérico.
-                  icon: AppAvatar(
-                    name: name,
-                    imageUrl: user?.avatarUrl,
-                    radius: 13,
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: scheme.outlineVariant)),
+              ),
+              child: NavigationBar(
+                selectedIndex: index,
+                onDestinationSelected: (selected) =>
+                    context.go(_tabs[selected]),
+                // O rótulo fica sempre visível. Com `onlyShowSelected` os dois
+                // ícones não escolhidos viram desenhos mudos, e "grupo de
+                // pessoas" versus "calendário" é justamente o par que quem não
+                // tem intimidade com aplicativo não decifra sozinho.
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: [
+                  const NavigationDestination(
+                    icon: Icon(Icons.calendar_today_outlined),
+                    selectedIcon: Icon(Icons.calendar_today_rounded),
+                    label: 'Agenda',
                   ),
-                  label: 'Perfil',
-                ),
-              ],
+                  const NavigationDestination(
+                    icon: Icon(Icons.groups_outlined),
+                    selectedIcon: Icon(Icons.groups_rounded),
+                    label: 'Equipe',
+                  ),
+                  NavigationDestination(
+                    // O avatar como ícone: a aba é sobre a própria pessoa, e
+                    // isso identifica melhor que um boneco genérico.
+                    icon: AppAvatar(
+                      name: name,
+                      imageUrl: user?.avatarUrl,
+                      radius: 13,
+                    ),
+                    label: 'Perfil',
+                  ),
+                ],
+              ),
             )
           : null,
     );

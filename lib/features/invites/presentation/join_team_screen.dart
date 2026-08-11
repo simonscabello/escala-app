@@ -5,6 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/invite_repository.dart';
@@ -87,14 +91,12 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
 
       if (!mounted) return;
       context.go('/home');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.joined
-                ? 'Você entrou em ${result.teamName}.'
-                : 'Você já fazia parte de ${result.teamName}.',
-          ),
-        ),
+      showAppSnackBar(
+        context,
+        result.joined
+            ? 'Pronto! Você entrou em ${result.teamName}.'
+            : 'Você já fazia parte de ${result.teamName}.',
+        tone: result.joined ? AppTone.success : AppTone.info,
       );
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -163,15 +165,11 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
           FormErrorBanner(message: _error!),
         ],
         const SizedBox(height: AppSpacing.md),
-        FilledButton(
+        AppSubmitButton(
+          label: 'Entrar na equipe',
+          loading: _joining,
+          loadingLabel: 'Entrando na equipe',
           onPressed: _preview == null || busy ? null : _join,
-          child: _joining
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Entrar na equipe'),
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
@@ -197,54 +195,54 @@ class _PreviewCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Card(
+    // `AppCard` e não o `Card` do Material: era o último lugar do app com um
+    // cartão de outra família -- outro raio, outra borda, outra sombra.
+    return AppCard(
       color: scheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                  child: Icon(
-                    Icons.groups_rounded,
-                    color: scheme.onPrimaryContainer,
-                  ),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(
-                    preview.teamName,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                child: Icon(
+                  Icons.groups_rounded,
+                  color: scheme.onPrimaryContainer,
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              [
-                if (preview.invitedBy != null)
-                  'Convite enviado por ${preview.invitedBy}.',
-                if (preview.invitedName != null)
-                  'Você entrará como ${preview.invitedName}, com as funções '
-                      'que já foram cadastradas para você.',
-              ].join(' '),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onPrimaryContainer,
               ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  preview.teamName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            [
+              if (preview.invitedBy != null)
+                'Convite enviado por ${preview.invitedBy}.',
+              if (preview.invitedName != null)
+                'Você entrará como ${preview.invitedName}, com as funções '
+                    'que já foram cadastradas para você.',
+            ].join(' '),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onPrimaryContainer,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

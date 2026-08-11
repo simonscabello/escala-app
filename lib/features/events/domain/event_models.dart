@@ -46,6 +46,7 @@ class EventSong {
     this.keyOverride,
     this.defaultKey,
     this.note,
+    this.isNew = false,
     this.chordsUrl,
     this.lyricsUrl,
     this.youtubeUrl,
@@ -73,6 +74,17 @@ class EventSong {
   /// Recado da música ("entra só o teclado", "repetir o refrão").
   final String? note;
 
+  /// A equipe ainda não tocou esta música: "chegue sabendo".
+  ///
+  /// **Vem calculado do servidor, e não há como marcá-lo daqui.** Ou a música
+  /// já apareceu numa escala publicada anterior desta equipe, ou não apareceu;
+  /// é um fato entre a equipe e a canção, não uma escolha de quem monta a
+  /// escala. Depois do domingo em que ela estreia, o selo some sozinho.
+  ///
+  /// O que a equipe controla é a exceção, na tela da música: "já cantamos esta
+  /// há anos", para o acervo que entrou no app sem histórico.
+  final bool isNew;
+
   final String? chordsUrl;
   final String? lyricsUrl;
   final String? youtubeUrl;
@@ -93,6 +105,9 @@ class EventSong {
       keyOverride: json['keyOverride'] as String?,
       defaultKey: json['defaultKey'] as String?,
       note: json['note'] as String?,
+      // Falso quando ausente: é o que o cache gravado antes desta versão
+      // significa, e é o que a maioria das músicas será para sempre.
+      isNew: json['isNew'] as bool? ?? false,
       chordsUrl: json['chordsUrl'] as String?,
       lyricsUrl: json['lyricsUrl'] as String?,
       youtubeUrl: json['youtubeUrl'] as String?,

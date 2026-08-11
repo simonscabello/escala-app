@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/team_repository.dart';
@@ -51,9 +52,8 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
     return FormScaffold(
       appBar: AppBar(title: const Text('Nova equipe')),
       title: 'Criar equipe',
-      subtitle:
-          'Você será o dono da equipe e podera cadastrar os integrantes em '
-          'seguida.',
+      subtitle: 'Você será o dono da equipe e poderá cadastrar os integrantes '
+          'em seguida.',
       children: [
         Form(
           key: _formKey,
@@ -61,7 +61,7 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
             controller: _name,
             decoration: const InputDecoration(
               labelText: 'Nome da equipe',
-              hintText: 'Ministerio de Louvor',
+              hintText: 'Ministério de Louvor',
             ),
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.done,
@@ -74,15 +74,11 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
         ),
         const SizedBox(height: AppSpacing.xl),
         if (_error != null) FormErrorBanner(message: _error!),
-        FilledButton(
-          onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Criar equipe'),
+        AppSubmitButton(
+          label: 'Criar equipe',
+          loading: _loading,
+          loadingLabel: 'Criando a equipe',
+          onPressed: _submit,
         ),
       ],
     );

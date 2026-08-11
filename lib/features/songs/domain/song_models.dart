@@ -21,6 +21,8 @@ class Song {
     this.youtubeUrl,
     this.spotifyUrl,
     this.isArchived = false,
+    this.isNew = false,
+    this.hymnNumber,
   });
 
   final String id;
@@ -48,11 +50,24 @@ class Song {
   final String? spotifyUrl;
   final bool isArchived;
 
-  bool get hasLyrics => lyrics != null && lyrics!.trim().isNotEmpty;
+  /// A equipe ainda está aprendendo esta música.
+  ///
+  /// Marcado no cadastro, desligado no repertório quando a equipe domina e a
+  /// igreja já canta junto. Não é dedução de nada: música cantada há anos que
+  /// só hoje entrou no app é nova para o **app**, não para a equipe — e tocar
+  /// uma vez não encerra a novidade.
+  final bool isNew;
 
-  /// O que ainda falta a equipe decidir. É o que a tela cobra: nenhum serviço
-  /// externo responde essas três.
-  bool get isIncomplete => defaultKey == null || kind == null || pace == null;
+  /// Número do hino no Cantor Cristão. Nulo em cântico.
+  ///
+  /// É como a igreja chama o hino — ninguém pede "Pão da Vida", pede "142" —
+  /// então ele aparece no lugar de maior destaque da linha e a busca do
+  /// servidor também o compara.
+  final int? hymnNumber;
+
+  bool get isHymn => hymnNumber != null;
+
+  bool get hasLyrics => lyrics != null && lyrics!.trim().isNotEmpty;
 
   String get subtitle {
     final parts = [artist, composer].where((p) => p != null && p.isNotEmpty);
@@ -76,6 +91,8 @@ class Song {
       youtubeUrl: json['youtubeUrl'] as String?,
       spotifyUrl: json['spotifyUrl'] as String?,
       isArchived: json['isArchived'] as bool? ?? false,
+      isNew: json['isNew'] as bool? ?? false,
+      hymnNumber: json['hymnNumber'] as int?,
     );
   }
 }
