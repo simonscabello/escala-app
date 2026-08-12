@@ -54,11 +54,15 @@ class _EventSongSheet extends ConsumerWidget {
       maxChildSize: 0.95,
       builder: (_, controller) => ListView(
         controller: controller,
-        padding: const EdgeInsets.fromLTRB(
+        // O recuo da barra de navegação entra no fim da lista: a folha vai até
+        // a borda da tela, e sem isto as últimas linhas da letra ficavam por
+        // baixo dos botões do sistema -- justamente no fim da música, que é
+        // onde se está olhando quando ela acaba.
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.screenPadding,
           0,
           AppSpacing.screenPadding,
-          AppSpacing.xxl,
+          AppSpacing.xxl + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
           // `Wrap` e não `Row`: título longo em `headlineSmall` ocupa duas

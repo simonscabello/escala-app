@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
+import '../../songs/domain/song_sections.dart';
 import '../../songs/presentation/add_song_screen.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
@@ -607,6 +609,108 @@ class _PickerResult {
   final bool cadastrarNova;
 }
 
+/// A letra ou a faixa de números que abre um trecho da lista.
+///
+/// Discreto de propósito: letra pequena em maiúscula, na cor do texto de apoio,
+/// e um fio que corre até a borda. Sem fundo tingido e sem barra — o marcador
+/// existe para o olho saber onde está enquanto rola, não para ser lido. Uma
+/// faixa colorida a cada dez linhas seria mais visível que as próprias músicas.
+class _SectionMarker extends StatelessWidget {
+  const _SectionMarker({required this.label, required this.first});
+
+  final String label;
+
+  /// O primeiro não leva folga acima: ele encosta na barra de filtros.
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.screenPadding,
+        first ? AppSpacing.sm : AppSpacing.lg,
+        AppSpacing.screenPadding,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Divider(height: 1, color: scheme.outlineVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// O vazio do seletor, que agora depende também da aba.
+///
+/// Dizer "o repertório está vazio" enquanto a pessoa está em "Hinos" com 581
+/// hinos cadastrados seria mentira: o que está vazio é a aba.
+class _PickerEmpty extends StatelessWidget {
+  const _PickerEmpty({
+    required this.filter,
+    required this.searching,
+    required this.onCadastrar,
+  });
+
+  final SongFilter filter;
+  final bool searching;
+  final VoidCallback onCadastrar;
+
+  @override
+  Widget build(BuildContext context) {
+    if (searching) {
+      return AppEmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'Nenhuma música com esse nome',
+        message: 'Procure nas outras abas, ou cadastre agora — sem perder o '
+            'que você já montou aqui.',
+        actionLabel: 'Cadastrar música',
+        onAction: onCadastrar,
+      );
+    }
+
+    final (String title, String message) = switch (filter) {
+      SongFilter.hinos => (
+          'Nenhum hino para adicionar',
+          'Ou a equipe ainda não tem hinos cadastrados, ou todos já estão '
+              'neste culto.',
+        ),
+      SongFilter.novas => (
+          'Nenhuma música em aprendizado',
+          'As músicas marcadas como novas aparecem aqui. Procure em Cânticos '
+              'ou em Hinos.',
+        ),
+      SongFilter.canticos => (
+          'Nada para adicionar',
+          'Ou o repertório está vazio, ou todos os cânticos já estão neste '
+              'culto.',
+        ),
+    };
+
+    return AppEmptyState(
+      icon: Icons.library_music_outlined,
+      title: title,
+      message: message,
+      actionLabel: 'Cadastrar música',
+      onAction: onCadastrar,
+    );
+  }
+}
+
 /// Escolha múltipla do repertório da equipe, para um culto.
 class _SongPicker extends ConsumerStatefulWidget {
   const _SongPicker({
@@ -631,11 +735,26 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
   final _selecionadas = <Song>[];
   String _search = '';
 
+  /// Mesmo filtro do Repertório, e começando em "Cânticos" pelo mesmo motivo.
+  ///
+  /// **Este seletor não mostrava hino nenhum.** Ele construía a `SongQuery` sem
+  /// `filter`, e o padrão dela é `canticos` — que exclui hinos de propósito.
+  /// Resultado: 581 dos 861 títulos da igreja eram inalcançáveis na hora de
+  /// montar a escala, e a única saída era cadastrar de novo uma música que já
+  /// existia.
+  SongFilter _filter = SongFilter.canticos;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final songs = ref.watch(
-      songsProvider(SongQuery(teamId: widget.teamId, search: _search)),
+      songsProvider(
+        SongQuery(
+          teamId: widget.teamId,
+          search: _search,
+          filter: _filter,
+        ),
+      ),
     );
 
     return DraggableScrollableSheet(
@@ -666,6 +785,24 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          // As mesmas três abas do Repertório, na mesma ordem: quem monta a
+          // escala é quem cadastra as músicas, e o acervo é o mesmo. Trocar a
+          // forma de filtrar entre as duas telas obrigaria a reaprender.
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+            ),
+            child: AppChoiceBar<SongFilter>(
+              value: _filter,
+              onChanged: (value) => setState(() => _filter = value),
+              options: const [
+                AppChoice(value: SongFilter.canticos, label: 'Cânticos'),
+                AppChoice(value: SongFilter.hinos, label: 'Hinos'),
+                AppChoice(value: SongFilter.novas, label: 'Novas'),
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
             child: songs.when(
@@ -681,30 +818,39 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                     .toList();
 
                 if (disponiveis.isEmpty) {
-                  return AppEmptyState(
-                    icon: Icons.library_music_outlined,
-                    title: _search.trim().isEmpty
-                        ? 'Nada para adicionar'
-                        : 'Nenhuma música com esse nome',
-                    message: _search.trim().isEmpty
-                        ? 'Ou o repertório está vazio, ou todas as músicas já '
-                            'estão neste culto.'
-                        : 'Ela pode ainda não estar no repertório da equipe. '
-                            'Dá para cadastrar agora, sem perder o que você já '
-                            'montou aqui.',
-                    actionLabel: 'Cadastrar música',
-                    onAction: () => Navigator.pop(
+                  return _PickerEmpty(
+                    filter: _filter,
+                    searching: _search.trim().isNotEmpty,
+                    onCadastrar: () => Navigator.pop(
                       context,
                       const _PickerResult.cadastrar(),
                     ),
                   );
                 }
 
+                final entries = buildSongSections(
+                  disponiveis,
+                  filter: _filter,
+                  searching: _search.trim().isNotEmpty,
+                );
+
                 return ListView.builder(
                   controller: controller,
-                  itemCount: disponiveis.length,
+                  // O marcador de seção é item da lista, não cabeçalho fixo:
+                  // assim o `ListView` continua construindo só o que aparece,
+                  // que com 581 hinos é o que mantém a rolagem leve.
+                  itemCount: entries.length,
                   itemBuilder: (_, index) {
-                    final song = disponiveis[index];
+                    final entry = entries[index];
+
+                    if (entry is SongSectionHeader) {
+                      return _SectionMarker(
+                        label: entry.label,
+                        first: index == 0,
+                      );
+                    }
+
+                    final song = (entry as SongSectionItem).song;
                     final marcada = _selecionadas.contains(song);
 
                     return CheckboxListTile(
@@ -712,9 +858,15 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                       title: Text(song.title),
                       subtitle: Text(
                         [
+                          // No hino o número abre a linha: é assim que a igreja
+                          // pede ("142", não "Pão da Vida").
+                          if (song.hymnNumber != null)
+                            'Hino ${song.hymnNumber}',
                           song.subtitle,
                           if (song.defaultKey != null) 'Tom ${song.defaultKey}',
                         ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       onChanged: (_) => setState(() {
                         marcada
@@ -727,10 +879,18 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
-            child: Row(
-              children: [
+          // `SafeArea` no rodapé: a folha ocupa a tela inteira e o `Padding`
+          // sozinho não sabia da barra de navegação do Android — "Cadastrar" e
+          // "Adicionar" ficavam **por baixo** dos botões do sistema, cortados
+          // ao meio. `SafeArea` usa `padding`, que já desconta o teclado: com
+          // ele aberto o recuo vai a zero, porque aí é o teclado que cobre a
+          // barra e somar os dois empurraria os botões para o meio da tela.
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.screenPadding),
+              child: Row(
+                children: [
                 // Sem `Expanded`: o botão fica com a largura do próprio texto.
                 // Dividir a linha em frações espremia "Cadastrar" em um terço
                 // da tela e quebrava a palavra no meio ("Cadast / rar").
@@ -738,34 +898,35 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                 // Sempre visível, e não só na lista vazia: quem já sabe que a
                 // música não está cadastrada não deveria ter de procurar por
                 // ela primeiro para descobrir o caminho.
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(
-                    context,
-                    const _PickerResult.cadastrar(),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(
+                      context,
+                      const _PickerResult.cadastrar(),
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Cadastrar', softWrap: false),
                   ),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Cadastrar', softWrap: false),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                // O que sobra vai para a ação principal.
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _selecionadas.isEmpty
-                        ? null
-                        : () => Navigator.pop(
-                              context,
-                              _PickerResult.songs(_selecionadas),
-                            ),
-                    child: Text(
-                      _selecionadas.isEmpty
-                          ? 'Escolha as músicas'
-                          : 'Adicionar ${_selecionadas.length}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: AppSpacing.sm),
+                  // O que sobra vai para a ação principal.
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _selecionadas.isEmpty
+                          ? null
+                          : () => Navigator.pop(
+                                context,
+                                _PickerResult.songs(_selecionadas),
+                              ),
+                      child: Text(
+                        _selecionadas.isEmpty
+                            ? 'Escolha as músicas'
+                            : 'Adicionar ${_selecionadas.length}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
