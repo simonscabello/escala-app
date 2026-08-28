@@ -14,6 +14,7 @@ class SongRepository {
     String teamId, {
     String? search,
     bool includeArchived = false,
+    Set<String> themes = const {},
   }) async {
     return _guard(() async {
       final response = await _dio.get<List<dynamic>>(
@@ -21,6 +22,10 @@ class SongRepository {
         queryParameters: {
           if (search != null && search.trim().isNotEmpty) 'search': search,
           if (includeArchived) 'includeArchived': true,
+          // Separados por vírgula, num parâmetro só: o servidor aceita as duas
+          // formas, e esta é a que sobrevive a proxy que reordena parâmetro
+          // repetido.
+          if (themes.isNotEmpty) 'themes': themes.join(','),
         },
       );
       return response.data!
@@ -85,13 +90,19 @@ class SongRepository {
     String teamId,
     String sourceSongId, {
     bool isNew = false,
+    Set<String> themes = const {},
   }) async {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
         '/teams/$teamId/songs/from-catalog',
         // `isNew` é de quem está adicionando, não da música de origem: que a
-        // outra equipe já domine a canção não diz nada sobre esta.
-        data: {'sourceSongId': sourceSongId, 'isNew': isNew},
+        // outra equipe já domine a canção não diz nada sobre esta. Os temas,
+        // ao contrário, vêm da origem — estes aqui se somam a eles.
+        data: {
+          'sourceSongId': sourceSongId,
+          'isNew': isNew,
+          if (themes.isNotEmpty) 'themes': themes.toList(),
+        },
       );
       return Song.fromJson(response.data!);
     });
@@ -119,6 +130,7 @@ class SongRepository {
     String teamId,
     ExternalCandidate candidate, {
     bool isNew = false,
+    Set<String> themes = const {},
   }) async {
     return _guard(
       () async {
@@ -128,6 +140,7 @@ class SongRepository {
             'title': candidate.title,
             'artist': candidate.artist,
             'isNew': isNew,
+            if (themes.isNotEmpty) 'themes': themes.toList(),
             if (candidate.spotifyUrl.isNotEmpty)
               'spotifyUrl': candidate.spotifyUrl,
           },
@@ -170,28 +183,50 @@ class SongQuery {
     required this.teamId,
     this.search = '',
     this.filter = SongFilter.canticos,
+    this.themes = const {},
   });
 
   final String teamId;
   final String search;
   final SongFilter filter;
 
+  /// Temas marcados no filtro. Vazio = sem filtro de tema.
+  ///
+  /// **Somam-se aos outros filtros, não os substituem**: "Hinos" + "Ceia" é o
+  /// hino que serve à Santa Ceia, que é exatamente a pergunta de quem monta o
+  /// culto. Entre si, os temas são um OU — marcar "Natal" e "Páscoa" mostra as
+  /// duas listas juntas, porque marcar dois e receber nada seria lido como
+  /// defeito.
+  final Set<String> themes;
+
   @override
   bool operator ==(Object other) =>
       other is SongQuery &&
       other.teamId == teamId &&
       other.search == search &&
-      other.filter == filter;
+      other.filter == filter &&
+      // `Set` não tem igualdade estrutural em Dart: sem comparar item a item,
+      // dois filtros idênticos seriam chaves diferentes do provider e cada
+      // reconstrução da tela dispararia uma consulta nova.
+      other.themes.length == themes.length &&
+      other.themes.containsAll(themes);
 
   @override
-  int get hashCode => Object.hash(teamId, search, filter);
+  int get hashCode => Object.hash(
+        teamId,
+        search,
+        filter,
+        // Ordenado: `{A, B}` e `{B, A}` são o mesmo filtro e precisam do mesmo
+        // código, senão a comparação acima nunca é alcançada.
+        Object.hashAll(themes.toList()..sort()),
+      );
 }
 
 final songsProvider =
     FutureProvider.autoDispose.family<List<Song>, SongQuery>((ref, query) async {
   final songs = await ref
       .watch(songRepositoryProvider)
-      .list(query.teamId, search: query.search);
+      .list(query.teamId, search: query.search, themes: query.themes);
 
   // O filtro é local: a lista inteira já veio, e ir ao servidor de novo só
   // para esconder linhas gastaria uma volta de rede à toa.

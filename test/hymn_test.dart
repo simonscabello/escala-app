@@ -12,32 +12,56 @@ class _RepositorioFake extends SongRepository {
 
   final List<Song> songs;
 
+  /// Faz o papel do servidor, inclusive no filtro por tema: ele acontece na
+  /// consulta (`hasSome`), e nao na lista ja recebida, entao um fake que
+  /// devolvesse tudo esconderia justamente o que o `SongQuery` precisa levar
+  /// ate la.
   @override
   Future<List<Song>> list(
     String teamId, {
     String? search,
     bool includeArchived = false,
+    Set<String> themes = const {},
   }) async =>
-      songs;
+      themes.isEmpty
+          ? songs
+          : songs.where((s) => s.themes.any(themes.contains)).toList();
 }
 
-Song cantico(String title, {bool isNew = false}) => Song(
+Song cantico(
+  String title, {
+  bool isNew = false,
+  List<String> themes = const [],
+}) =>
+    Song(
       id: 'c-$title',
       title: title,
       artist: 'Aline Barros',
       isNew: isNew,
+      themes: themes,
     );
 
-Song hino(int numero, String title, {bool isNew = false}) => Song(
+Song hino(
+  int numero,
+  String title, {
+  bool isNew = false,
+  List<String> themes = const [],
+}) =>
+    Song(
       id: 'h-$numero',
       title: title,
       artist: 'Cantor Cristão',
       kind: 'HYMN',
       hymnNumber: numero,
       isNew: isNew,
+      themes: themes,
     );
 
-Future<List<Song>> filtrar(List<Song> acervo, SongFilter filtro) async {
+Future<List<Song>> filtrar(
+  List<Song> acervo,
+  SongFilter filtro, {
+  Set<String> themes = const {},
+}) async {
   final container = ProviderContainer(
     overrides: [
       songRepositoryProvider.overrideWithValue(_RepositorioFake(acervo)),
@@ -46,7 +70,9 @@ Future<List<Song>> filtrar(List<Song> acervo, SongFilter filtro) async {
   addTearDown(container.dispose);
 
   return container.read(
-    songsProvider(SongQuery(teamId: 't1', filter: filtro)).future,
+    songsProvider(
+      SongQuery(teamId: 't1', filter: filtro, themes: themes),
+    ).future,
   );
 }
 

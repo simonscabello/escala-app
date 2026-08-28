@@ -1,5 +1,7 @@
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../../../core/text/text_search.dart';
+
 /// Icone e emoji de cada funcao da equipe.
 ///
 /// A escolha e pelo **nome**, nao pela categoria: "Guitarra" e "Bateria" sao
@@ -69,7 +71,7 @@ class PositionVisuals {
   /// Compara sem acento e em minusculas porque o nome e digitavel: a equipe
   /// pode ter cadastrado "Multimidia", "multimídia" ou "MULTIMÍDIA".
   static String _key(String name) {
-    final n = _normalize(name);
+    final n = normalizeForSearch(name);
 
     if (n.contains('vocal') || n.contains('voz') || n.contains('cantor')) {
       return 'vocal';
@@ -109,21 +111,4 @@ class PositionVisuals {
     return '';
   }
 
-  static const _accents = {
-    'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
-    'é': 'e', 'ê': 'e', 'è': 'e', 'ë': 'e',
-    'í': 'i', 'î': 'i', 'ì': 'i', 'ï': 'i',
-    'ó': 'o', 'ô': 'o', 'õ': 'o', 'ò': 'o', 'ö': 'o',
-    'ú': 'u', 'û': 'u', 'ù': 'u', 'ü': 'u',
-    'ç': 'c', 'ñ': 'n',
-  };
-
-  static String _normalize(String value) {
-    final lower = value.toLowerCase().trim();
-    final buffer = StringBuffer();
-    for (final char in lower.split('')) {
-      buffer.write(_accents[char] ?? char);
-    }
-    return buffer.toString();
-  }
 }

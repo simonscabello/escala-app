@@ -14,6 +14,8 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
+import '../domain/song_themes.dart';
+import 'song_theme_picker.dart';
 
 /// Adicionar música: uma caixa de busca, duas fontes.
 ///
@@ -59,6 +61,18 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
   /// cadastrando o acervo antigo desliga uma vez e a escolha vale para as
   /// próximas desta sessão, que é como o cadastro em lote acontece.
   bool _isNew = true;
+
+  /// Os temas que vão junto com a música escolhida.
+  ///
+  /// Como o `_isNew`: valem para a próxima que for adicionada e continuam
+  /// valendo para as seguintes desta sessão. Quem está cadastrando o repertório
+  /// de Natal adiciona seis músicas seguidas com o mesmo tema, e remarcar a
+  /// cada uma seria trabalho repetido sem razão.
+  ///
+  /// Numa música vinda do catálogo eles **se somam** aos que a outra equipe já
+  /// tinha classificado; numa vinda do Spotify são os únicos que existem, já
+  /// que nenhum serviço externo lê letra.
+  Set<String> _themes = {};
 
   @override
   void dispose() {
@@ -121,8 +135,9 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
 
       // A lista do repertório precisa enxergar a música nova: quem volta para
       // ela (ou para o seletor da escala) procuraria por algo que a resposta
-      // em cache não tem.
-      ref.invalidate(songsProvider(SongQuery(teamId: widget.teamId)));
+      // em cache não tem. A família inteira, porque a lista de trás está com
+      // os filtros que a pessoa deixou ligados.
+      ref.invalidate(songsProvider);
 
       showAppSnackBar(
         context,
@@ -196,13 +211,22 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                     right: AppSpacing.screenPadding,
                     bottom: AppSpacing.sm,
                   ),
-                  child: CheckboxListTile(
-                    value: _isNew,
-                    onChanged: (v) => setState(() => _isNew = v ?? false),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    dense: true,
-                    title: const Text('Música nova'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CheckboxListTile(
+                        value: _isNew,
+                        onChanged: (v) => setState(() => _isNew = v ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                        title: const Text('Música nova'),
+                      ),
+                      _ThemePicker(
+                        themes: _themes,
+                        onChanged: (themes) => setState(() => _themes = themes),
+                      ),
+                    ],
                   ),
                 ),
               Expanded(
@@ -220,6 +244,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                             widget.teamId,
                             c.sourceSongId,
                             isNew: _isNew,
+                            themes: _themes,
                           ),
                         ),
                         onPickExternal: (c) => _add(
@@ -227,6 +252,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                             widget.teamId,
                             c,
                             isNew: _isNew,
+                            themes: _themes,
                           ),
                         ),
                       ),
@@ -446,6 +472,49 @@ class _ExternalTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Os temas a aplicar na música que for escolhida abaixo.
+///
+/// Uma tira de etiquetas e não o seletor inteiro: esta tela é uma busca, e
+/// oitenta e dois chips entre o campo e os resultados afastariam do olho
+/// justamente o que se veio fazer aqui. Fechado, ocupa uma linha; aberto, o
+/// seletor é o mesmo da edição e do filtro.
+class _ThemePicker extends StatelessWidget {
+  const _ThemePicker({required this.themes, required this.onChanged});
+
+  final Set<String> themes;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final tema in themes)
+          InputChip(
+            label: Text(songThemeLabel(tema)),
+            selected: true,
+            showCheckmark: false,
+            onDeleted: () => onChanged({...themes}..remove(tema)),
+            deleteIcon: const Icon(Icons.close_rounded, size: 16),
+            deleteButtonTooltipMessage: 'Tirar ${songThemeLabel(tema)}',
+          ),
+        ActionChip(
+          avatar: const Icon(Icons.sell_outlined, size: 18),
+          label: Text(themes.isEmpty ? 'Temas' : 'Mais temas'),
+          onPressed: () async {
+            final escolha = await showSongThemePicker(
+              context,
+              selected: themes,
+            );
+            if (escolha != null) onChanged(escolha);
+          },
+        ),
+      ],
     );
   }
 }

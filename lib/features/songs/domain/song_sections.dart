@@ -1,3 +1,4 @@
+import '../../../core/text/text_search.dart';
 import '../data/song_repository.dart';
 import 'song_models.dart';
 
@@ -124,22 +125,9 @@ String _letraInicial(String title) {
 /// Sem tirar o acento, "Água" vem depois de "Zelo" na ordem de caractere — o
 /// código de "á" é maior que o de qualquer letra sem acento.
 String _chaveDeOrdem(String title) {
-  final limpo = title.trim().toLowerCase();
-  final buffer = StringBuffer();
-  for (final char in limpo.split('')) {
-    buffer.write(_acentos[char] ?? char);
-  }
   // "#" no fim: o caractere que abre o título não deve decidir a posição dele
   // antes do "a".
-  final chave = buffer.toString().replaceAll(RegExp(r'^[^a-z0-9]+'), '');
+  final chave =
+      normalizeForSearch(title).replaceAll(RegExp(r'^[^a-z0-9]+'), '');
   return chave.isEmpty ? '￿' : chave;
 }
-
-const Map<String, String> _acentos = {
-  'á': 'a', 'â': 'a', 'ã': 'a', 'à': 'a', 'ä': 'a',
-  'é': 'e', 'ê': 'e', 'è': 'e', 'ë': 'e',
-  'í': 'i', 'î': 'i', 'ì': 'i', 'ï': 'i',
-  'ó': 'o', 'ô': 'o', 'õ': 'o', 'ò': 'o', 'ö': 'o',
-  'ú': 'u', 'û': 'u', 'ù': 'u', 'ü': 'u',
-  'ç': 'c', 'ñ': 'n',
-};

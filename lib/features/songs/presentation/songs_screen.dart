@@ -16,6 +16,8 @@ import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
+import '../domain/song_themes.dart';
+import 'song_theme_picker.dart';
 
 /// Repertório da equipe.
 ///
@@ -42,6 +44,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
 
   String _search = '';
   SongFilter _filter = SongFilter.canticos;
+  Set<String> _themes = {};
 
   @override
   void dispose() {
@@ -64,6 +67,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
       teamId: widget.teamId,
       search: _search,
       filter: _filter,
+      themes: _themes,
     );
     final songs = ref.watch(songsProvider(query));
     final canManage = ref
@@ -137,7 +141,12 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
+              _ThemeFilterBar(
+                selected: _themes,
+                onChanged: (themes) => setState(() => _themes = themes),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               Expanded(
                 child: songs.when(
                   loading: () => const AppListSkeleton(
@@ -162,6 +171,8 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                     query: query,
                     filter: _filter,
                     hasSearch: _search.trim().isNotEmpty,
+                    themes: _themes,
+                    onClearThemes: () => setState(() => _themes = {}),
                     canManage: canManage,
                   ),
                 ),
@@ -181,6 +192,8 @@ class _SongList extends ConsumerWidget {
     required this.query,
     required this.filter,
     required this.hasSearch,
+    required this.themes,
+    required this.onClearThemes,
     required this.canManage,
   });
 
@@ -189,11 +202,41 @@ class _SongList extends ConsumerWidget {
   final SongQuery query;
   final SongFilter filter;
   final bool hasSearch;
+  final Set<String> themes;
+  final VoidCallback onClearThemes;
   final bool canManage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (songs.isEmpty) {
+      // Com tema marcado, é ELE que explica a lista vazia e é ele que se
+      // desfaz — dizer "nenhum cântico" a quem filtrou por "Ceia" descreveria
+      // o acervo inteiro e esconderia o que de fato tirou as linhas da tela.
+      if (themes.isNotEmpty) {
+        return RefreshableMessage(
+          onRefresh: () async => ref.refresh(songsProvider(query).future),
+          child: AppEmptyState(
+            icon: Icons.sell_outlined,
+            title: 'Nada com esses temas',
+            message: hasSearch
+                ? 'Nenhuma música com esses temas e esse nome. Tire um dos '
+                    'dois para alargar a busca.'
+                : switch (filter) {
+                    SongFilter.canticos =>
+                      'Nenhum cântico classificado assim. Se for hino, toque '
+                          'em Hinos.',
+                    SongFilter.hinos =>
+                      'Nenhum hino classificado assim. Se for cântico, toque '
+                          'em Cânticos.',
+                    SongFilter.novas =>
+                      'Nenhuma música em aprendizado com esses temas.',
+                  },
+            actionLabel: 'Tirar os temas',
+            onAction: onClearThemes,
+          ),
+        );
+      }
+
       // A ação só existe quando ela é possível: antes o callback era passado
       // sempre, e só o rótulo era condicional -- um integrante sem permissão
       // via a tela sem saída, e a ação ficava presa a um botão invisível.
@@ -505,6 +548,70 @@ class _LinkDots extends StatelessWidget {
               padding: const EdgeInsets.only(left: 2),
               child: Icon(link.$1, size: 15, color: scheme.onSurfaceVariant),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A linha de filtro por tema, logo abaixo das abas.
+///
+/// **Uma tira que rola, e não um painel.** O que precisa estar visível o tempo
+/// todo é *quais* temas estão filtrando — sem isso, uma lista curta parece
+/// acervo pequeno em vez de filtro ligado, e foi assim que a aba "Novas" já
+/// confundiu antes. Cada tema marcado vira uma etiqueta com "x", que é o
+/// caminho mais curto para desfazer: um toque, sem reabrir o seletor.
+///
+/// O botão de abrir vem **primeiro** e não some quando há escolha: a mesma
+/// posição sempre, esteja o filtro ligado ou não.
+class _ThemeFilterBar extends StatelessWidget {
+  const _ThemeFilterBar({required this.selected, required this.onChanged});
+
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+
+  Future<void> _open(BuildContext context) async {
+    final escolha = await showSongThemePicker(context, selected: selected);
+    if (escolha != null) onChanged(escolha);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // `SingleChildScrollView` + `Row`, como o `AppChoiceBar` logo acima, e nao
+    // um `ListView` de altura fixa: com a fonte do sistema aumentada o chip
+    // cresce, e uma caixa de altura fixa o cortaria com a listra amarela de
+    // overflow. Aqui a tira toma a altura do que tem dentro.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenPadding,
+      ),
+      child: Row(
+        children: [
+          ActionChip(
+            avatar: const Icon(Icons.sell_outlined, size: 18),
+            label: Text(
+              selected.isEmpty ? 'Temas' : 'Temas (${selected.length})',
+            ),
+            tooltip: 'Filtrar por tema',
+            onPressed: () => _open(context),
+          ),
+          // Na ordem do catálogo: a tira não pode se remexer conforme a ordem
+          // em que a pessoa foi marcando.
+          for (final tema in songThemeValues)
+            if (selected.contains(tema))
+              Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                child: InputChip(
+                  label: Text(songThemeLabel(tema)),
+                  selected: true,
+                  showCheckmark: false,
+                  onDeleted: () => onChanged({...selected}..remove(tema)),
+                  deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                  deleteButtonTooltipMessage: 'Tirar ${songThemeLabel(tema)}',
+                  onSelected: (_) => _open(context),
+                ),
+              ),
         ],
       ),
     );

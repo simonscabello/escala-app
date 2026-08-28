@@ -15,6 +15,7 @@ import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
+import 'song_theme_picker.dart';
 
 class SongDetailScreen extends ConsumerWidget {
   const SongDetailScreen({
@@ -126,6 +127,15 @@ class _Body extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.xl),
         _Facts(song: song),
+        // Entre os fatos e os links, e não no rodapé: é a resposta de "esta
+        // música serve para o culto que estou montando?", que vem antes de
+        // abrir a cifra. Sem tema nenhum, a seção inteira some -- e some
+        // calada, porque cobrar classificação de 1.210 músicas numa tela de
+        // leitura seria alarme permanente.
+        if (song.themes.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          SongThemeChips(themes: song.themes),
+        ],
         const SizedBox(height: AppSpacing.xl),
         _Links(song: song),
         if (song.hasLyrics) ...[

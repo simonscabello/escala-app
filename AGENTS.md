@@ -156,8 +156,68 @@ não só o link: site de letra sai do ar e não abre no meio do culto.
   como as pessoas digitam. A ordenação também usa ele.
 - Regra 20 (título+artista único por equipe, ignorando maiúsculas) e regra 21
   (**música usada em escala não se exclui, arquiva-se** — 409 `SONG_IN_USE`).
-- **Não existe classificação** (redenção, justificação...). Foi adiada de
-  propósito; entra como coluna nova quando for a hora.
+- **Temas** (`themes`) classificam a música pelo conteúdo: `CEIA`, `NATAL`,
+  `REDENCAO`... 82 valores num enum do Postgres, guardados em **coluna de
+  array na própria linha** e não em tabela de ligação — a listagem já lê a
+  música inteira e passaria a precisar de um join só para desenhar as
+  etiquetas. Ver a seção "Temas" abaixo.
+
+### Temas da música
+
+`SongTheme` é um vocabulário **fechado** de 82 temas — o índice temático com
+que a igreja escolhe o repertório do culto. Enum e não tabela de catálogo:
+ninguém cria tema pela tela, a lista é a mesma para toda equipe e cabe no
+código dos dois lados. Tema novo entra por migration, que é o preço certo para
+mexer num vocabulário que a API e o app conhecem de cor.
+
+- `GET /teams/:teamId/songs?themes=CEIA,ADORACAO` filtra. **É um OU**
+  (`hasSome`), não um E: marcar "Natal" e "Ceia" — duas datas que não caem no
+  mesmo culto — devolveria zero com E, e o filtro pareceria quebrado. E ele
+  **soma** aos outros filtros: busca por texto e tema valem na mesma consulta.
+- Tema desconhecido no filtro é **ignorado**, não vira 400: isto é leitura, e a
+  resposta honesta é a lista sem aquele critério. No `PATCH`, ao contrário, ele
+  é recusado — ali o valor inválido acabaria gravado.
+- Teto de **8 temas** por música (`MAX_SONG_THEMES`, em `song-themes.ts` e não
+  no DTO: o script de classificação importa daí e o DTO puxaria junto os
+  decoradores do `class-validator`). Quinze temas não é classificar, é indexar
+  — e o filtro devolveria a música em toda pergunta.
+- `PATCH` com `themes: []` **limpa**; omitir o campo não mexe.
+- `from-catalog` traz os temas da origem e **soma** os que a tela mandou: eles
+  descrevem a letra, e a letra é a mesma. `from-external` só tem os da tela —
+  nenhum serviço externo lê letra.
+- A **escala não carrega temas** (`event-songs.service.ts`): ali a pergunta é
+  quem toca o quê, e a tela já é a mais pesada do app.
+
+No app: `song_themes.dart` espelha o enum com os rótulos (mesma divisão de
+`kindLabel`/`paceLabel`), e `song_theme_picker.dart` é **o** seletor das três
+telas que precisam dele — filtro do repertório, edição e cadastro. Folha com
+busca sem acento, etiquetas em vez de linhas, escolhidos no topo; fechar por
+qualquer caminho (botão, voltar, arrastar) **aplica** o que foi marcado.
+
+### Classificar o acervo existente
+
+```
+docker compose exec api npm run classify:songs -- --team=<uuid> [--dry-run] [--replace]
+```
+
+A lista vem de `prisma/data/song-themes.json`, revista à mão: onde a letra está
+no banco (286 das 1.210) ela é a fonte; nas outras, o título mais o que a
+canção é. Cada entrada registra `source` (`lyrics`/`title`) para que essa
+diferença continue visível.
+
+**Não há detecção por palavra-chave, e a ausência é proposital**: "sangue" no
+verso de uma canção de entrega não a torna um cântico sobre a expiação, e casar
+tema por regex produziria etiqueta errada em silêncio.
+
+- Casa por **número do hino** ou por **título+artista** normalizados — nenhum
+  id. Por isso o arquivo serve a qualquer equipe: a igreja que importar o
+  Cantor Cristão amanhã recebe a classificação dos 581 hinos rodando o script.
+- Sem `--replace`, os temas do arquivo **se somam** aos que a música já tem: o
+  que a equipe marcou na tela vale mais que o palpite do arquivo.
+- Repetível — rodar de novo devolve "0 classificadas".
+- 20 músicas ficaram **de fora de propósito**: os três hinos cívicos (575-577)
+  e títulos que não dizem o conteúdo ("Colina", "Cativar", "Deep Deep"). O
+  script lista todas no fim; classificar no escuro seria pior que o vazio.
 
 ### Busca externa (Spotify + CifraClub)
 

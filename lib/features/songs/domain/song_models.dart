@@ -23,6 +23,7 @@ class Song {
     this.isArchived = false,
     this.isNew = false,
     this.hymnNumber,
+    this.themes = const [],
   });
 
   final String id;
@@ -65,6 +66,13 @@ class Song {
   /// servidor também o compara.
   final int? hymnNumber;
 
+  /// Sobre o que a música fala, nos valores do enum do servidor
+  /// (`'ADORACAO'`, `'CEIA'`...). Vazia enquanto ninguém classificou.
+  ///
+  /// Vem também na listagem, ao contrário da letra: são poucas etiquetas por
+  /// música, a lista filtra por elas e a linha as mostra.
+  final List<String> themes;
+
   bool get isHymn => hymnNumber != null;
 
   bool get hasLyrics => lyrics != null && lyrics!.trim().isNotEmpty;
@@ -93,6 +101,11 @@ class Song {
       isArchived: json['isArchived'] as bool? ?? false,
       isNew: json['isNew'] as bool? ?? false,
       hymnNumber: json['hymnNumber'] as int?,
+      // Ausente vale lista vazia: é o que o cache gravado antes desta versão
+      // guarda, e é o que uma música sem classificação significa.
+      themes: (json['themes'] as List<dynamic>? ?? const [])
+          .map((e) => e as String)
+          .toList(),
     );
   }
 }

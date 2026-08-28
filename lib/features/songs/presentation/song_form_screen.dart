@@ -11,6 +11,8 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
+import '../domain/song_themes.dart';
+import 'song_theme_picker.dart';
 
 /// Edição de uma música, em duas camadas.
 ///
@@ -58,6 +60,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
 
   String? _kind;
   String? _pace;
+  Set<String> _themes = {};
   bool _isNew = false;
   bool _populated = false;
   bool _saving = false;
@@ -93,6 +96,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _key.text = song.defaultKey ?? '';
     _kind = song.kind;
     _pace = song.pace;
+    _themes = {...song.themes};
     _isNew = song.isNew;
     _artist.text = song.artist ?? '';
     _composer.text = song.composer ?? '';
@@ -136,6 +140,10 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           'defaultKey': _key.text.trim(),
           'kind': _kind,
           'pace': _pace,
+          // Sempre enviado, inclusive vazio: `[]` é o que limpa a
+          // classificação, e omitir o campo significaria "não mexi nele" — a
+          // pessoa que tirou a última etiqueta não conseguiria salvar isso.
+          'themes': _themes.toList(),
           'isNew': _isNew,
           if (song.isHymn) 'hymnNumber': numero,
           'artist': _artist.text.trim(),
@@ -154,9 +162,16 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       ref.invalidate(
         songProvider((teamId: widget.teamId, songId: widget.songId)),
       );
-      // O título, o artista e o tom aparecem na lista: sem isto ela mostraria
-      // o valor antigo até alguém puxar para atualizar.
-      ref.invalidate(songsProvider(SongQuery(teamId: widget.teamId)));
+      // A família inteira, e não a consulta sem filtro.
+      //
+      // A lista que ficou embaixo desta tela tem os filtros que a pessoa
+      // deixou ligados — uma aba, uma busca, temas marcados —, e é ELA que
+      // precisa se refazer. Invalidar só `SongQuery(teamId)` acertava uma
+      // consulta que ninguém estava olhando: a tela continuava com o valor
+      // antigo até alguém puxar para atualizar, e com o filtro por tema isso
+      // fica pior, porque a música pode ter acabado de sair (ou entrar) no
+      // critério que está na tela.
+      ref.invalidate(songsProvider);
       if (mounted) {
         context.pop();
         showAppSnackBar(context, '"$title" foi salva.', tone: AppTone.success);
@@ -257,6 +272,12 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           },
           hint: song.bpm != null ? 'A gravação tem ${song.bpm} bpm' : null,
           onChanged: _saving ? null : (v) => setState(() => _pace = v),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ThemeField(
+          themes: _themes,
+          enabled: !_saving,
+          onChanged: (themes) => setState(() => _themes = themes),
         ),
         const SizedBox(height: AppSpacing.lg),
         // Onde a novidade termina.
@@ -537,6 +558,78 @@ class _ChipField extends StatelessWidget {
                     ? null
                     : (selected) => onChanged!(selected ? entry.key : null),
               ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Os temas da música, na camada de cima do formulário.
+///
+/// Fica junto de tom, tipo e andamento — e não no grupo recolhido — porque é
+/// da mesma natureza: **leitura da letra, feita por gente**. Nenhum serviço
+/// externo classifica canção, e o que o script de classificação escreveu é um
+/// palpite que esta tela existe para corrigir.
+///
+/// A lista completa não cabe no formulário: 82 etiquetas empurrariam o botão de
+/// salvar para dois palmos abaixo da dobra. Aqui ficam só as escolhidas, e o
+/// resto mora no seletor, que é onde há espaço para buscar.
+class _ThemeField extends StatelessWidget {
+  const _ThemeField({
+    required this.themes,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final Set<String> themes;
+  final bool enabled;
+  final ValueChanged<Set<String>> onChanged;
+
+  Future<void> _open(BuildContext context) async {
+    final escolha = await showSongThemePicker(context, selected: themes);
+    if (escolha != null) onChanged(escolha);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Temas', style: theme.textTheme.titleSmall),
+        Text(
+          'Sobre o que ela fala. É por aqui que o repertório se filtra na hora '
+          'de montar o culto.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final tema in themes)
+              InputChip(
+                label: Text(songThemeLabel(tema)),
+                selected: true,
+                showCheckmark: false,
+                onDeleted:
+                    enabled ? () => onChanged({...themes}..remove(tema)) : null,
+                deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                deleteButtonTooltipMessage: 'Tirar ${songThemeLabel(tema)}',
+                onSelected: enabled ? (_) => _open(context) : null,
+              ),
+            // Sempre no fim da lista, e com rótulo diferente quando ainda não
+            // há nenhum: "Escolher temas" convida, "Adicionar" acrescenta.
+            ActionChip(
+              avatar: const Icon(Icons.add_rounded, size: 18),
+              label: Text(themes.isEmpty ? 'Escolher temas' : 'Adicionar'),
+              onPressed: enabled ? () => _open(context) : null,
+            ),
           ],
         ),
       ],
