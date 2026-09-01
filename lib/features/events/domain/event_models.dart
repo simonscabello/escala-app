@@ -16,8 +16,7 @@ class AssignmentMember {
       membershipId: json['membershipId'] as String,
       displayName: json['displayName'] as String,
       note: json['note'] as String?,
-      isRegisteredForPosition:
-          json['isRegisteredForPosition'] as bool? ?? true,
+      isRegisteredForPosition: json['isRegisteredForPosition'] as bool? ?? true,
     );
   }
 
@@ -167,6 +166,7 @@ class EventService {
     required this.id,
     required this.label,
     required this.startsAt,
+    this.songCount,
   });
 
   factory EventService.fromJson(Map<String, dynamic> json) {
@@ -174,6 +174,7 @@ class EventService {
       id: json['id'] as String? ?? '',
       label: json['label'] as String? ?? 'Culto',
       startsAt: DateTime.parse(json['startsAt'] as String).toUtc(),
+      songCount: json['songCount'] as int?,
     );
   }
 
@@ -183,6 +184,7 @@ class EventService {
   final String label;
 
   final DateTime startsAt;
+  final int? songCount;
 }
 
 class SameDayConflict {
@@ -254,6 +256,7 @@ class Event {
     this.minister,
     this.unavailable = const [],
     this.warnings = const EventWarnings(),
+    this.updatedAt,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
@@ -298,6 +301,7 @@ class Event {
       warnings: EventWarnings.fromJson(
         json['warnings'] as Map<String, dynamic>?,
       ),
+      updatedAt: _parseUtcDateTime(json['updatedAt']),
     );
   }
 
@@ -328,6 +332,12 @@ class Event {
 
   /// Quem conduz a ministração do louvor. Nulo enquanto ninguém foi escolhido.
   final EventMinister? minister;
+
+  /// Versão da escala para a trava de edição simultânea: vai junto na hora de
+  /// gravar, e o servidor recusa se a escala mudou desde que esta tela a
+  /// abriu. Nulo em resposta antiga guardada em cache — aí a gravação segue
+  /// sem trava, como era antes.
+  final DateTime? updatedAt;
 
   bool get hasTitle => title != null && title!.isNotEmpty;
 
@@ -379,6 +389,28 @@ class Event {
   /// Quem avisou que não pode no dia desta escala.
   final List<UnavailableMember> unavailable;
   final EventWarnings warnings;
+
+  bool get isDraft => status == 'DRAFT';
+
+  /// O que ainda impede a publicação. Na agenda, `songCount` vem junto de
+  /// cada culto; no detalhe e no cache antigo, a própria lista de músicas é a
+  /// fonte alternativa.
+  List<String> get publicationPendingItems {
+    final pending = <String>[];
+    if (assignments.isEmpty) pending.add('equipe');
+
+    for (final service in displayServices) {
+      final count = service.songCount ??
+          songs.where((song) {
+            final serviceId = song.serviceId.isEmpty
+                ? displayServices.first.id
+                : song.serviceId;
+            return serviceId == service.id;
+          }).length;
+      if (count == 0) pending.add('músicas de ${service.label}');
+    }
+    return pending;
+  }
 
   /// Nomes das funções em que o membership aparece nesta escala.
   /// Quantas pessoas distintas estao escaladas. Quem acumula duas funcoes

@@ -1,15 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/read_cache.dart';
+import '../../../core/storage/shared_preferences_provider.dart';
+import '../domain/event_change.dart';
 import '../domain/event_models.dart';
-
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('sharedPreferencesProvider precisa ser overridden');
-});
 
 final readCacheProvider = Provider<ReadCache>((ref) {
   return ReadCache(ref.watch(sharedPreferencesProvider));
@@ -54,8 +51,7 @@ class EventRepository {
 
   Future<CachedValue<Event>> find(String eventId) async {
     try {
-      final response =
-          await _dio.get<Map<String, dynamic>>('/events/$eventId');
+      final response = await _dio.get<Map<String, dynamic>>('/events/$eventId');
       final map = Map<String, dynamic>.from(response.data!);
       await _cache.saveEvent(eventId, map);
       return CachedValue(data: Event.fromJson(map), fromCache: false);
@@ -98,6 +94,19 @@ class EventRepository {
     });
   }
 
+  Future<GeneratedSchedules> generate(
+    String teamId, {
+    required int weeks,
+  }) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/events/generate',
+        data: {'weeks': weeks},
+      );
+      return GeneratedSchedules.fromJson(response.data!);
+    });
+  }
+
   Future<Event> update(
     String eventId, {
     String? title,
@@ -107,6 +116,7 @@ class EventRepository {
     String? location,
     String? notes,
     String? colorPalette,
+    DateTime? expectedUpdatedAt,
   }) async {
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
@@ -121,15 +131,47 @@ class EventRepository {
           if (location != null) 'location': location,
           if (notes != null) 'notes': notes,
           if (colorPalette != null) 'colorPalette': colorPalette,
+          if (expectedUpdatedAt != null)
+            'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
         },
       );
       return Event.fromJson(response.data!);
     });
   }
 
+  /// Histórico da escala. Liberado para a equipe inteira: quem mais quer saber
+  /// quem o tirou da escala é justamente quem não a monta.
+  Future<List<EventChange>> history(String eventId) async {
+    return _guard(() async {
+      final response =
+          await _dio.get<List<dynamic>>('/events/$eventId/history');
+      return response.data!
+          .map((e) => EventChange.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
   Future<void> remove(String eventId) async {
     return _guard(() async {
       await _dio.delete<void>('/events/$eventId');
+    });
+  }
+
+  Future<Event> publish(String eventId) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/events/$eventId/publish',
+      );
+      return Event.fromJson(response.data!);
+    });
+  }
+
+  Future<Event> unpublish(String eventId) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/events/$eventId/unpublish',
+      );
+      return Event.fromJson(response.data!);
     });
   }
 
@@ -147,6 +189,7 @@ class EventRepository {
     String eventId,
     List<Map<String, Object?>> assignments, {
     String? ministerMembershipId,
+    DateTime? expectedUpdatedAt,
   }) async {
     return _guard(() async {
       final response = await _dio.put<Map<String, dynamic>>(
@@ -166,6 +209,8 @@ class EventRepository {
           // Sempre presente: `null` é o pedido de limpar, e omitir significaria
           // "não mexe" -- o que deixaria o ministrante antigo preso na escala.
           'ministerMembershipId': ministerMembershipId,
+          if (expectedUpdatedAt != null)
+            'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
         },
       );
       return Event.fromJson(response.data!);
@@ -194,8 +239,7 @@ class EventRepository {
                   // A posição não vai: quem numera é o servidor, a partir da
                   // ordem — agora dentro de cada culto. Mandar índice abriria
                   // espaço para buraco e repetido.
-                  if (song.keyOverride != null &&
-                      song.keyOverride!.isNotEmpty)
+                  if (song.keyOverride != null && song.keyOverride!.isNotEmpty)
                     'keyOverride': song.keyOverride,
                   if (song.note != null && song.note!.isNotEmpty)
                     'note': song.note,
@@ -220,6 +264,23 @@ class EventRepository {
   }
 }
 
+class GeneratedSchedules {
+  const GeneratedSchedules({
+    required this.createdCount,
+    required this.skippedCount,
+  });
+
+  factory GeneratedSchedules.fromJson(Map<String, dynamic> json) {
+    return GeneratedSchedules(
+      createdCount: json['createdCount'] as int? ?? 0,
+      skippedCount: json['skippedCount'] as int? ?? 0,
+    );
+  }
+
+  final int createdCount;
+  final int skippedCount;
+}
+
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository(
     ref.watch(dioProvider),
@@ -234,6 +295,11 @@ final eventsProvider = FutureProvider.autoDispose
   final (teamId, scope) = query;
   return ref.watch(eventRepositoryProvider).list(teamId, scope: scope);
 });
+
+final eventHistoryProvider =
+    FutureProvider.autoDispose.family<List<EventChange>, String>(
+  (ref, eventId) => ref.watch(eventRepositoryProvider).history(eventId),
+);
 
 final eventProvider =
     FutureProvider.autoDispose.family<CachedValue<Event>, String>(

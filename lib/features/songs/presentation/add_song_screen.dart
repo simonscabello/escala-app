@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
@@ -158,6 +159,35 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
     }
   }
 
+  /// Porta de saída quando a música não existe nem no catálogo nem no
+  /// Spotify. O backend sempre aceitou cadastro manual, mas a interface só
+  /// expunha as duas buscas — numa equipe nova, sem catálogo e sem credenciais
+  /// do Spotify, era impossível cadastrar a primeira música.
+  Future<void> _addManual() async {
+    final draft = await showModalBottomSheet<_ManualSongDraft>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ManualSongSheet(
+        initialTitle: _controller.text.trim(),
+      ),
+    );
+    if (draft == null || !mounted) return;
+
+    final repository = ref.read(songRepositoryProvider);
+    await _add(
+      () => repository.create(
+        widget.teamId,
+        {
+          'title': draft.title,
+          if (draft.artist != null) 'artist': draft.artist,
+          'isNew': _isNew,
+          if (_themes.isNotEmpty) 'themes': _themes.toList(),
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final repository = ref.read(songRepositoryProvider);
@@ -239,6 +269,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                         catalog: _catalog,
                         external: _external,
                         searched: _searched,
+                        onManual: _addManual,
                         onPickCatalog: (c) => _add(
                           () => repository.copyFromCatalog(
                             widget.teamId,
@@ -270,6 +301,7 @@ class _Results extends StatelessWidget {
     required this.catalog,
     required this.external,
     required this.searched,
+    required this.onManual,
     required this.onPickCatalog,
     required this.onPickExternal,
   });
@@ -277,6 +309,7 @@ class _Results extends StatelessWidget {
   final List<CatalogCandidate> catalog;
   final List<ExternalCandidate> external;
   final bool searched;
+  final VoidCallback onManual;
   final ValueChanged<CatalogCandidate> onPickCatalog;
   final ValueChanged<ExternalCandidate> onPickExternal;
 
@@ -294,11 +327,13 @@ class _Results extends StatelessWidget {
     }
 
     if (catalog.isEmpty && external.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.search_off_rounded,
         title: 'Nada encontrado',
-        message: 'Tente escrever o artista junto, ou cadastre a música '
-            'manualmente pelo botão de editar depois de criá-la.',
+        message: 'Tente escrever o artista junto ou cadastre esta versão '
+            'manualmente.',
+        actionLabel: 'Cadastrar manualmente',
+        onAction: onManual,
       );
     }
 
@@ -335,7 +370,119 @@ class _Results extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        OutlinedButton.icon(
+          onPressed: onManual,
+          icon: const Icon(Icons.edit_note_rounded, size: 18),
+          label: const Text('Cadastrar outra versão manualmente'),
+        ),
       ],
+    );
+  }
+}
+
+class _ManualSongDraft {
+  const _ManualSongDraft({required this.title, this.artist});
+
+  final String title;
+  final String? artist;
+}
+
+/// Cadastro mínimo. O restante continua na edição em duas camadas: aqui só se
+/// pede o que identifica a música, para não transformar a saída de emergência
+/// da busca num formulário de doze campos.
+class _ManualSongSheet extends StatefulWidget {
+  const _ManualSongSheet({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_ManualSongSheet> createState() => _ManualSongSheetState();
+}
+
+class _ManualSongSheetState extends State<_ManualSongSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _title =
+      TextEditingController(text: widget.initialTitle);
+  final _artist = TextEditingController();
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _artist.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    final artist = _artist.text.trim();
+    Navigator.of(context).pop(
+      _ManualSongDraft(
+        title: _title.text.trim(),
+        artist: artist.isEmpty ? null : artist,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Cadastrar manualmente',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Informe só o que identifica a música. Tom, letra e links '
+                'podem ser completados depois.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextFormField(
+                controller: _title,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'Nome da música'),
+                validator: (value) => value == null || value.trim().length < 2
+                    ? 'Informe o nome da música.'
+                    : null,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextFormField(
+                controller: _artist,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Artista (opcional)',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              AppSubmitButton(
+                label: 'Cadastrar',
+                loading: false,
+                onPressed: _submit,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

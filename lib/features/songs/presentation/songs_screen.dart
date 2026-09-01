@@ -30,9 +30,18 @@ import 'song_theme_picker.dart';
 /// andamento. Saiu a pedido: essas três decisões continuam existindo na edição,
 /// mas cobrá-las numa aba não era o jeito desta equipe trabalhar.
 class SongsScreen extends ConsumerStatefulWidget {
-  const SongsScreen({super.key, required this.teamId});
+  const SongsScreen({
+    super.key,
+    required this.teamId,
+    this.archived = false,
+  });
 
   final String teamId;
+
+  /// O arquivo reaproveita esta tela inteira — busca, linhas, estados vazios.
+  /// O que muda é o acervo consultado e o que não faz sentido lá: escolher
+  /// entre cânticos e hinos, e adicionar música.
+  final bool archived;
 
   @override
   ConsumerState<SongsScreen> createState() => _SongsScreenState();
@@ -43,7 +52,8 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
   Timer? _debounce;
 
   String _search = '';
-  SongFilter _filter = SongFilter.canticos;
+  late SongFilter _filter =
+      widget.archived ? SongFilter.arquivadas : SongFilter.canticos;
   Set<String> _themes = {};
 
   @override
@@ -79,8 +89,20 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
         false;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Repertório')),
-      floatingActionButton: canManage
+      appBar: AppBar(
+        title: Text(widget.archived ? 'Arquivadas' : 'Repertório'),
+        actions: [
+          // Só para quem administra: arquivar e restaurar é decisão de líder, e
+          // o integrante não tem o que fazer numa lista do que saiu de uso.
+          if (canManage && !widget.archived)
+            IconButton(
+              tooltip: 'Músicas arquivadas',
+              icon: const Icon(Icons.inventory_2_outlined),
+              onPressed: () => context.push('/equipe/musicas/arquivadas'),
+            ),
+        ],
+      ),
+      floatingActionButton: canManage && !widget.archived
           ? FloatingActionButton.extended(
               onPressed: () => context.push('/equipe/musicas/nova'),
               icon: const Icon(Icons.add_rounded),
@@ -127,20 +149,21 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenPadding,
+              if (!widget.archived)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.screenPadding,
+                  ),
+                  child: AppChoiceBar<SongFilter>(
+                    value: _filter,
+                    onChanged: (value) => setState(() => _filter = value),
+                    options: const [
+                      AppChoice(value: SongFilter.canticos, label: 'Cânticos'),
+                      AppChoice(value: SongFilter.hinos, label: 'Hinos'),
+                      AppChoice(value: SongFilter.novas, label: 'Novas'),
+                    ],
+                  ),
                 ),
-                child: AppChoiceBar<SongFilter>(
-                  value: _filter,
-                  onChanged: (value) => setState(() => _filter = value),
-                  options: const [
-                    AppChoice(value: SongFilter.canticos, label: 'Cânticos'),
-                    AppChoice(value: SongFilter.hinos, label: 'Hinos'),
-                    AppChoice(value: SongFilter.novas, label: 'Novas'),
-                  ],
-                ),
-              ),
               const SizedBox(height: AppSpacing.sm),
               _ThemeFilterBar(
                 selected: _themes,
@@ -230,6 +253,8 @@ class _SongList extends ConsumerWidget {
                           'em Cânticos.',
                     SongFilter.novas =>
                       'Nenhuma música em aprendizado com esses temas.',
+                    SongFilter.arquivadas =>
+                      'Nenhuma música arquivada com esses temas.',
                   },
             actionLabel: 'Tirar os temas',
             onAction: onClearThemes,
@@ -241,6 +266,7 @@ class _SongList extends ConsumerWidget {
       // sempre, e só o rótulo era condicional -- um integrante sem permissão
       // via a tela sem saída, e a ação ficava presa a um botão invisível.
       final canAdd = !hasSearch && filter == SongFilter.canticos && canManage;
+
 
       return RefreshableMessage(
         onRefresh: () async => ref.refresh(songsProvider(query).future),
@@ -259,6 +285,7 @@ class _SongList extends ConsumerWidget {
                   SongFilter.novas => 'Nada em aprendizado',
                   SongFilter.hinos => 'Nenhum hino',
                   SongFilter.canticos => 'Nenhum cântico',
+                  SongFilter.arquivadas => 'O arquivo está vazio',
                 },
           // Com a busca preenchida, a mensagem diz em qual acervo se procurou.
           // Sem isso, quem digita "142" em Cânticos vê "Nada encontrado" e
@@ -271,6 +298,8 @@ class _SongList extends ConsumerWidget {
                     'Procuramos só nos hinos. Se for cântico, toque em Cânticos.',
                   SongFilter.novas =>
                     'Nenhuma música em aprendizado com esse nome.',
+                  SongFilter.arquivadas =>
+                    'Nenhuma música arquivada com esse nome.',
                 }
               : switch (filter) {
                   SongFilter.novas =>
@@ -281,6 +310,10 @@ class _SongList extends ConsumerWidget {
                       ? 'Adicione as músicas que a equipe canta.'
                       : 'Quando o líder cadastrar as músicas, elas aparecem '
                           'aqui com letra, cifra e tom.',
+                  SongFilter.arquivadas =>
+                    'Nada foi tirado do repertório até agora. Arquivar é o '
+                        'caminho para uma música que a equipe não canta mais, '
+                        'sem apagar as escalas em que ela foi tocada.',
                 },
           actionLabel: canAdd ? 'Adicionar música' : null,
           onAction:

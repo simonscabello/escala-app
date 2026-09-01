@@ -68,14 +68,39 @@ então todo build de release precisa passar o `--dart-define`.
 
 ## Estado atual
 
-Concluídas: **0 a 7** — fundação, contas, equipe/membros/funções, convites,
-cultos, escalação, músicas e acabamento (compartilhar no WhatsApp, duplicar
-culto, cache de leitura, identidade visual verde com design tokens).
+Concluídas: **0 a 8** — fundação, contas, equipe/membros/funções, convites,
+cultos, escalação, músicas, acabamento (compartilhar no WhatsApp, duplicar
+escala, cache de leitura, design tokens) e distribuição (`docs/DEPLOY.md`,
+`GET /version` e aviso de atualização dentro do app).
 
-**Falta uma etapa**, cujo prompt continua válido em `docs/PROMPTS-CURSOR.md`:
+Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
+**fechar fluxo pela metade antes de acrescentar entidade nova**. O que entrou:
 
-- **Etapa 8 — Distribuição.** Não existe `docs/DEPLOY.md`, `GET /version` nem
-  keystore de release configurado.
+- **Rascunho e publicação** da escala (seção própria abaixo).
+- **A escala acaba no último culto, não no primeiro**: um domingo com manhã e
+  noite continua em "Próximas" o dia inteiro. O corte usa o começo do dia civil
+  no fuso da equipe (`EventsService.list`), e não `now`.
+- **Recado individual** por escalado, preservado ao remontar a escalação — o
+  formulário mandava só os ids e apagava os recados em silêncio.
+- **Cadastro manual de música** quando o catálogo e a busca externa não acham
+  nada: antes a mensagem mandava cadastrar à mão sem oferecer o caminho.
+- **Duplicar escala** religada (era feature flag desligada).
+- **Seletor de equipe ativa** no cabeçalho da agenda, para quem serve em mais
+  de uma equipe.
+- **Arquivar e restaurar música**, com o arquivo em `/equipe/musicas/arquivadas`.
+- **Convite oferecido logo após cadastrar o integrante**, e atalho "Convidar"
+  na linha de quem ainda não tem conta.
+- **Geração de rascunhos** das próximas semanas a partir da grade de cultos
+  (`POST /teams/:id/events/generate`), pulando as datas que já têm escala.
+- **Calendário de indisponibilidade da equipe** (seção Indisponibilidade).
+- **Rodízio no seletor da escalação**: "Há 3 semanas · 2 escalas em 8 semanas".
+- **Relatórios** de participação e de uso do repertório (seção Relatórios).
+- **Histórico da escala e trava de edição simultânea** (seção própria).
+
+O que o plano ainda prevê e **não** foi feito: notificações push de publicação
+e alteração, modo culto offline (letra garantida sem rede), solicitação de
+troca pelo integrante, link web somente leitura da escala, sugestão assistida
+de escalação e testes automatizados do backend.
 
 ## Conta do usuário: dados, senha e foto
 
@@ -743,12 +768,82 @@ não pode, e quem monta a escala vê a etiqueta na hora de escalar.
 - **Indisponível não bloqueia escalar** — o líder às vezes já combinou a troca
   por fora. A tela sinaliza em vermelho e o aviso reaparece depois de salvar.
 - LEADER+ pode marcar indisponibilidade por outra pessoa; MEMBER, só a própria.
+- `GET /teams/:id/unavailabilities?from&to` alimenta o **calendário da equipe**
+  (`Gerenciar equipe → Quem não pode`): um mês civil por vez, contagem por dia,
+  filtro por pessoa e atalho "criar escala neste dia", que abre a escala nova
+  já na data (`/agenda/novo?data=AAAA-MM-DD`). Antes disso o líder só descobria
+  a ausência ao abrir a escala de um domingo específico — depois de escalar.
+
+## Rascunho e publicação
+
+Toda escala nasce `DRAFT` — inclusive a cópia de "duplicar" e os rascunhos
+gerados pela grade. Antes ela nascia publicada, e a equipe via a montagem pela
+metade: nome entrando e saindo, repertório vazio, e alguém perguntando no grupo
+se aquilo já valia.
+
+Enquanto está em rascunho:
+
+- **só quem administra enxerga.** `GET /teams/:id/events` filtra por papel e
+  `GET /events/:id` devolve 404 da escala em rascunho para quem é MEMBER;
+- a agenda mostra a etiqueta "Rascunho" e o que ainda falta;
+- `POST /events/:id/publish` recusa com `INCOMPLETE_SCHEDULE` enquanto não
+  houver equipe escalada **e** repertório em todos os cultos. A mensagem lista
+  o que falta;
+- `POST /events/:id/unpublish` devolve a escala ao rascunho.
+
+## Histórico da escala e edição simultânea
+
+O `updatedAt` da escala é o **número de versão dela inteira**. A escalação e o
+repertório tocam a linha da escala de propósito (`event.update` com `data: {}`)
+só para que trocar a equipe também conte como alteração.
+
+- Quem edita devolve o `expectedUpdatedAt` que recebeu ao abrir a tela.
+  Diferente do banco = **409 `SCHEDULE_CHANGED`**, e o app oferece "ver como
+  está agora" ou "salvar assim mesmo". Sem isso, dois líderes montando o mesmo
+  domingo se sobrescreviam **em silêncio**.
+- O campo é **opcional**: app antigo, que ainda não o manda, continua gravando
+  como antes em vez de quebrar na atualização.
+- `event_changes` guarda quem mexeu, quando e as frases do que mudou.
+  `GET /events/:id/history` é liberado para a equipe inteira: "quem me tirou da
+  escala?" é pergunta de quem foi tirado.
+- **O texto é gravado pronto, não derivado depois.** Um resumo montado hoje a
+  partir dos ids leria "Fulano entrou no Baixo" com o nome e a função de hoje;
+  o histórico precisa dizer o que era verdade naquele dia.
+- **Registrar nunca derruba a gravação.** `EventChangesService.record` engole o
+  próprio erro: a escala é o produto, o histórico é o benefício.
+- Salvar sem mudar nada **não** vira linha. O app manda o formulário inteiro a
+  cada gravação; sem a comparação, o histórico diria que tudo mudou toda vez.
+
+As funções que montam as frases são puras e exportadas —
+`describeAssignmentChange`, `describeDetailsChange` e `describeSetlistChange` —
+justamente para serem testáveis sem banco quando houver teste no backend.
+
+## Relatórios
+
+Todos em `/teams/:teamId/reports`, restritos a OWNER/LEADER:
+
+- `GET .../workload?weeks=` — participação por integrante: escalas, funções e
+  última vez. Tela: `Gerenciar equipe → Participação`.
+- `GET .../rotation?weeks=` — o mesmo olhar, magro e indexado por
+  `membershipId`, para a **linha do seletor da escalação**. Conta escalas e não
+  escalações: quem tocou baixo e cantou no mesmo domingo serviu uma vez. Não
+  bloqueia nem sugere nada — só evita que a escala repita quem vem à cabeça
+  primeiro.
+- `GET .../songs?months=` — uso do repertório: quantas vezes, quando e em que
+  tons. Só escala **publicada e já passada**: rascunho é plano, e plano não é
+  histórico. As não cantadas viram um número (`neverPlayedCount`), não uma
+  lista — com os 581 hinos do Cantor Cristão importados de uma vez, a lista
+  seria ruído. Tela: `Gerenciar equipe → Uso do repertório`.
 
 ## Feature flags
 
 `app/lib/core/config/feature_flags.dart` esconde funcionalidades prontas em vez
-de removê-las. Hoje: `duplicateSchedule = false` — o endpoint, o diálogo e o
-teste continuam funcionando; só a entrada no menu some.
+de removê-las: o endpoint, o diálogo e o teste continuam funcionando; só a
+entrada no menu some.
+
+Hoje **nenhuma está desligada**. `duplicateSchedule` voltou a `true` depois da
+revisão do fluxo — a cópia nasce como rascunho, e cultos, escalação,
+ministrante, recados e repertório caem nos horários correspondentes.
 
 **O schema Prisma já contém TODAS as tabelas do MVP**, incluindo `events`,
 `assignments`, `songs` e `event_songs`. As etapas 4 a 6 normalmente **não
@@ -905,3 +1000,14 @@ executado.
   exibir com selo "atualizado às HH:mm".
 - **Sem confirmação de presença** ("aceito/não posso"). Fora do MVP por decisão;
   o modelo suporta com uma coluna `status` em `assignments`.
+- **Sem teste automatizado no backend.** É justamente onde moram isolamento
+  entre equipes, permissões, duplicação, publicação e as regras de escalação.
+  Hoje a verificação é por `curl`, à mão, a cada mudança.
+- **Sem notificação.** A escala publicada não avisa ninguém: a equipe continua
+  descobrindo pelo WhatsApp, o que é metade do problema que o produto resolve.
+- **Sem modo culto offline.** O cache guarda agenda e detalhe, mas não garante
+  a letra quando a conexão cai durante o ensaio ou o culto.
+- **Sem link web da escala.** Convidado e quem não tem o APK dependem do texto
+  compartilhado.
+- **Telefone coletado e não usado.** É gravado e devolvido pela API, mas nenhuma
+  tela faz nada com ele: ou vira ação de WhatsApp/ligação, ou sai do cadastro.

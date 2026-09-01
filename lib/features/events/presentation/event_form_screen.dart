@@ -18,6 +18,7 @@ import '../../team/domain/service_template.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
+import 'schedule_changed_dialog.dart';
 
 /// Um culto sendo montado no formulário.
 ///
@@ -50,9 +51,14 @@ class _ServiceDraft {
 }
 
 class EventFormScreen extends ConsumerStatefulWidget {
-  const EventFormScreen({super.key, this.eventId});
+  const EventFormScreen({super.key, this.eventId, this.initialDate});
 
   final String? eventId;
+
+  /// Dia já escolhido em outra tela — hoje, o calendário de indisponibilidade.
+  /// Quem chega dali já decidiu a data; repetir a escolha seria pedir duas
+  /// vezes a mesma coisa, e é onde se erra o domingo.
+  final DateTime? initialDate;
 
   @override
   ConsumerState<EventFormScreen> createState() => _EventFormScreenState();
@@ -79,13 +85,17 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   bool _loading = false;
   String? _error;
 
+  /// Versão da escala no momento em que esta tela a abriu. Vai junto ao salvar
+  /// para o servidor recusar a gravação se outra pessoa mexeu no meio.
+  DateTime? _expectedUpdatedAt;
+
   bool get _isEditing => widget.eventId != null;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _date = DateTime(now.year, now.month, now.day);
+    final start = widget.initialDate ?? DateTime.now();
+    _date = DateTime(start.year, start.month, start.day);
   }
 
   @override
@@ -102,6 +112,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
     _populated = true;
     _seededFromTemplates = true;
+    _expectedUpdatedAt = event.updatedAt;
     _title.text = event.title ?? '';
     _location.text = event.location ?? '';
     _notes.text = event.notes ?? '';
@@ -295,7 +306,9 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
     return _timezone(team.timezone);
   }
 
-  Future<void> _submit() async {
+  /// [force] repete a gravação sem a trava de versão: é o "salvar assim mesmo"
+  /// de quem viu o aviso de que a escala mudou e decidiu sobrescrever.
+  Future<void> _submit({bool force = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_services.isEmpty) {
@@ -339,6 +352,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
           location: _location.text.trim(),
           notes: _notes.text.trim(),
           colorPalette: _colorPalette.text.trim(),
+          expectedUpdatedAt: force ? null : _expectedUpdatedAt,
         );
         ref.invalidate(eventsProvider((event.teamId, 'upcoming')));
         ref.invalidate(eventsProvider((event.teamId, 'past')));
@@ -378,10 +392,29 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
       if (mounted) context.pop();
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (!mounted) return;
+      if (error.code == scheduleChangedCode) {
+        await _resolveConflict(error.message);
+        return;
+      }
+      setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Sobrescrever é escolha da pessoa; conferir é o caminho oferecido primeiro.
+  /// Ao voltar, o detalhe recarrega e mostra a escala como ela está agora.
+  Future<void> _resolveConflict(String message) async {
+    final overwrite = await showScheduleChangedDialog(context, message);
+    if (!mounted) return;
+
+    if (overwrite) {
+      await _submit(force: true);
+      return;
+    }
+    ref.invalidate(eventProvider(widget.eventId!));
+    if (mounted) context.pop();
   }
 
   @override

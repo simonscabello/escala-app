@@ -1,11 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/shared_preferences_provider.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/service_template.dart';
 import '../domain/team_models.dart';
+import '../domain/workload_report.dart';
 
 class TeamRepository {
   const TeamRepository(this._dio);
@@ -251,6 +254,26 @@ class TeamRepository {
     });
   }
 
+  Future<WorkloadReport> workload(String teamId, {int weeks = 8}) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/reports/workload',
+        queryParameters: {'weeks': weeks},
+      );
+      return WorkloadReport.fromJson(response.data!);
+    });
+  }
+
+  Future<RotationReport> rotation(String teamId, {int weeks = 8}) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/reports/rotation',
+        queryParameters: {'weeks': weeks},
+      );
+      return RotationReport.fromJson(response.data!);
+    });
+  }
+
   Future<T> _guard<T>(Future<T> Function() request) async {
     try {
       return await request();
@@ -264,10 +287,41 @@ final teamRepositoryProvider = Provider<TeamRepository>((ref) {
   return TeamRepository(ref.watch(dioProvider));
 });
 
-/// Equipe ativa: no MVP e a primeira (e normalmente unica) do usuario.
-final activeTeamIdProvider = Provider<String?>((ref) {
+class ActiveTeamController extends StateNotifier<String?> {
+  ActiveTeamController(this._prefs, List<String> availableTeamIds)
+      : _availableTeamIds = availableTeamIds.toSet(),
+        super(_initialValue(_prefs, availableTeamIds));
+
+  static const _key = 'active_team_id';
+
+  final SharedPreferences _prefs;
+  final Set<String> _availableTeamIds;
+
+  static String? _initialValue(
+    SharedPreferences prefs,
+    List<String> availableTeamIds,
+  ) {
+    final saved = prefs.getString(_key);
+    if (saved != null && availableTeamIds.contains(saved)) return saved;
+    return availableTeamIds.firstOrNull;
+  }
+
+  Future<void> select(String teamId) async {
+    if (!_availableTeamIds.contains(teamId) || state == teamId) return;
+    state = teamId;
+    await _prefs.setString(_key, teamId);
+  }
+}
+
+/// Equipe usada pela Agenda e pelas telas de gestão. A escolha fica no
+/// aparelho e só é restaurada quando a conta ainda participa daquela equipe.
+final activeTeamIdProvider =
+    StateNotifierProvider<ActiveTeamController, String?>((ref) {
   final teams = ref.watch(authControllerProvider).teams;
-  return teams.isEmpty ? null : teams.first.teamId;
+  return ActiveTeamController(
+    ref.watch(sharedPreferencesProvider),
+    teams.map((team) => team.teamId).toList(),
+  );
 });
 
 final membersProvider =
@@ -284,8 +338,8 @@ final schedulableMembersProvider =
 });
 
 /// Cadastra um músico de fora e devolve o registro criado.
-final addGuestProvider = Provider<
-    Future<Member> Function(String teamId, String displayName)>((ref) {
+final addGuestProvider =
+    Provider<Future<Member> Function(String teamId, String displayName)>((ref) {
   return (teamId, displayName) =>
       ref.read(teamRepositoryProvider).addGuest(teamId, displayName);
 });
@@ -306,6 +360,27 @@ final allPositionsProvider =
 final teamProvider =
     FutureProvider.autoDispose.family<Team, String>((ref, teamId) {
   return ref.watch(teamRepositoryProvider).find(teamId);
+});
+
+typedef WorkloadQuery = ({String teamId, int weeks});
+
+final workloadProvider = FutureProvider.autoDispose
+    .family<WorkloadReport, WorkloadQuery>((ref, query) {
+  return ref
+      .watch(teamRepositoryProvider)
+      .workload(query.teamId, weeks: query.weeks);
+});
+
+/// Janela do rodízio: oito semanas, dois meses de domingos. Curta o bastante
+/// para descrever o momento da equipe, longa o bastante para que quem serve
+/// uma vez por mês apareça com mais de um.
+const rotationWeeks = 8;
+
+/// Quanto tempo faz e quantas escalas cada pessoa teve. Alimenta o seletor da
+/// escalação, e por isso é por equipe, não por escala.
+final rotationProvider =
+    FutureProvider.autoDispose.family<RotationReport, String>((ref, teamId) {
+  return ref.watch(teamRepositoryProvider).rotation(teamId, weeks: rotationWeeks);
 });
 
 /// A grade de cultos da igreja. Leitura liberada a qualquer integrante: a tela

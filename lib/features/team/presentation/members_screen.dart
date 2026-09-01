@@ -16,6 +16,7 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../invites/presentation/invite_actions.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -280,6 +281,14 @@ class _MemberRow extends ConsumerWidget {
                 onSelected: (action) => _onAction(context, ref, action),
                 itemBuilder: (menuContext) => [
                   const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                  // Só para quem ainda não tem conta: é a linha em que o líder
+                  // percebe que falta convidar, e até aqui o caminho era sair
+                  // desta lista e procurar "Convites" nas configurações.
+                  if (!member.hasAccount)
+                    const PopupMenuItem(
+                      value: 'invite',
+                      child: Text('Convidar'),
+                    ),
                   PopupMenuItem(
                     value: 'remove',
                     child: Text(
@@ -303,6 +312,17 @@ class _MemberRow extends ConsumerWidget {
   ) async {
     if (action == 'edit') {
       context.push('/equipe/membros/editar', extra: member);
+      return;
+    }
+
+    if (action == 'invite') {
+      await copyIndividualInvite(
+        context,
+        ref,
+        teamId: teamId,
+        membershipId: member.id,
+        displayName: member.displayName,
+      );
       return;
     }
 

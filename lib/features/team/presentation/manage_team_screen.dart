@@ -79,6 +79,24 @@ class ManageTeamScreen extends ConsumerWidget {
                     onTap: () => context.push('/equipe/funcoes'),
                   ),
                   AppGroupRow(
+                    icon: Icons.event_busy_rounded,
+                    title: 'Quem não pode',
+                    subtitle: 'Calendário das indisponibilidades da equipe',
+                    onTap: () => context.push('/equipe/indisponibilidade'),
+                  ),
+                  AppGroupRow(
+                    icon: Icons.balance_rounded,
+                    title: 'Participação',
+                    subtitle: 'Distribuição das escalas entre os integrantes',
+                    onTap: () => context.push('/equipe/participacao'),
+                  ),
+                  AppGroupRow(
+                    icon: Icons.history_rounded,
+                    title: 'Uso do repertório',
+                    subtitle: 'O que foi cantado, quando e em que tom',
+                    onTap: () => context.push('/equipe/musicas/uso'),
+                  ),
+                  AppGroupRow(
                     icon: Icons.tune_rounded,
                     title: 'Dados da equipe',
                     subtitle: 'O nome que aparece para os integrantes',

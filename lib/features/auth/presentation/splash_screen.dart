@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_brand_mark.dart';
 
@@ -17,37 +18,43 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return Scaffold(
+      // A mesma cor da abertura nativa do Android: o primeiro frame do Flutter
+      // substitui o splash do sistema sem um clarão ou uma troca de marca.
+      backgroundColor: AppColors.lightPrimary,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Spacer(flex: 3),
-              const AppBrandMark(size: 60),
+              const Spacer(flex: 4),
+              const AppBrandGlyph(size: 108, color: Colors.white),
               const SizedBox(height: AppSpacing.xl),
               Text(
-                'Escalas de Louvor',
-                style: theme.textTheme.displaySmall,
+                'Louve!',
+                style: theme.textTheme.displaySmall?.copyWith(
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Sua escala, clara e no lugar certo.',
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                  color: AppColors.lightPrimaryContainer,
                 ),
+                textAlign: TextAlign.center,
               ),
-              const Spacer(flex: 4),
+              const Spacer(flex: 5),
               SizedBox(
                 width: 120,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                  child: LinearProgressIndicator(
+                  child: const LinearProgressIndicator(
                     minHeight: 3,
-                    backgroundColor: scheme.surfaceContainerHigh,
+                    color: Colors.white,
+                    backgroundColor: Color(0x4DFFFFFF),
                   ),
                 ),
               ),

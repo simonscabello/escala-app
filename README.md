@@ -81,6 +81,22 @@ Instalar no aparelho conectado:
 C:\Users\Acer\AppData\Local\Android\sdk\platform-tools\adb.exe install -r build\app\outputs\flutter-apk\app-release.apk
 ```
 
+### Instalar sem cabo USB
+
+1. Baixe ou transfira `app-release.apk` para o celular.
+2. Abra o arquivo pelo navegador ou pelo gerenciador de arquivos.
+3. Se o Android bloquear, autorize **Instalar apps desconhecidos** apenas para
+   o aplicativo que abriu o arquivo (por exemplo, Chrome ou Arquivos).
+4. Confirme a instalação e, ao terminar, revogue essa autorização se desejar.
+
+Para atualizar, abra o APK novo sem desinstalar o anterior. O arquivo precisa
+ter um número de build maior e a mesma assinatura. Se o Android informar que o
+pacote é incompatível, não desinstale antes de confirmar que o APK foi assinado
+com o keystore definitivo.
+
+O procedimento completo de Railway, versão, assinatura e publicação está em
+[`../docs/DEPLOY.md`](../docs/DEPLOY.md).
+
 ## Estrutura
 
 ```

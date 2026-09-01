@@ -2,10 +2,17 @@ import 'package:dio/dio.dart';
 
 /// Erro ja traduzido para mensagem exibivel ao usuario.
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(this.message, {this.statusCode, this.code});
 
   final String message;
   final int? statusCode;
+
+  /// Código de negócio do backend (`SCHEDULE_CHANGED`, `CANNOT_REMOVE_OWNER`).
+  ///
+  /// A `message` é para a pessoa ler; o `code` é para a tela reagir. Sem ele,
+  /// reconhecer um erro específico exigiria comparar o texto da mensagem — que
+  /// muda de redação sem aviso.
+  final String? code;
 
   factory ApiException.fromDio(DioException e) {
     switch (e.type) {
@@ -24,7 +31,11 @@ class ApiException implements Exception {
                 ? (data['message'] as List).join('\n')
                 : data['message'].toString())
             : 'Algo deu errado. Tente novamente.';
-        return ApiException(message, statusCode: e.response?.statusCode);
+        return ApiException(
+          message,
+          statusCode: e.response?.statusCode,
+          code: data is Map ? data['code'] as String? : null,
+        );
     }
   }
 

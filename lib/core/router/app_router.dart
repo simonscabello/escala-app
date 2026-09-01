@@ -10,6 +10,7 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/assignments/presentation/assignment_form_screen.dart';
 import '../../features/events/presentation/agenda_screen.dart';
 import '../../features/events/presentation/event_detail_screen.dart';
+import '../../features/events/presentation/event_history_screen.dart';
 import '../../features/events/presentation/event_form_screen.dart';
 import '../../features/events/presentation/main_shell.dart';
 import '../../features/events/presentation/setlist_form_screen.dart';
@@ -26,6 +27,7 @@ import '../../features/songs/domain/song_models.dart';
 import '../../features/songs/presentation/add_song_screen.dart';
 import '../../features/songs/presentation/song_detail_screen.dart';
 import '../../features/songs/presentation/song_form_screen.dart';
+import '../../features/songs/presentation/song_usage_screen.dart';
 import '../../features/songs/presentation/songs_screen.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
@@ -34,6 +36,15 @@ import '../../features/team/presentation/members_screen.dart';
 import '../../features/team/presentation/positions_screen.dart';
 import '../../features/team/presentation/service_templates_screen.dart';
 import '../../features/team/presentation/team_settings_screen.dart';
+import '../../features/team/presentation/workload_report_screen.dart';
+import '../../features/unavailability/presentation/team_unavailability_screen.dart';
+
+/// `AAAA-MM-DD` da barra de endereço. Inválida ou ausente vira nulo: a tela
+/// cai no seu próprio padrão em vez de abrir num dia que ninguém escolheu.
+DateTime? _parseDate(String? value) {
+  if (value == null) return null;
+  return DateTime.tryParse(value);
+}
 
 /// Rotas acessiveis sem sessao.
 const _publicRoutes = {'/login', '/cadastro', '/diagnostico'};
@@ -142,16 +153,45 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) =>
             _withActiveTeam(ref, (id) => TeamSettingsScreen(teamId: id)),
       ),
+      GoRoute(
+        path: '/equipe/indisponibilidade',
+        builder: (_, __) => _withActiveTeam(
+          ref,
+          (id) => TeamUnavailabilityScreen(teamId: id),
+        ),
+      ),
+      GoRoute(
+        path: '/equipe/participacao',
+        builder: (_, __) => _withActiveTeam(
+          ref,
+          (id) => WorkloadReportScreen(teamId: id),
+        ),
+      ),
       // Repertório fora da casca, como as outras telas de configuração: a
       // barra inferior atrapalharia o caminho de volta.
       GoRoute(
         path: '/equipe/musicas',
-        builder: (_, __) => _withActiveTeam(ref, (id) => SongsScreen(teamId: id)),
+        builder: (_, __) =>
+            _withActiveTeam(ref, (id) => SongsScreen(teamId: id)),
         routes: [
           GoRoute(
             path: 'nova',
             builder: (_, __) =>
                 _withActiveTeam(ref, (id) => AddSongScreen(teamId: id)),
+          ),
+          // Antes de `:songId`, senão "uso" e "arquivadas" seriam lidos como o
+          // id de uma música e a tela abriria em erro.
+          GoRoute(
+            path: 'uso',
+            builder: (_, __) =>
+                _withActiveTeam(ref, (id) => SongUsageScreen(teamId: id)),
+          ),
+          GoRoute(
+            path: 'arquivadas',
+            builder: (_, __) => _withActiveTeam(
+              ref,
+              (id) => SongsScreen(teamId: id, archived: true),
+            ),
           ),
           GoRoute(
             path: ':songId',
@@ -187,7 +227,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'novo',
-                builder: (_, __) => const EventFormScreen(),
+                builder: (_, state) => EventFormScreen(
+                  initialDate: _parseDate(state.uri.queryParameters['data']),
+                ),
               ),
               GoRoute(
                 path: ':eventId',
@@ -199,6 +241,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'editar',
                     builder: (_, state) => EventFormScreen(
                       eventId: state.pathParameters['eventId'],
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'historico',
+                    builder: (_, state) => EventHistoryScreen(
+                      eventId: state.pathParameters['eventId']!,
                     ),
                   ),
                   GoRoute(
@@ -224,8 +272,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                         // Vem nula quando o encadeamento da criação chega aqui
                         // por URL; aí a tela busca sozinha.
                         event: state.extra as Event?,
-                        isNewSchedule:
-                            state.uri.queryParameters['novo'] == '1',
+                        isNewSchedule: state.uri.queryParameters['novo'] == '1',
                       ),
                     ),
                   ),
@@ -246,8 +293,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               // fica fora da casca porque o redirect prende o app nela.
               GoRoute(
                 path: 'senha',
-                builder: (_, __) =>
-                    const ChangePasswordScreen(forced: false),
+                builder: (_, __) => const ChangePasswordScreen(forced: false),
               ),
             ],
           ),

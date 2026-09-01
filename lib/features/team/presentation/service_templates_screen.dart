@@ -11,7 +11,9 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
+import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
+import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/service_template.dart';
 
@@ -31,7 +33,18 @@ class ServiceTemplatesScreen extends ConsumerWidget {
     final templates = ref.watch(serviceTemplatesProvider(teamId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cultos da igreja')),
+      appBar: AppBar(
+        title: const Text('Cultos da igreja'),
+        actions: [
+          IconButton(
+            tooltip: 'Planejar próximas escalas',
+            onPressed: templates.valueOrNull?.isNotEmpty == true
+                ? () => _openGenerator(context, ref)
+                : null,
+            icon: const Icon(Icons.event_repeat_rounded),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context, ref),
         icon: const Icon(Icons.add_rounded),
@@ -88,6 +101,104 @@ class ServiceTemplatesScreen extends ConsumerWidget {
       builder: (_) => _TemplateEditorSheet(teamId: teamId, template: template),
     );
     if (saved == true) ref.invalidate(serviceTemplatesProvider(teamId));
+  }
+
+  Future<void> _openGenerator(BuildContext context, WidgetRef ref) async {
+    final result = await showDialog<GeneratedSchedules>(
+      context: context,
+      builder: (_) => _GenerateSchedulesDialog(teamId: teamId),
+    );
+    if (result == null || !context.mounted) return;
+
+    ref.invalidate(eventsProvider((teamId, 'upcoming')));
+    final message = result.createdCount == 0
+        ? 'As próximas datas já tinham escala.'
+        : '${result.createdCount} '
+            '${result.createdCount == 1 ? 'rascunho criado' : 'rascunhos criados'}.';
+    showAppSnackBar(context, message, tone: AppTone.success);
+  }
+}
+
+class _GenerateSchedulesDialog extends ConsumerStatefulWidget {
+  const _GenerateSchedulesDialog({required this.teamId});
+
+  final String teamId;
+
+  @override
+  ConsumerState<_GenerateSchedulesDialog> createState() =>
+      _GenerateSchedulesDialogState();
+}
+
+class _GenerateSchedulesDialogState
+    extends ConsumerState<_GenerateSchedulesDialog> {
+  int _weeks = 4;
+  bool _saving = false;
+  String? _error;
+
+  Future<void> _generate() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final result = await ref
+          .read(eventRepositoryProvider)
+          .generate(widget.teamId, weeks: _weeks);
+      if (mounted) Navigator.of(context).pop(result);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Planejar próximas escalas'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Cria rascunhos usando os dias e horários desta grade. Datas que '
+            'já têm escala são mantidas como estão.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          DropdownButtonFormField<int>(
+            initialValue: _weeks,
+            decoration: const InputDecoration(labelText: 'Período'),
+            items: const [
+              DropdownMenuItem(value: 4, child: Text('Próximas 4 semanas')),
+              DropdownMenuItem(value: 8, child: Text('Próximas 8 semanas')),
+              DropdownMenuItem(value: 12, child: Text('Próximas 12 semanas')),
+            ],
+            onChanged:
+                _saving ? null : (value) => setState(() => _weeks = value ?? 4),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            FormErrorBanner(message: _error!),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _generate,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Criar rascunhos'),
+        ),
+      ],
+    );
   }
 }
 
@@ -152,8 +263,7 @@ class _TemplateList extends ConsumerWidget {
             child: Column(
               children: [
                 for (var i = 0; i < byWeekday[weekday]!.length; i++) ...[
-                  if (i > 0)
-                    Divider(color: scheme.outlineVariant, height: 1),
+                  if (i > 0) Divider(color: scheme.outlineVariant, height: 1),
                   _TemplateRow(
                     teamId: teamId,
                     template: byWeekday[weekday]![i],
@@ -417,9 +527,8 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
                   ChoiceChip(
                     label: Text(weekdayName(day).substring(0, 3)),
                     selected: _weekday == day,
-                    onSelected: _saving
-                        ? null
-                        : (_) => setState(() => _weekday = day),
+                    onSelected:
+                        _saving ? null : (_) => setState(() => _weekday = day),
                   ),
               ],
             ),

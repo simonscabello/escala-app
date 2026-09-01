@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
@@ -17,6 +19,7 @@ import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
+import '../../update/presentation/app_update_banner.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -75,7 +78,15 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               _GreetingHeader(
                 name: auth.user?.firstName ?? '',
                 teamName: team.name,
+                activeTeamId: teamId,
+                teams: [
+                  for (final item in auth.teams)
+                    (id: item.teamId, name: item.name),
+                ],
+                onTeamChanged: (id) =>
+                    ref.read(activeTeamIdProvider.notifier).select(id),
               ),
+              const AppUpdateBanner(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.xl,
@@ -132,10 +143,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
 /// para ver. O cumprimento continua ali, no lugar que ele merece — o de uma
 /// linha só.
 class _GreetingHeader extends StatelessWidget {
-  const _GreetingHeader({required this.name, required this.teamName});
+  const _GreetingHeader({
+    required this.name,
+    required this.teamName,
+    required this.activeTeamId,
+    required this.teams,
+    required this.onTeamChanged,
+  });
 
   final String name;
   final String teamName;
+  final String activeTeamId;
+  final List<({String id, String name})> teams;
+  final ValueChanged<String> onTeamChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +196,35 @@ class _GreetingHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (teams.length > 1)
+                PopupMenuButton<String>(
+                  tooltip: 'Trocar equipe',
+                  initialValue: activeTeamId,
+                  onSelected: onTeamChanged,
+                  icon: const Icon(Icons.unfold_more_rounded, size: 18),
+                  itemBuilder: (context) => [
+                    for (final team in teams)
+                      PopupMenuItem(
+                        value: team.id,
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              child: team.id == activeTeamId
+                                  ? Icon(
+                                      Icons.check_rounded,
+                                      size: 18,
+                                      color: scheme.primary,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(child: Text(team.name)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
             ],
           ),
         ],
@@ -464,7 +513,14 @@ class _FeaturedEvent extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PRÓXIMA ESCALA', style: AppTypography.eyebrow(context)),
+          Text(
+            event.isDraft ? 'RASCUNHO' : 'PRÓXIMA ESCALA',
+            style: AppTypography.eyebrow(context).copyWith(
+              color: event.isDraft
+                  ? AppStatusColors.of(context).warning.foreground
+                  : null,
+            ),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -508,6 +564,10 @@ class _FeaturedEvent extends ConsumerWidget {
           // A mesma frase do detalhe: abrir a escala não deve reapresentar a
           // mesma informação num formato diferente.
           EventTimesList(event: event, timezone: timezone),
+          if (event.isDraft) ...[
+            const SizedBox(height: AppSpacing.md),
+            _DraftPendingLine(event: event),
+          ],
           if (youPositions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             Align(
@@ -589,6 +649,13 @@ class _EventRow extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (event.isDraft) ...[
+                    const AppBadge(
+                      label: 'Rascunho',
+                      tone: AppTone.warning,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
                   // A data por extenso abre o item: é o que identifica a
                   // escala, e fica na mesma posição em todos, o que deixa a
                   // lista legível de cima a baixo.
@@ -639,6 +706,10 @@ class _EventRow extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.sm),
                     YouHighlight(positionNames: youPositions),
                   ],
+                  if (event.isDraft) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _DraftPendingLine(event: event),
+                  ],
                 ],
               ),
             ),
@@ -675,6 +746,40 @@ class _EventRow extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DraftPendingLine extends StatelessWidget {
+  const _DraftPendingLine({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = event.publicationPendingItems;
+    final palette = AppStatusColors.of(context).warning;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          pending.isEmpty ? Icons.check_circle_outline : Icons.pending_actions,
+          size: 16,
+          color: palette.foreground,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            pending.isEmpty
+                ? 'Pronta para publicar'
+                : 'Falta ${pending.join(' e ')}',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: palette.foreground,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+      ],
     );
   }
 }

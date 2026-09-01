@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/song_models.dart';
+import '../domain/song_usage.dart';
 
 class SongRepository {
   const SongRepository(this._dio);
@@ -65,6 +66,27 @@ class SongRepository {
       );
       return Song.fromJson(response.data!);
     });
+  }
+
+  /// Histórico de uso: o que a equipe cantou, quando e em que tom.
+  Future<SongUsageReport> usage(String teamId, {int months = 6}) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/reports/songs',
+        queryParameters: {'months': months},
+      );
+      return SongUsageReport.fromJson(response.data!);
+    });
+  }
+
+  /// Regra 21: música já usada em escala não se exclui. Arquivar tira do
+  /// repertório do dia a dia sem quebrar as escalas passadas, e é reversível.
+  Future<Song> setArchived(
+    String teamId,
+    String songId, {
+    required bool isArchived,
+  }) {
+    return update(teamId, songId, {'isArchived': isArchived});
   }
 
   Future<void> remove(String teamId, String songId) async {
@@ -176,7 +198,12 @@ final songRepositoryProvider = Provider<SongRepository>((ref) {
 ///
 /// "Novas" atravessa os dois: um hino pode estar sendo aprendido tanto quanto
 /// um cântico.
-enum SongFilter { canticos, hinos, novas }
+///
+/// "Arquivadas" não é uma aba: é a tela do arquivo, em `/equipe/musicas/
+/// arquivadas`. Música usada em escala não se apaga — as escalas passadas
+/// continuam íntegras —, então arquivar é o único jeito de tirar do caminho o
+/// que a equipe não canta mais, e o arquivo precisa de uma porta de volta.
+enum SongFilter { canticos, hinos, novas, arquivadas }
 
 class SongQuery {
   const SongQuery({
@@ -224,9 +251,14 @@ class SongQuery {
 
 final songsProvider =
     FutureProvider.autoDispose.family<List<Song>, SongQuery>((ref, query) async {
-  final songs = await ref
-      .watch(songRepositoryProvider)
-      .list(query.teamId, search: query.search, themes: query.themes);
+  final songs = await ref.watch(songRepositoryProvider).list(
+        query.teamId,
+        search: query.search,
+        themes: query.themes,
+        // A lista normal já vem sem as arquivadas: o servidor as esconde por
+        // padrão. Só o arquivo pede que elas venham.
+        includeArchived: query.filter == SongFilter.arquivadas,
+      );
 
   // O filtro é local: a lista inteira já veio, e ir ao servidor de novo só
   // para esconder linhas gastaria uma volta de rede à toa.
@@ -237,6 +269,7 @@ final songsProvider =
     // que se procura um hino que se sabe de cor pelo número.
     SongFilter.hinos => songs.where((s) => s.isHymn).toList()
       ..sort((a, b) => a.hymnNumber!.compareTo(b.hymnNumber!)),
+    SongFilter.arquivadas => songs.where((s) => s.isArchived).toList(),
   };
 });
 
@@ -244,3 +277,12 @@ final songProvider = FutureProvider.autoDispose
     .family<Song, ({String teamId, String songId})>((ref, args) {
   return ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
 });
+
+typedef SongUsageQuery = ({String teamId, int months});
+
+final songUsageProvider =
+    FutureProvider.autoDispose.family<SongUsageReport, SongUsageQuery>(
+  (ref, query) => ref
+      .watch(songRepositoryProvider)
+      .usage(query.teamId, months: query.months),
+);

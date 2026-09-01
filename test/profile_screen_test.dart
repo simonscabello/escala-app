@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
+import 'package:louvor_app/core/storage/shared_preferences_provider.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
-import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/profile/presentation/profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

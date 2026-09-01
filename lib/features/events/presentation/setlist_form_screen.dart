@@ -699,6 +699,12 @@ class _PickerEmpty extends StatelessWidget {
           'Ou o repertório está vazio, ou todos os cânticos já estão neste '
               'culto.',
         ),
+      // O seletor da escala não abre o arquivo: a música é arquivada
+      // justamente para deixar de aparecer aqui.
+      SongFilter.arquivadas => (
+          'Nada para adicionar',
+          'As músicas arquivadas ficam fora do repertório da escala.',
+        ),
     };
 
     return AppEmptyState(

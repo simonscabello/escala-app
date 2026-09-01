@@ -324,16 +324,7 @@ class _InviteCard extends ConsumerWidget {
   /// Copia a mensagem pronta para colar no grupo do WhatsApp -- e assim que a
   /// equipe vai receber o convite na pratica.
   Future<void> _copy(BuildContext context) async {
-    final message = [
-      'Você foi convidado para a nossa equipe de louvor.',
-      '',
-      'Código: ${invite.formattedCode}',
-      if (invite.url != null) invite.url!,
-      '',
-      'Abra o app, toque em "Recebi um convite" e cole o código.',
-    ].join('\n');
-
-    await Clipboard.setData(ClipboardData(text: message));
+    await Clipboard.setData(ClipboardData(text: invite.shareMessage));
 
     if (context.mounted) {
       showAppSnackBar(

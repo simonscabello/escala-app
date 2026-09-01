@@ -14,10 +14,15 @@ import '../../auth/application/auth_controller.dart';
 import '../data/invite_repository.dart';
 import '../domain/invite_models.dart';
 
-/// Entrada por código. Sem deep link no MVP: verificar dominio no Android custa
-/// dias e o código colavel resolve o mesmo problema hoje.
+String cleanInviteCode(String value) =>
+    value.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+
+/// Entrada por código ou por link público. O link abre esta mesma tela já com
+/// o código preenchido; sem conta, a pessoa vê a equipe antes de entrar.
 class JoinTeamScreen extends ConsumerStatefulWidget {
-  const JoinTeamScreen({super.key});
+  const JoinTeamScreen({super.key, this.initialCode});
+
+  final String? initialCode;
 
   @override
   ConsumerState<JoinTeamScreen> createState() => _JoinTeamScreenState();
@@ -34,7 +39,11 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
   @override
   void initState() {
     super.initState();
+    _code.text = widget.initialCode ?? '';
     _code.addListener(_onCodeChanged);
+    if (cleanInviteCode(_code.text).length == 20) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+    }
   }
 
   @override
@@ -47,7 +56,7 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
   /// O código tem 20 caracteres uteis; assim que completa, buscamos o preview
   /// sozinhos -- a pessoa não precisa apertar nada para saber se acertou.
   void _onCodeChanged() {
-    final clean = _clean(_code.text);
+    final clean = cleanInviteCode(_code.text);
     if (clean.length == 20 && _preview == null && !_checking) {
       _check();
     } else if (clean.length < 20 && _preview != null) {
@@ -58,9 +67,6 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
     }
   }
 
-  String _clean(String value) =>
-      value.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
-
   Future<void> _check() async {
     setState(() {
       _checking = true;
@@ -69,7 +75,9 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
 
     try {
       final preview =
-          await ref.read(inviteRepositoryProvider).preview(_clean(_code.text));
+          await ref
+              .read(inviteRepositoryProvider)
+              .preview(cleanInviteCode(_code.text));
       if (mounted) setState(() => _preview = preview);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -86,7 +94,9 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
 
     try {
       final result =
-          await ref.read(inviteRepositoryProvider).accept(_clean(_code.text));
+          await ref
+              .read(inviteRepositoryProvider)
+              .accept(cleanInviteCode(_code.text));
       await ref.read(authControllerProvider.notifier).reloadTeams();
 
       if (!mounted) return;
@@ -121,6 +131,9 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final busy = _checking || _joining;
+    final authenticated =
+        ref.watch(authControllerProvider).status == AuthStatus.authenticated;
+    final code = cleanInviteCode(_code.text);
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Convite')),
@@ -166,11 +179,21 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
         ],
         const SizedBox(height: AppSpacing.md),
         AppSubmitButton(
-          label: 'Entrar na equipe',
+          label: authenticated ? 'Entrar na equipe' : 'Entrar para aceitar',
           loading: _joining,
           loadingLabel: 'Entrando na equipe',
-          onPressed: _preview == null || busy ? null : _join,
+          onPressed: _preview == null || busy
+              ? null
+              : authenticated
+                  ? _join
+                  : () => context.go('/login?convite=$code'),
         ),
+        if (!authenticated && _preview != null)
+          TextButton(
+            onPressed:
+                busy ? null : () => context.go('/cadastro?convite=$code'),
+            child: const Text('Não tenho conta. Criar agora'),
+          ),
         const SizedBox(height: AppSpacing.md),
         Text(
           'O código tem 20 caracteres. Maiúsculas, minúsculas e hífens tanto '

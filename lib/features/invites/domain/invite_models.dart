@@ -29,6 +29,18 @@ class Invite {
 
   bool get isIndividual => forMembershipId != null;
 
+  /// A mensagem que vai para o WhatsApp. Fica no modelo porque o convite é
+  /// gerado de três lugares — a tela de convites, o cadastro do integrante e a
+  /// lista da equipe — e o texto precisa chegar igual nos três.
+  String get shareMessage => [
+        'Você foi convidado para a nossa equipe de louvor.',
+        '',
+        'Código: $formattedCode',
+        if (url != null) url!,
+        '',
+        'Abra o app, toque em "Recebi um convite" e cole o código.',
+      ].join('\n');
+
   factory Invite.fromJson(Map<String, dynamic> json) {
     return Invite(
       id: json['id'] as String,

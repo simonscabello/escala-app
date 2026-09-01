@@ -54,6 +54,22 @@ class SongDetailScreen extends ConsumerWidget {
                 extra: song.valueOrNull,
               ),
             ),
+          // Só depois que a música carregou: o rótulo do menu depende de ela
+          // estar arquivada ou não, e um menu que muda de texto sozinho depois
+          // de aberto seria pior que menu nenhum.
+          if (canManage && song.valueOrNull != null)
+            PopupMenuButton<String>(
+              tooltip: 'Mais opções',
+              onSelected: (_) => _toggleArchived(context, ref, song.value!),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'archive',
+                  child: Text(
+                    song.value!.isArchived ? 'Restaurar' : 'Arquivar',
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       body: SafeArea(
@@ -72,6 +88,52 @@ class SongDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Arquivar é o que existe no lugar de excluir: a API recusa apagar música
+  /// que já foi tocada, para não abrir buracos nas escalas passadas. O caminho
+  /// de volta fica em Repertório → arquivadas.
+  Future<void> _toggleArchived(
+    BuildContext context,
+    WidgetRef ref,
+    Song song,
+  ) async {
+    final restoring = song.isArchived;
+
+    if (!restoring) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Arquivar ${song.title}?',
+        message: 'Ela sai do repertório e da busca do repertório da escala. '
+            'As escalas em que já foi tocada continuam como estão, e dá para '
+            'restaurar quando quiser.',
+        confirmLabel: 'Arquivar',
+      );
+      if (!confirmed || !context.mounted) return;
+    }
+
+    try {
+      await ref.read(songRepositoryProvider).setArchived(
+            teamId,
+            songId,
+            isArchived: !restoring,
+          );
+      ref.invalidate(songProvider((teamId: teamId, songId: songId)));
+      ref.invalidate(songsProvider);
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          restoring
+              ? '${song.title} voltou para o repertório.'
+              : '${song.title} foi arquivada.',
+          tone: AppTone.success,
+        );
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        showAppSnackBar(context, e.message, tone: AppTone.danger);
+      }
+    }
   }
 }
 
@@ -106,6 +168,14 @@ class _Body extends StatelessWidget {
                 label: 'Nova',
                 tone: AppTone.info,
                 semanticsLabel: 'A equipe está aprendendo esta música',
+              ),
+            // Aberta a partir de uma escala antiga, a música arquivada não
+            // teria como se explicar: some do repertório e continua ali.
+            if (song.isArchived)
+              const AppBadge(
+                label: 'Arquivada',
+                tone: AppTone.warning,
+                semanticsLabel: 'Esta música está fora do repertório',
               ),
           ],
         ),

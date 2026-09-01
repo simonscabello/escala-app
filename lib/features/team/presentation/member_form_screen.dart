@@ -13,6 +13,7 @@ import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_models.dart';
+import '../../invites/presentation/invite_actions.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -69,6 +70,8 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     try {
       final repository = ref.read(teamRepositoryProvider);
 
+      Member? created;
+
       if (widget.isEditing) {
         await repository.updateMember(
           widget.teamId,
@@ -81,7 +84,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           role: _role != widget.member!.role ? _role : null,
         );
       } else {
-        await repository.addMember(
+        created = await repository.addMember(
           widget.teamId,
           displayName: _name.text.trim(),
           phone: _phone.text.trim(),
@@ -90,9 +93,17 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
       }
 
       ref.invalidate(membersProvider(widget.teamId));
-      if (mounted) {
-        final name = _name.text.trim();
-        context.pop(true);
+      if (!mounted) return;
+
+      final name = _name.text.trim();
+      // O convite é o passo seguinte natural de cadastrar alguém, e ficava
+      // escondido duas telas adiante. Oferecer aqui é o que transforma
+      // "cadastrei a equipe" em "a equipe está usando o app".
+      final invited = created != null && await _offerInvite(created);
+      if (!mounted) return;
+
+      context.pop(true);
+      if (!invited) {
         showAppSnackBar(
           context,
           widget.isEditing
@@ -106,6 +117,44 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Pergunta, logo depois do cadastro, se o líder quer o convite na mão.
+  ///
+  /// Devolve `true` quando o convite foi gerado e copiado — aí a tela não
+  /// mostra o aviso genérico de "entrou na equipe", que apagaria da tela o
+  /// aviso de que a mensagem está pronta para colar.
+  Future<bool> _offerInvite(Member member) async {
+    final wants = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${member.displayName} entrou na equipe'),
+        content: const Text(
+          'Ainda falta a conta no app. Posso gerar o convite e deixar a '
+          'mensagem pronta para você colar no WhatsApp.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Depois'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Convidar agora'),
+          ),
+        ],
+      ),
+    );
+    if (wants != true || !mounted) return false;
+
+    await copyIndividualInvite(
+      context,
+      ref,
+      teamId: widget.teamId,
+      membershipId: member.id,
+      displayName: member.displayName,
+    );
+    return true;
   }
 
   @override

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#DBE6FE</color>
+    <color name="brand_primary">#1D4ED8</color>
+    <!-- O azul da marca (AppColors.lightPrimary). A camada de frente do
+         adaptive icon e branca, entao o contraste do icone nasce daqui: o
+         #DBE6FE anterior deixava o glifo azul sobre azul palido, que a 48px
+         virava uma mancha. -->
+    <color name="ic_launcher_background">#1D4ED8</color>
 </resources>

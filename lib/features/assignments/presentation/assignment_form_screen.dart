@@ -17,8 +17,56 @@ import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_models.dart';
+import '../../events/presentation/schedule_changed_dialog.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/team_models.dart';
+import '../../team/domain/workload_report.dart';
+
+@visibleForTesting
+List<Map<String, Object?>> buildAssignmentPayload(
+  Map<String, Set<String>> selected,
+  Map<(String, String), String> notes,
+) {
+  return <Map<String, Object?>>[
+    for (final entry in selected.entries)
+      for (final membershipId in entry.value)
+        {
+          'membershipId': membershipId,
+          'positionId': entry.key,
+          if (notes[(entry.key, membershipId)] case final note?) 'note': note,
+        },
+  ];
+}
+
+/// Como o rodízio da pessoa aparece na linha do seletor.
+///
+/// O líder não escala por planilha: ele lembra de quem vem à cabeça, e quem vem
+/// à cabeça é quem tocou no domingo passado. Duas informações curtas ao lado do
+/// nome — há quanto tempo e quantas vezes — bastam para ele reparar em quem
+/// está sumindo da escala. **Não bloqueia nem sugere nada**: a decisão continua
+/// sendo dele, que sabe de coisas que o app não sabe.
+@visibleForTesting
+String rotationSummary(
+  RotationMember? rotation, {
+  required int weeks,
+  required DateTime now,
+}) {
+  final last = rotation?.lastScheduledAt;
+  if (last == null) return 'Sem escala no último ano';
+
+  final days = now.toUtc().difference(last).inDays;
+  final when = switch (days) {
+    <= 0 => 'Hoje',
+    1 => 'Ontem',
+    < 14 => 'Há $days dias',
+    < 60 => 'Há ${(days / 7).round()} semanas',
+    _ => 'Há ${(days / 30).round()} meses',
+  };
+
+  final count = rotation!.recentCount;
+  return '$when · $count ${count == 1 ? 'escala' : 'escalas'} '
+      'em $weeks semanas';
+}
 
 /// Montagem da escala.
 ///
@@ -54,6 +102,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   /// positionId -> membershipIds selecionados
   final Map<String, Set<String>> _selected = {};
 
+  /// Recado individual por (função, pessoa).
+  ///
+  /// A API já guardava este campo, mas o formulário remontava o payload só
+  /// com os ids. Assim, abrir uma escala antiga e salvar qualquer ajuste
+  /// apagava todos os recados sem aviso.
+  final Map<(String, String), String> _notes = {};
+
   /// Quem conduz a ministração do louvor. Um por escala, não por função.
   String? _ministerId;
 
@@ -61,20 +116,30 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   bool _saving = false;
   String? _error;
 
+  /// Versão da escala no momento em que esta tela a abriu. Vai junto ao salvar
+  /// para o servidor recusar a gravação se outra pessoa mexeu no meio.
+  DateTime? _expectedUpdatedAt;
+
   void _seedFromEvent(Event event) {
     if (_seeded) return;
     _seeded = true;
+    _expectedUpdatedAt = event.updatedAt;
     for (final group in event.assignments) {
       _selected[group.positionId] = {
         for (final member in group.members) member.membershipId,
       };
+      for (final member in group.members) {
+        final note = member.note?.trim();
+        if (note != null && note.isNotEmpty) {
+          _notes[(group.positionId, member.membershipId)] = note;
+        }
+      }
     }
     _ministerId = event.minister?.membershipId;
   }
 
   /// Todos os escalados, sem repetir quem acumula duas funções.
-  Set<String> get _assignedIds =>
-      _selected.values.expand((ids) => ids).toSet();
+  Set<String> get _assignedIds => _selected.values.expand((ids) => ids).toSet();
 
   /// O ministrante precisa continuar escalado; se saiu, o campo se limpa.
   void _dropMinisterIfUnassigned() {
@@ -131,26 +196,24 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   int get _filledPositions =>
       _selected.values.where((ids) => ids.isNotEmpty).length;
 
-  Future<void> _save() async {
+  /// [force] repete a gravação sem a trava de versão: é o "salvar assim mesmo"
+  /// de quem viu o aviso de que a escala mudou e decidiu sobrescrever.
+  Future<void> _save({bool force = false}) async {
     setState(() {
       _saving = true;
       _error = null;
     });
 
-    final payload = <Map<String, Object?>>[
-      for (final entry in _selected.entries)
-        for (final membershipId in entry.value)
-          {'membershipId': membershipId, 'positionId': entry.key},
-    ];
+    final payload = buildAssignmentPayload(_selected, _notes);
 
     try {
-      final updated = await ref
-          .read(eventRepositoryProvider)
-          .replaceAssignments(
-            widget.eventId,
-            payload,
-            ministerMembershipId: _ministerId,
-          );
+      final updated =
+          await ref.read(eventRepositoryProvider).replaceAssignments(
+                widget.eventId,
+                payload,
+                ministerMembershipId: _ministerId,
+                expectedUpdatedAt: force ? null : _expectedUpdatedAt,
+              );
       ref.invalidate(eventProvider(widget.eventId));
       // A agenda também mostra a escalação (o chip "VOCÊ" e a contagem de
       // escalados). Sem invalidar a lista, o cartão continuava com o número
@@ -197,10 +260,28 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       context.pop();
     } on ApiException catch (error) {
       if (!mounted) return;
+      if (error.code == scheduleChangedCode) {
+        await _resolveConflict(error.message);
+        return;
+      }
       setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Sobrescrever é escolha da pessoa; conferir é o caminho oferecido primeiro.
+  /// Ao voltar, o detalhe recarrega e mostra a escala como ela está agora.
+  Future<void> _resolveConflict(String message) async {
+    final overwrite = await showScheduleChangedDialog(context, message);
+    if (!mounted) return;
+
+    if (overwrite) {
+      await _save(force: true);
+      return;
+    }
+    ref.invalidate(eventProvider(widget.eventId));
+    if (mounted) context.pop();
   }
 
   Future<void> _openPicker({
@@ -209,6 +290,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     required List<Position> positions,
     required Set<String> unavailableIds,
     required String teamId,
+    required Map<String, RotationMember>? rotation,
   }) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -217,6 +299,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
       builder: (sheetContext) => _MemberPickerSheet(
         position: position,
         members: members,
+        rotation: rotation,
         unavailableIds: unavailableIds,
         blockedReason: (member) => _blockedReason(member, position, positions),
         onAddGuest: (name) => _addGuest(teamId, name),
@@ -227,6 +310,66 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         }),
       ),
     );
+  }
+
+  Future<void> _editNote({
+    required Position position,
+    required Member member,
+  }) async {
+    final key = (position.id, member.id);
+    final controller = TextEditingController(text: _notes[key] ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Recado para ${member.displayName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              position.name,
+              style: Theme.of(dialogContext).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(dialogContext).colorScheme.primary,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 500,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Recado individual',
+                hintText: 'Ex.: trazer o violão reserva',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Salvar recado'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+
+    setState(() {
+      if (result.isEmpty) {
+        _notes.remove(key);
+      } else {
+        _notes[key] = result;
+      }
+    });
   }
 
   Future<Member?> _addGuest(String teamId, String name) async {
@@ -300,6 +443,10 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     final unavailableIds = {
       for (final person in event.unavailable) person.membershipId,
     };
+    // Observado aqui, e não dentro da folha: quando o líder toca na função a
+    // resposta já chegou, e a linha não nasce depois que ele começou a ler.
+    final rotation =
+        ref.watch(rotationProvider(event.teamId)).valueOrNull?.members;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Escalar equipe')),
@@ -329,6 +476,12 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 position: position,
                 members: members,
                 selected: _selected[position.id] ?? const <String>{},
+                notes: {
+                  for (final membershipId
+                      in _selected[position.id] ?? const <String>{})
+                    if (_notes[(position.id, membershipId)] case final note?)
+                      membershipId: note,
+                },
                 unavailableIds: unavailableIds,
                 onTap: () => _openPicker(
                   position: position,
@@ -336,6 +489,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   positions: activePositions,
                   unavailableIds: unavailableIds,
                   teamId: event.teamId,
+                  rotation: rotation,
                 ),
                 onRemove: (membershipId) => setState(() {
                   final next = {...?_selected[position.id]}
@@ -343,6 +497,10 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                   _selected[position.id] = next;
                   _dropMinisterIfUnassigned();
                 }),
+                onEditNote: (member) => _editNote(
+                  position: position,
+                  member: member,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
             ],
@@ -548,14 +706,11 @@ class _MinisterChoice extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final foreground = selected
-        ? scheme.onPrimaryContainer
-        : scheme.onSurfaceVariant;
+    final foreground =
+        selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
 
     return Material(
-      color: selected
-          ? scheme.primaryContainer
-          : scheme.surfaceContainerHigh,
+      color: selected ? scheme.primaryContainer : scheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
       child: InkWell(
         onTap: onTap,
@@ -594,17 +749,21 @@ class _PositionCard extends StatelessWidget {
     required this.position,
     required this.members,
     required this.selected,
+    required this.notes,
     required this.unavailableIds,
     required this.onTap,
     required this.onRemove,
+    required this.onEditNote,
   });
 
   final Position position;
   final List<Member> members;
   final Set<String> selected;
+  final Map<String, String> notes;
   final Set<String> unavailableIds;
   final VoidCallback onTap;
   final ValueChanged<String> onRemove;
+  final ValueChanged<Member> onEditNote;
 
   @override
   Widget build(BuildContext context) {
@@ -673,6 +832,8 @@ class _PositionCard extends StatelessWidget {
                     outsideRegistration:
                         !member.positions.any((p) => p.id == position.id),
                     unavailable: unavailableIds.contains(member.id),
+                    note: notes[member.id],
+                    onEditNote: () => onEditNote(member),
                     onRemove: () => onRemove(member.id),
                   ),
               ],
@@ -688,12 +849,16 @@ class _SelectedChip extends StatelessWidget {
     required this.member,
     required this.outsideRegistration,
     required this.unavailable,
+    required this.note,
+    required this.onEditNote,
     required this.onRemove,
   });
 
   final Member member;
   final bool outsideRegistration;
   final bool unavailable;
+  final String? note;
+  final VoidCallback onEditNote;
   final VoidCallback onRemove;
 
   @override
@@ -759,6 +924,31 @@ class _SelectedChip extends StatelessWidget {
                 color: palette.onContainer,
               ),
             ],
+            Tooltip(
+              message: note == null ? 'Adicionar recado' : 'Editar recado',
+              child: Semantics(
+                button: true,
+                label: note == null
+                    ? 'Adicionar recado para ${member.displayName}'
+                    : 'Editar recado de ${member.displayName}: $note',
+                child: InkWell(
+                  onTap: onEditNote,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      note == null
+                          ? Icons.edit_note_outlined
+                          : Icons.sticky_note_2_rounded,
+                      size: 16,
+                      color: note == null
+                          ? palette.onContainer.withValues(alpha: 0.72)
+                          : palette.onContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 2),
             // O "x" herdava `onSurfaceVariant` seja qual fosse o fundo do chip
             // -- cinza sobre o vermelho de indisponível.
@@ -790,6 +980,7 @@ class _MemberPickerSheet extends StatefulWidget {
   const _MemberPickerSheet({
     required this.position,
     required this.members,
+    required this.rotation,
     required this.unavailableIds,
     required this.blockedReason,
     required this.onAddGuest,
@@ -799,6 +990,9 @@ class _MemberPickerSheet extends StatefulWidget {
 
   final Position position;
   final List<Member> members;
+
+  /// Nulo enquanto o relatório de rodízio não chegou.
+  final Map<String, RotationMember>? rotation;
   final Set<String> unavailableIds;
 
   /// Nulo = pode escalar. Texto = motivo do bloqueio, exibido na linha.
@@ -880,6 +1074,19 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   /// Convidados criados aqui dentro: a lista recebida por parâmetro só é
   /// recarregada quando a folha fecha.
   List<Member> _extraGuests = [];
+
+  /// O convidado fica de fora: ele não faz parte da equipe, e "sem escala no
+  /// último ano" ao lado do nome de quem foi chamado só para o dia diria algo
+  /// que não é sobre ele.
+  String? _rotationOf(Member member) {
+    final report = widget.rotation;
+    if (report == null || member.isGuest) return null;
+    return rotationSummary(
+      report[member.id],
+      weeks: rotationWeeks,
+      now: DateTime.now(),
+    );
+  }
 
   void _toggle(String membershipId) {
     setState(() {
@@ -970,6 +1177,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                       _PickerTile(
                         member: member,
                         checked: _working.contains(member.id),
+                        rotation: _rotationOf(member),
                         unavailable: widget.unavailableIds.contains(member.id),
                         blockedReason: widget.blockedReason(member),
                         onTap: () => _toggle(member.id),
@@ -989,6 +1197,7 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
                       _PickerTile(
                         member: member,
                         checked: _working.contains(member.id),
+                        rotation: _rotationOf(member),
                         outsideRegistration: true,
                         unavailable: widget.unavailableIds.contains(member.id),
                         blockedReason: widget.blockedReason(member),
@@ -1074,6 +1283,7 @@ class _PickerTile extends StatelessWidget {
     required this.member,
     required this.checked,
     required this.onTap,
+    this.rotation,
     this.outsideRegistration = false,
     this.unavailable = false,
     this.blockedReason,
@@ -1082,6 +1292,9 @@ class _PickerTile extends StatelessWidget {
   final Member member;
   final bool checked;
   final VoidCallback onTap;
+
+  /// "Há 3 semanas · 2 escalas em 8 semanas". Nulo = nada a mostrar.
+  final String? rotation;
   final bool outsideRegistration;
 
   /// A pessoa avisou que não pode no dia desta escala.
@@ -1166,6 +1379,16 @@ class _PickerTile extends StatelessWidget {
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: AppStatusColors.of(context).warning.foreground,
                           fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    // Cinza, e não uma cor de estado: é contexto para a
+                    // decisão do líder, não alarme. Escalar de novo quem tocou
+                    // ontem continua sendo legítimo.
+                    else if (rotation != null)
+                      Text(
+                        rotation!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                   ],

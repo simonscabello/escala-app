@@ -54,8 +54,7 @@ class EventDetailScreen extends ConsumerWidget {
         // Permissao e identidade vem da equipe DO CULTO, nao da primeira da
         // lista: quem participa de mais de uma equipe veria o menu de lider
         // num culto onde e apenas membro.
-        final myTeam =
-            teams.where((t) => t.teamId == event.teamId).firstOrNull;
+        final myTeam = teams.where((t) => t.teamId == event.teamId).firstOrNull;
         final myMembershipId = myTeam?.membershipId;
         final canManage = myTeam?.canManage ?? false;
 
@@ -63,13 +62,14 @@ class EventDetailScreen extends ConsumerWidget {
           appBar: AppBar(
             title: const Text('Escala'),
             actions: [
-              IconButton(
-                tooltip: 'Compartilhar escala',
-                onPressed: () => SharePlus.instance.share(
-                  ShareParams(text: buildScheduleShareText(event)),
+              if (!event.isDraft)
+                IconButton(
+                  tooltip: 'Compartilhar escala',
+                  onPressed: () => SharePlus.instance.share(
+                    ShareParams(text: buildScheduleShareText(event)),
+                  ),
+                  icon: const Icon(Icons.share_outlined),
                 ),
-                icon: const Icon(Icons.share_outlined),
-              ),
               if (canManage)
                 PopupMenuButton<String>(
                   tooltip: 'Mais opções desta escala',
@@ -85,6 +85,8 @@ class EventDetailScreen extends ConsumerWidget {
                           ref: ref,
                           source: event,
                         );
+                      case 'unpublish':
+                        await _confirmUnpublish(context, ref, event);
                       case 'delete':
                         await _confirmDelete(context, ref, event);
                     }
@@ -102,6 +104,11 @@ class EventDetailScreen extends ConsumerWidget {
                       const PopupMenuItem(
                         value: 'duplicate',
                         child: Text('Duplicar escala'),
+                      ),
+                    if (!event.isDraft)
+                      const PopupMenuItem(
+                        value: 'unpublish',
+                        child: Text('Voltar a rascunho'),
                       ),
                     // Em vermelho: é a única opção destrutiva do menu e estava
                     // com o mesmo peso visual das outras.
@@ -136,6 +143,8 @@ class EventDetailScreen extends ConsumerWidget {
               ),
             ),
           ),
+          bottomNavigationBar:
+              canManage && event.isDraft ? _PublishBar(event: event) : null,
         );
       },
     );
@@ -170,6 +179,132 @@ class EventDetailScreen extends ConsumerWidget {
       showAppSnackBar(context, error.message, tone: AppTone.danger);
     }
   }
+
+  Future<void> _confirmUnpublish(
+    BuildContext context,
+    WidgetRef ref,
+    Event event,
+  ) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Voltar a rascunho?',
+      message: 'A equipe deixa de ver esta escala até você publicá-la de novo.',
+      confirmLabel: 'Voltar a rascunho',
+    );
+    if (!confirmed || !context.mounted) return;
+
+    try {
+      await ref.read(eventRepositoryProvider).unpublish(event.id);
+      ref.invalidate(eventProvider(event.id));
+      ref.invalidate(eventsProvider((event.teamId, 'upcoming')));
+      ref.invalidate(eventsProvider((event.teamId, 'past')));
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          'A escala voltou a ser rascunho.',
+          tone: AppTone.warning,
+        );
+      }
+    } on ApiException catch (error) {
+      if (context.mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    }
+  }
+}
+
+class _PublishBar extends ConsumerStatefulWidget {
+  const _PublishBar({required this.event});
+
+  final Event event;
+
+  @override
+  ConsumerState<_PublishBar> createState() => _PublishBarState();
+}
+
+class _PublishBarState extends ConsumerState<_PublishBar> {
+  bool _publishing = false;
+
+  Future<void> _publish() async {
+    setState(() => _publishing = true);
+    try {
+      await ref.read(eventRepositoryProvider).publish(widget.event.id);
+      ref.invalidate(eventProvider(widget.event.id));
+      ref.invalidate(eventsProvider((widget.event.teamId, 'upcoming')));
+      ref.invalidate(eventsProvider((widget.event.teamId, 'past')));
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Escala publicada para a equipe.',
+          tone: AppTone.success,
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final pending = widget.event.publicationPendingItems;
+    final ready = pending.isEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: SafeArea(
+        child: AppContentWidth(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AppBadge(label: 'Rascunho', tone: AppTone.warning),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        ready
+                            ? 'Pronta para a equipe'
+                            : 'Falta ${pending.join(' e ')}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                FilledButton(
+                  onPressed: _publishing ? null : _publish,
+                  child: _publishing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Publicar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EventDetailBody extends StatelessWidget {
@@ -197,7 +332,8 @@ class _EventDetailBody extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       children: [
-        if (fromCache && cachedAt != null) CacheStampBanner(cachedAt: cachedAt!),
+        if (fromCache && cachedAt != null)
+          CacheStampBanner(cachedAt: cachedAt!),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.screenPadding,
@@ -229,10 +365,37 @@ class _EventDetailBody extends StatelessWidget {
               _TeamSection(event: event, canManage: canManage),
               const SizedBox(height: AppSpacing.xl),
               _SongsSection(event: event, canManage: canManage),
+              const SizedBox(height: AppSpacing.xl),
+              // Para a equipe inteira, e não dentro do menu de quem lidera:
+              // "quem me tirou da escala?" é pergunta de quem foi tirado.
+              _HistoryLink(eventId: event.id),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Porta do histórico, discreta e no fim da tela: ela não compete com a
+/// escala em si, que é o que se abre para ver.
+class _HistoryLink extends StatelessWidget {
+  const _HistoryLink({required this.eventId});
+
+  final String eventId;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () => context.push('/agenda/$eventId/historico'),
+        icon: const Icon(Icons.history_rounded, size: 18),
+        label: const Text('Histórico de alterações'),
+        style: TextButton.styleFrom(foregroundColor: scheme.onSurfaceVariant),
+      ),
     );
   }
 }

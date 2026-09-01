@@ -1,5 +1,5 @@
 name: louvor_app
-description: Escalas de louvor - app da equipe
+description: Louve! - escalas da equipe de louvor
 publish_to: "none"
 version: 0.1.0+1
 
@@ -32,6 +32,10 @@ dependencies:
   # Foto de perfil. A imagem ja sai reduzida do picker (ver profile_screen):
   # o backend aceita ate 5 MB, e foto de celular passa disso com folga.
   image_picker: ^1.1.2
+  # Lê a versão realmente instalada para comparar com GET /version. Manter
+  # isto automático evita um segundo número de versão esquecido no código.
+  # 9.x enquanto share_plus 12 fixa win32 5.x; a 10.x exige win32 6.x.
+  package_info_plus: ^9.0.1
   # Icones das funcoes (violao, bateria, mesa de som). O Material Icons do
   # Flutter nao tem instrumentos: so mic, piano e music_note. A fonte vai
   # empacotada no APK, sem download em runtime -- mesma razao da Plus Jakarta.
@@ -45,17 +49,21 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.4
 
-# Icone a partir de web/icons, com o azul da marca (AppColors.lightPrimary /
-# primaryContainer). Sem pasta ios neste projeto.
+# O arquivo cheio atende Android antigo; foreground e monochrome preservam as
+# camadas do ícone adaptativo e o ícone temático do Android 13+. As fontes são
+# geradas por tools/generate_brand_assets.py. Sem pasta ios neste projeto.
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: web/icons/Icon-512.png
-  adaptive_icon_background: "#DBE6FE"
-  adaptive_icon_foreground: web/icons/Icon-maskable-512.png
+  image_path: assets/branding/louve_icon.png
+  adaptive_icon_background: "#1D4ED8"
+  adaptive_icon_foreground: assets/branding/louve_foreground.png
+  adaptive_icon_monochrome: assets/branding/louve_monochrome.png
+  adaptive_icon_foreground_inset: 0
   web:
-    generate: true
-    image_path: web/icons/Icon-512.png
+    # O gerador do pacote usa a mesma imagem para ícones normais e maskable.
+    # Nossa fonte gera o normal com cantos transparentes e o maskable cheio.
+    generate: false
     background_color: "#1D4ED8"
     theme_color: "#1D4ED8"
 
