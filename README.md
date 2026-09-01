@@ -146,7 +146,51 @@ Para servir a pasta localmente e conferir o build:
 python -m http.server 8080 --directory build\web
 ```
 
-### Navegador × aplicativo: o que muda
+## Deploy Web — Railway
+
+O repositório já traz o que o Railway precisa para publicar o site: um
+`Dockerfile` de dois estágios (Flutter Web → Caddy) e um `Caddyfile`. Não há
+proxy da API neste container. O navegador continua chamando o backend em
+`API_BASE_URL`.
+
+Variáveis de **build** (o Caddy não as lê em runtime):
+
+| Variável | Obrigatória | Valor |
+| --- | --- | --- |
+| `API_BASE_URL` | sim | `https://backend-production-b304.up.railway.app` |
+| `FLUTTER_VERSION` | não | padrão `3.44.8` (stable deste projeto) |
+
+`API_BASE_URL` é a base, **sem** barra no fim e **sem** `/api/v1`. O
+`AppConfig` já monta `apiUrl = '$apiBaseUrl/api/v1'`. Com o prefixo na
+variável o site chama `/api/v1/api/v1` e tudo responde 404. O Dockerfile
+recusa build sem a variável ou com `/api/v1` no valor.
+
+`PORT` é injetada em runtime pelo Railway. Localmente é preciso passá-la.
+
+Build e execução locais:
+
+```bash
+docker build \
+  --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app \
+  --build-arg FLUTTER_VERSION=3.44.8 \
+  -t louve-web .
+```
+
+```powershell
+docker build --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app --build-arg FLUTTER_VERSION=3.44.8 -t louve-web .
+docker run --rm -e PORT=8080 -p 8080:8080 louve-web
+```
+
+O site fica em `http://localhost:8080`. O Caddy faz fallback de SPA
+(`try_files` → `index.html`), então uma rota como `/agenda` também devolve o
+Flutter em vez de 404. As rotas do app hoje usam hash
+(`https://site/#/agenda/<id>`); o fallback cobre um F5 em URL de caminho, se
+isso for adotado depois.
+
+O backend precisa aceitar a origem do site em `CORS_ORIGINS`. Sem isso o
+navegador recusa as chamadas à API.
+
+## Navegador × aplicativo: o que muda
 
 Nada de negócio. O que muda é a **arrumação**, e ela é decidida pela largura da
 janela — não pela plataforma. Reduzir o Chrome devolve a interface do celular.

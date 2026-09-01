@@ -1,0 +1,26 @@
+.git
+.idea
+.vscode
+.claude
+.superpowers
+.dart_tool
+.pub-cache
+.pub
+build
+coverage
+*.log
+*.iml
+**/*.iml
+.DS_Store
+Thumbs.db
+
+# Assinatura e fonte Android: o estágio de build só gera Web.
+android
+*.jks
+*.keystore
+
+# Nao entram em `flutter pub get` / `flutter build web`.
+test
+docs
+tools
+ios

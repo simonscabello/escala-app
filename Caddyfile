@@ -1,0 +1,28 @@
+{
+	admin off
+	persist_config off
+	auto_https off
+	log {
+		format json
+	}
+	servers {
+		trusted_proxies static private_ranges 100.0.0.0/8
+	}
+}
+
+:{$PORT:8080} {
+	root * /usr/share/caddy
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+
+	# HTML da casca e qualquer rota da SPA. Assets reais ficam de fora.
+	@html {
+		not path *.js *.css *.mjs *.wasm *.png *.jpg *.jpeg *.gif *.svg *.webp *.ico *.woff *.woff2 *.ttf *.otf *.json /canvaskit* /assets* /icons*
+	}
+	header @html Cache-Control "no-cache, no-store, must-revalidate"
+
+	header /flutter_service_worker.js Cache-Control "no-cache"
+	header /flutter_bootstrap.js Cache-Control "no-cache"
+	header /version.json Cache-Control "no-cache"
+}
