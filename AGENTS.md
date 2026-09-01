@@ -854,6 +854,45 @@ Contas de teste no banco local, ambas da equipe "Ministerio de Louvor":
 `mariaTeste2026` (MEMBER — serve para conferir os 403 sem depender de ler o
 código do guard).
 
+## Testes do backend
+
+Integração de verdade: sobem o `AppModule` inteiro contra um Postgres, com os
+mesmos `ValidationPipe`, filtro de exceção e prefixo do `main.ts`. É onde moram
+as coisas que quebram caladas — isolamento entre equipes, papéis, transações,
+regras de escalação — e nenhuma delas aparece num teste com o Prisma dublado.
+
+```
+cd backend
+docker compose exec api npm test              # a suíte inteira
+docker compose exec api npx jest test/x.spec.ts   # um arquivo
+docker compose exec api npx tsc --noEmit -p tsconfig.spec.json
+```
+
+- **Banco separado.** A suíte usa `louvor_test`, no mesmo Postgres do compose:
+  `test/setup/env.ts` troca a `DATABASE_URL` **antes** de qualquer import (o
+  `src/config/env.ts` valida o ambiente no import), e `global-setup` cria o
+  banco e roda `prisma migrate deploy`. Cada teste começa truncando todas as
+  tabelas — apontar isso para o banco de trabalho apagaria a equipe de verdade.
+- **`maxWorkers: 1`.** Um banco só, limpo entre testes. Paralelizar exigiria um
+  schema por worker, e a suíte inteira roda em menos de um minuto.
+- **Token assinado direto** (`ctx.tokenFor`), sem passar pelo login: o argon2 é
+  caro de propósito. O login de verdade tem teste próprio em `auth.spec.ts`.
+- **O rate limit é neutralizado trocando o `ThrottlerStorage`**, e não o guard:
+  `overrideGuard` não alcança um guard registrado como `APP_GUARD`, porque o
+  token do provider é `APP_GUARD` e não a classe.
+- **Não use `isolatedModules` no ts-jest.** Sem checagem de tipo, a primeira
+  versão desta suíte passava `SeededMember` onde a ajuda esperava `{ id }`,
+  assinava um token com `sub: undefined` e o teste de isolamento entre equipes
+  passava *pelo motivo errado* — filtro do Prisma com `undefined` deixa de
+  filtrar.
+
+O que a suíte cobre hoje: autenticação, isolamento entre equipes e papéis,
+rascunho/publicação, o corte da agenda pelo dia civil, regras de escalação,
+recado individual, trava de edição simultânea, histórico, repertório por culto,
+geração pela grade, duplicação, indisponibilidade, convites e os três
+relatórios. **Ainda sem teste**: cadastro de músicas, catálogo e busca externa,
+fotos de perfil e o CRUD de funções e integrantes.
+
 ## Convenções do backend
 
 - Módulos por feature em `src/modules/<nome>/` com `*.controller.ts`,
@@ -1000,9 +1039,12 @@ executado.
   exibir com selo "atualizado às HH:mm".
 - **Sem confirmação de presença** ("aceito/não posso"). Fora do MVP por decisão;
   o modelo suporta com uma coluna `status` em `assignments`.
-- **Sem teste automatizado no backend.** É justamente onde moram isolamento
-  entre equipes, permissões, duplicação, publicação e as regras de escalação.
-  Hoje a verificação é por `curl`, à mão, a cada mudança.
+- **Cobertura parcial no backend.** A suíte de integração cobre o núcleo (ver
+  a seção Testes do backend), mas cadastro de músicas, catálogo, busca externa,
+  fotos de perfil e o CRUD de funções e integrantes continuam verificados só
+  por `curl`, à mão.
+- **Sem CI.** Nada roda a suíte sozinho: `npm test`, `tsc` e `flutter test`
+  dependem de alguém lembrar antes de publicar.
 - **Sem notificação.** A escala publicada não avisa ninguém: a equipe continua
   descobrindo pelo WhatsApp, o que é metade do problema que o produto resolve.
 - **Sem modo culto offline.** O cache guarda agenda e detalhe, mas não garante
