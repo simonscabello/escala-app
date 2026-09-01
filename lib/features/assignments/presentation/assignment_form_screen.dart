@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -292,10 +294,11 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     required String teamId,
     required Map<String, RotationMember>? rotation,
   }) async {
-    await showModalBottomSheet<void>(
+    // No celular sobe do rodapé; no monitor abre no centro. O conteúdo é o
+    // mesmo widget nos dois casos.
+    await showAdaptiveSheet<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 560,
       builder: (sheetContext) => _MemberPickerSheet(
         position: position,
         members: members,
@@ -434,6 +437,24 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     List<Member> members,
     List<Position> positions,
   ) {
+    return LayoutBuilder(
+      builder: (context, constraints) => _form(
+        context,
+        event,
+        members,
+        positions,
+        constraints.maxWidth,
+      ),
+    );
+  }
+
+  Widget _form(
+    BuildContext context,
+    Event event,
+    List<Member> members,
+    List<Position> positions,
+    double available,
+  ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final activePositions = positions.where((p) => p.isActive).toList()
@@ -448,9 +469,150 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     final rotation =
         ref.watch(rotationProvider(event.teamId)).valueOrNull?.members;
 
+    void openPicker(Position position) => _openPicker(
+          position: position,
+          members: members,
+          positions: activePositions,
+          unavailableIds: unavailableIds,
+          teamId: event.teamId,
+          rotation: rotation,
+        );
+
+    void removeFrom(Position position, String membershipId) => setState(() {
+          final next = {...?_selected[position.id]}..remove(membershipId);
+          _selected[position.id] = next;
+          _dropMinisterIfUnassigned();
+        });
+
+    final minister = _MinisterPicker(
+      members: members,
+      assignedIds: _assignedIds,
+      ministerId: _ministerId,
+      enabled: !_saving,
+      onChanged: (id) => setState(() => _ministerId = id),
+    );
+
+    final summary = _SummaryBar(
+      people: _distinctPeople,
+      filled: _filledPositions,
+      total: activePositions.length,
+    );
+
+    final saveButton = AppSubmitButton(
+      label: widget.nextIsSetlist ? 'Salvar e escolher músicas' : 'Salvar escala',
+      loading: _saving,
+      onPressed: _save,
+    );
+
+    final replaceWarning = Text(
+      'Salvar substitui toda a equipe escalada.',
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: scheme.onSurfaceVariant,
+      ),
+    );
+
+    // No monitor, montar a escala deixa de ser uma rolagem.
+    //
+    // No celular a tarefa é: rolar até a função, tocar, escolher, voltar, rolar
+    // de novo — e o "quanto falta" fica no topo, fora da vista justamente
+    // enquanto se decide. Com 1024px de largura as duas metades da tarefa cabem
+    // lado a lado: as funções à esquerda, como uma tabela de uma superfície só,
+    // e à direita o que responde "acabou?" — o resumo, o ministrante e o botão,
+    // parados enquanto a lista rola.
+    //
+    // A escolha de quem entra continua sendo a **mesma** folha do celular; ela
+    // só aparece como diálogo (ver `showAdaptiveSheet`).
+    // 940 é a largura **disponível para esta tela** (janela menos a barra
+    // lateral), não a da janela: num monitor de 1024px com a barra aberta
+    // sobram 756px, e ali as duas colunas espremeriam a tabela de funções. Um
+    // 1280px deixa ~1010px e cabe com folga.
+    if (available >= 940) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Escalar equipe')),
+        body: SafeArea(
+          top: false,
+          child: AppContentWidth.wide(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppSpacing.xl,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(event.describe(), style: theme.textTheme.titleLarge),
+                  const SizedBox(height: AppSpacing.lg),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.xl,
+                            ),
+                            children: [
+                              _PositionsTable(
+                                positions: activePositions,
+                                members: members,
+                                selected: _selected,
+                                notes: _notes,
+                                unavailableIds: unavailableIds,
+                                onOpen: openPicker,
+                                onRemove: removeFrom,
+                                onEditNote: (position, member) => _editNote(
+                                  position: position,
+                                  member: member,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xl),
+                        SizedBox(
+                          width: 320,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.xl,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                summary,
+                                if (_error != null) ...[
+                                  const SizedBox(height: AppSpacing.lg),
+                                  FormErrorBanner(message: _error!),
+                                ],
+                                const SizedBox(height: AppSpacing.lg),
+                                // Depois das funções de propósito: só dá para
+                                // escolher o ministrante entre quem já foi
+                                // escalado.
+                                minister,
+                                const SizedBox(height: AppSpacing.lg),
+                                saveButton,
+                                const SizedBox(height: AppSpacing.md),
+                                replaceWarning,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Escalar equipe')),
-      body: AppContentWidth(
+      body: AppContentWidth.wide(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.xl,
@@ -461,11 +623,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           children: [
             Text(event.describe(), style: theme.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
-            _SummaryBar(
-              people: _distinctPeople,
-              filled: _filledPositions,
-              total: activePositions.length,
-            ),
+            summary,
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.lg),
               FormErrorBanner(message: _error!),
@@ -483,20 +641,8 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                       membershipId: note,
                 },
                 unavailableIds: unavailableIds,
-                onTap: () => _openPicker(
-                  position: position,
-                  members: members,
-                  positions: activePositions,
-                  unavailableIds: unavailableIds,
-                  teamId: event.teamId,
-                  rotation: rotation,
-                ),
-                onRemove: (membershipId) => setState(() {
-                  final next = {...?_selected[position.id]}
-                    ..remove(membershipId);
-                  _selected[position.id] = next;
-                  _dropMinisterIfUnassigned();
-                }),
+                onTap: () => openPicker(position),
+                onRemove: (membershipId) => removeFrom(position, membershipId),
                 onEditNote: (member) => _editNote(
                   position: position,
                   member: member,
@@ -507,21 +653,9 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
             const SizedBox(height: AppSpacing.lg),
             // Depois das funções de propósito: só dá para escolher o
             // ministrante entre quem já foi escalado.
-            _MinisterPicker(
-              members: members,
-              assignedIds: _assignedIds,
-              ministerId: _ministerId,
-              enabled: !_saving,
-              onChanged: (id) => setState(() => _ministerId = id),
-            ),
+            minister,
             const SizedBox(height: AppSpacing.lg),
-            Text(
-              'Salvar substitui toda a equipe escalada.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
+            replaceWarning,
           ],
         ),
       ),
@@ -531,7 +665,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
           border: Border(top: BorderSide(color: scheme.outlineVariant)),
         ),
         child: SafeArea(
-          child: AppContentWidth(
+          child: AppContentWidth.wide(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
@@ -539,16 +673,7 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
                 AppSpacing.xl,
                 AppSpacing.md,
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: AppSubmitButton(
-                  label: widget.nextIsSetlist
-                      ? 'Salvar e escolher músicas'
-                      : 'Salvar escala',
-                  loading: _saving,
-                  onPressed: _save,
-                ),
-              ),
+              child: SizedBox(width: double.infinity, child: saveButton),
             ),
           ),
         ),
@@ -557,6 +682,208 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
   }
 }
 
+/// As funções como uma tabela de uma superfície só — a versão de monitor da
+/// pilha de cartões.
+///
+/// **Uma superfície, não uma por função.** Oito cartões com borda própria numa
+/// coluna de 700px é o mural de fichas soltas que o `AppGroup` já resolveu no
+/// resto do app; aqui a mesma ideia dá também o alinhamento das colunas, que é
+/// o que faz a lista ser lida por coluna ("quais funções estão vazias?") em vez
+/// de item por item.
+class _PositionsTable extends StatelessWidget {
+  const _PositionsTable({
+    required this.positions,
+    required this.members,
+    required this.selected,
+    required this.notes,
+    required this.unavailableIds,
+    required this.onOpen,
+    required this.onRemove,
+    required this.onEditNote,
+  });
+
+  final List<Position> positions;
+  final List<Member> members;
+  final Map<String, Set<String>> selected;
+  final Map<(String, String), String> notes;
+  final Set<String> unavailableIds;
+  final ValueChanged<Position> onOpen;
+  final void Function(Position position, String membershipId) onRemove;
+  final void Function(Position position, Member member) onEditNote;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: scheme.surfaceContainerLow,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 200,
+                  child: Text('Função', style: AppTypography.eyebrow(context)),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Text(
+                    'Quem está escalado',
+                    style: AppTypography.eyebrow(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < positions.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+            _PositionRow(
+              position: positions[i],
+              members: members,
+              selected: selected[positions[i].id] ?? const <String>{},
+              notes: {
+                for (final membershipId
+                    in selected[positions[i].id] ?? const <String>{})
+                  if (notes[(positions[i].id, membershipId)] case final note?)
+                    membershipId: note,
+              },
+              unavailableIds: unavailableIds,
+              onOpen: () => onOpen(positions[i]),
+              onRemove: (membershipId) => onRemove(positions[i], membershipId),
+              onEditNote: (member) => onEditNote(positions[i], member),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Uma função como linha da tabela: nome à esquerda, escalados no meio, a ação
+/// à direita — sempre no mesmo lugar, para o clique não ter de ser procurado.
+class _PositionRow extends StatelessWidget {
+  const _PositionRow({
+    required this.position,
+    required this.members,
+    required this.selected,
+    required this.notes,
+    required this.unavailableIds,
+    required this.onOpen,
+    required this.onRemove,
+    required this.onEditNote,
+  });
+
+  final Position position;
+  final List<Member> members;
+  final Set<String> selected;
+  final Map<String, String> notes;
+  final Set<String> unavailableIds;
+  final VoidCallback onOpen;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<Member> onEditNote;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final chosen =
+        members.where((m) => selected.contains(m.id)).toList(growable: false);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 200,
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: chosen.isEmpty
+                        ? scheme.surfaceContainerHigh
+                        : scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Center(
+                    child: PositionIcon(
+                      position.name,
+                      category: position.category,
+                      size: 16,
+                      color: chosen.isEmpty
+                          ? scheme.onSurfaceVariant
+                          : scheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    position.name,
+                    style: theme.textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: chosen.isEmpty
+                ? Text(
+                    'Ninguém escalado',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  )
+                : Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final member in chosen)
+                        _SelectedChip(
+                          member: member,
+                          // Escalar fora do cadastro é permitido (regra 18); o
+                          // chip sinaliza, não impede.
+                          outsideRegistration:
+                              !member.positions.any((p) => p.id == position.id),
+                          unavailable: unavailableIds.contains(member.id),
+                          note: notes[member.id],
+                          onEditNote: () => onEditNote(member),
+                          onRemove: () => onRemove(member.id),
+                        ),
+                    ],
+                  ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          // Botão com palavra, e não só um ícone: é a ação da linha, e "+"
+          // sozinho num monitor não diz se acrescenta pessoa ou função.
+          TextButton.icon(
+            onPressed: onOpen,
+            icon: Icon(
+              chosen.isEmpty ? Icons.add_rounded : Icons.edit_outlined,
+              size: 18,
+            ),
+            label: Text(chosen.isEmpty ? 'Escolher' : 'Alterar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 /// Responde "quanto falta?" sem o líder ter de rolar a lista inteira.
 class _SummaryBar extends StatelessWidget {
   const _SummaryBar({

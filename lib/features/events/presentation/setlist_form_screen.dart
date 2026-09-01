@@ -289,7 +289,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
           border: Border(top: BorderSide(color: scheme.outlineVariant)),
         ),
         child: SafeArea(
-          child: AppContentWidth(
+          child: AppContentWidth.reading(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
@@ -313,7 +313,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: Column(
             children: [
               if (_error != null)

@@ -1,6 +1,8 @@
 # Escalas de Louvor — App
 
-App Flutter (Android no MVP) para a equipe ver e o líder montar escalas.
+App Flutter para a equipe ver e o líder montar escalas. **Um projeto, duas
+plataformas**: o aplicativo Android e a versão Web para desktop saem do mesmo
+código, com as mesmas regras, os mesmos modelos e a mesma API.
 
 Projeto **independente** do backend: só se comunicam por HTTP. Arquitetura e
 convenções: [`AGENTS.md`](AGENTS.md) e [`docs/`](docs/).
@@ -40,11 +42,18 @@ Celular físico — IP da máquina + firewall na porta 3000:
 flutter run --dart-define=API_BASE_URL=http://192.168.0.10:3000
 ```
 
-Web:
+### Web
 
 ```powershell
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000
 ```
+
+`http://localhost:3000` e não `10.0.2.2`: o navegador roda no Windows, e
+`10.0.2.2` só existe dentro do emulador Android.
+
+O backend precisa aceitar a origem do Chrome. Em desenvolvimento o padrão de
+`CORS_ORIGINS` é `*`, e nada precisa ser configurado; em produção veja
+[Publicar a versão Web](#publicar-a-versão-web).
 
 ## Análise e testes
 
@@ -97,14 +106,72 @@ com o keystore definitivo.
 O procedimento completo de Railway, versão, assinatura e publicação está em
 [`../docs/DEPLOY.md`](../docs/DEPLOY.md).
 
+### Publicar a versão Web
+
+```powershell
+flutter build web --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+```
+
+A saída fica em `build/web`. É um site estático: sirva a pasta inteira em
+qualquer hospedagem (Netlify, Vercel, Cloudflare Pages, GitHub Pages, Nginx).
+
+Três coisas para não esquecer:
+
+1. **CORS no backend.** A API só responde ao navegador se o domínio do site
+   estiver em `CORS_ORIGINS`. Em produção `*` é recusado no boot, então some o
+   domínio à lista, sem barra no fim:
+
+   ```text
+   CORS_ORIGINS=https://escalas.suaigreja.com
+   ```
+
+   As fotos de perfil (`/uploads/...`) são servidas fora do `enableCors`, com
+   `Access-Control-Allow-Origin: *` próprio — são arquivos públicos, sem cookie
+   e sem token. Ver `backend/src/main.ts`.
+
+2. **As rotas usam `#`** (a estratégia padrão do go_router na Web):
+   `https://seusite/#/agenda/<id>`. Isso é deliberado — com hash, **nenhuma**
+   configuração de servidor é necessária: recarregar a página em qualquer rota
+   funciona, porque o servidor só vê `/`. Se um dia a URL sem `#` for desejada,
+   troque para `PathUrlStrategy` **e** configure o *SPA fallback* da hospedagem
+   (toda rota desconhecida serve `index.html`); sem isso, um F5 em
+   `/agenda/<id>` devolve 404.
+
+3. **A URL da API é de build**, como no APK: sem o `--dart-define` o site
+   aponta para `10.0.2.2:3000` e não fala com ninguém.
+
+Para servir a pasta localmente e conferir o build:
+
+```powershell
+python -m http.server 8080 --directory build\web
+```
+
+### Navegador × aplicativo: o que muda
+
+Nada de negócio. O que muda é a **arrumação**, e ela é decidida pela largura da
+janela — não pela plataforma. Reduzir o Chrome devolve a interface do celular.
+
+| Largura | Navegação | Conteúdo |
+| --- | --- | --- |
+| < 600px | barra inferior de três abas | uma coluna |
+| 600–1024px | barra lateral recolhida (ícones) | uma coluna, com folga |
+| > 1024px | barra lateral aberta | colunas alinhadas, tabelas, painéis |
+
+Os pontos de quebra vivem em `lib/core/responsive/app_breakpoints.dart`.
+
 ## Estrutura
 
 ```
 lib/
 ├─ main.dart
-├─ core/          config, network, router, theme, storage
+├─ core/          config, network, router, theme, storage, responsive
 ├─ features/      auth, team, invites, events, assignments, ...
 └─ shared/        widgets reutilizaveis
 ```
+
+`core/responsive/` guarda os pontos de quebra (`app_breakpoints.dart`), o
+`ResponsiveLayout`/`ResponsiveBuilder` e o `showAdaptiveSheet` — folha no
+celular, diálogo no monitor. **Não há `kIsWeb` espalhado pelas telas**: quem
+decide o formato é a largura da janela.
 
 Stack: Riverpod, go_router, Dio. Modelos à mão (sem freezed/build_runner).

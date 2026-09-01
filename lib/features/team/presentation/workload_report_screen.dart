@@ -35,7 +35,7 @@ class _WorkloadReportScreenState extends ConsumerState<WorkloadReportScreen> {
       appBar: AppBar(title: const Text('Participação da equipe')),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.wide(
           child: Column(
             children: [
               Padding(

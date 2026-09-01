@@ -111,7 +111,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
           : null,
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.wide(
           child: Column(
             children: [
               Padding(

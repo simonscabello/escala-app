@@ -47,7 +47,7 @@ class PositionsScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: positions.when(
             loading: () => const AppListSkeleton(itemCount: 5),
             error: (error, _) => AppErrorState(

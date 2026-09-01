@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -19,6 +19,11 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Escalas de louvor - app da equipe">
+  <!-- Sem isto o navegador de celular renderiza a pagina numa viewport de
+       980px e reduz tudo: a versao Web abria com a letra minuscula no telefone
+       e nao respondia aos pontos de quebra. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="theme-color" content="#1D4ED8">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,8 +36,98 @@
 
   <title>Louve!</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* A abertura, antes de o Flutter existir.
+
+       Entre abrir a pagina e o primeiro quadro renderizado o navegador baixa e
+       compila alguns megabytes: sem nada aqui, o que se ve nesse intervalo e
+       uma pagina branca -- e branco puro, alem de parecer travamento, e um
+       clarao para quem abriu o app no escuro. Esta tela repete o azul e a
+       marca da splash do aplicativo, entao a transicao para o primeiro quadro
+       do Flutter nao tem troca de cor nem de identidade.
+
+       Ela se remove sozinha no evento `flutter-first-frame`, que o proprio
+       Flutter dispara. Nao ha temporizador: se a compilacao demorar, a
+       abertura fica -- o que e correto -- em vez de sumir cedo e devolver o
+       branco. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #1D4ED8;
+    }
+
+    #louve-boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background-color: #1D4ED8;
+      color: #FFFFFF;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity 200ms ease-out;
+      z-index: 10;
+    }
+
+    #louve-boot.is-done {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #louve-boot .name {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    #louve-boot .tagline {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    #louve-boot .spinner {
+      width: 26px;
+      height: 26px;
+      border: 2.5px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #FFFFFF;
+      border-radius: 50%;
+      animation: louve-spin 900ms linear infinite;
+    }
+
+    /* Quem pediu menos movimento no sistema nao ganha uma rodinha girando. */
+    @media (prefers-reduced-motion: reduce) {
+      #louve-boot .spinner { animation: none; }
+      #louve-boot { transition: none; }
+    }
+
+    @keyframes louve-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div id="louve-boot">
+    <img src="icons/Icon-192.png" width="72" height="72" alt="">
+    <div class="name">Louve!</div>
+    <div class="tagline">Sua escala, clara e no lugar certo.</div>
+    <div class="spinner"></div>
+  </div>
+
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var boot = document.getElementById('louve-boot');
+      if (!boot) return;
+      boot.classList.add('is-done');
+      // Removido de vez depois da transicao: um elemento fixo com
+      // `pointer-events: none` ainda apareceria no leitor de tela.
+      window.setTimeout(function () { boot.remove(); }, 260);
+    });
+  </script>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

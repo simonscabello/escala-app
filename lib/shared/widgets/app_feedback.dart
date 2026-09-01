@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/responsive/app_breakpoints.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_status_colors.dart';
 
@@ -21,7 +22,6 @@ void showAppSnackBar(
 }) {
   final scheme = Theme.of(context).colorScheme;
   final palette = AppStatusColors.of(context).resolve(tone, scheme);
-  final width = MediaQuery.sizeOf(context).width;
 
   final icon = switch (tone) {
     AppTone.success => Icons.check_circle_rounded,
@@ -40,7 +40,7 @@ void showAppSnackBar(
         duration: Duration(seconds: tone == AppTone.danger ? 6 : 4),
         // Numa janela larga a barra atravessava o monitor inteiro para dizer
         // duas palavras, longe de onde o olho estava.
-        width: width > AppSpacing.wideBreakpoint ? 520 : null,
+        width: AppBreakpoints.of(context).isWide ? 520 : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           side: BorderSide(color: palette.foreground.withValues(alpha: 0.35)),

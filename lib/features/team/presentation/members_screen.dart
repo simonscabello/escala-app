@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -42,6 +44,7 @@ class MembersScreen extends ConsumerWidget {
             .firstOrNull ??
         ref.watch(authControllerProvider).teams.firstOrNull;
     final canManage = myTeam?.canManage ?? false;
+    final wide = AppBreakpoints.of(context).isWide;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,15 +53,30 @@ class MembersScreen extends ConsumerWidget {
           // Uma entrada só. Antes eram dois ícones — corrente e igreja — e
           // ninguém adivinha que "corrente" leva a convites. Cada configuração
           // nova acrescentaria mais um ícone mudo aqui.
-          if (canManage)
+          //
+          // No monitor ele sai: a barra lateral já lista "Gerenciar equipe" com
+          // nome escrito, e duas portas para o mesmo lugar na mesma tela é uma
+          // a mais.
+          if (canManage && !wide)
             IconButton(
               tooltip: 'Gerenciar equipe',
               icon: const Icon(Icons.settings_outlined),
               onPressed: () => context.push('/equipe/gerenciar'),
             ),
+          if (canManage && wide)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.lg),
+              child: FilledButton.icon(
+                onPressed: () => context.push('/equipe/membros/novo'),
+                icon: const Icon(Icons.person_add_rounded, size: 18),
+                label: const Text('Adicionar integrante'),
+              ),
+            ),
         ],
       ),
-      floatingActionButton: canManage
+      // Mesma razão da agenda: o botão flutuante é o canto que o polegar
+      // alcança. Com mouse, a ação principal vai para o cabeçalho.
+      floatingActionButton: canManage && !wide
           ? FloatingActionButton.extended(
               onPressed: () => context.push('/equipe/membros/novo'),
               icon: const Icon(Icons.person_add_rounded),
@@ -67,70 +85,309 @@ class MembersScreen extends ConsumerWidget {
           : null,
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.wide(
           child: members.when(
-            loading: () => const AppListSkeleton(itemCount: 5, leadingBlock: true),
+            loading: () =>
+                const AppListSkeleton(itemCount: 5, leadingBlock: true),
             error: (error, _) => AppErrorState(
               message: error is ApiException
                   ? error.message
                   : 'Não foi possível carregar a equipe.',
               onRetry: () => ref.invalidate(membersProvider(teamId)),
             ),
-            data: (list) => RefreshIndicator(
-              onRefresh: () async => ref.refresh(membersProvider(teamId).future),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.listPadding,
-                  AppSpacing.lg,
-                  AppSpacing.listPadding,
-                  96,
-                ),
-                children: [
-                  AppGroup(
-                    children: [
-                      AppGroupRow(
-                        icon: Icons.library_music_outlined,
-                        title: 'Repertório',
-                        subtitle:
-                            'As músicas da equipe, com letra, cifra e tom',
-                        onTap: () => context.push('/equipe/musicas'),
-                      ),
-                    ],
+            data: (list) => LayoutBuilder(
+              builder: (context, constraints) => RefreshIndicator(
+                onRefresh: () async =>
+                    ref.refresh(membersProvider(teamId).future),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.listPadding,
+                    AppSpacing.lg,
+                    AppSpacing.listPadding,
+                    wide ? AppSpacing.xxl : 96,
                   ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  if (list.isEmpty) ...[
-                    const SectionHeader(title: 'Integrantes'),
-                    _NoMembers(canManage: canManage),
-                  ] else
-                    // Uma superfície para a equipe inteira, e não um cartão por
-                    // pessoa. Doze integrantes viravam doze retângulos com
-                    // borda e margem própria: a tela parecia um mural de fichas
-                    // soltas, quando o que existe ali é **uma** lista.
+                  children: [
                     AppGroup(
-                      title: 'Integrantes',
-                      dividerIndent: AppSpacing.lg + 40 + AppSpacing.md,
-                      trailing: AppBadge(
-                        label: '${list.length}',
-                        semanticsLabel: list.length == 1
-                            ? '1 integrante'
-                            : '${list.length} integrantes',
-                      ),
                       children: [
-                        for (final member in list)
-                          _MemberRow(
-                            member: member,
-                            teamId: teamId,
-                            canManage: canManage,
-                          ),
+                        AppGroupRow(
+                          icon: Icons.library_music_outlined,
+                          title: 'Repertório',
+                          subtitle:
+                              'As músicas da equipe, com letra, cifra e tom',
+                          onTap: () => context.push('/equipe/musicas'),
+                        ),
                       ],
                     ),
-                ],
+                    const SizedBox(height: AppSpacing.xxl),
+                    if (list.isEmpty) ...[
+                      const SectionHeader(title: 'Integrantes'),
+                      _NoMembers(canManage: canManage),
+                    ] else if (constraints.maxWidth >= 860)
+                      // A largura da **lista**, e não a da janela: com a barra
+                      // lateral aberta um monitor de 1024px deixa ~700px aqui,
+                      // e as quatro colunas da tabela precisam de 860 para não
+                      // se espremerem. Abaixo disso a mesma equipe volta a ser
+                      // a lista do celular, que continua correta.
+                      _MembersTable(
+                        members: list,
+                        teamId: teamId,
+                        canManage: canManage,
+                      )
+                    else
+                      // Uma superfície para a equipe inteira, e não um cartão
+                      // por pessoa. Doze integrantes viravam doze retângulos
+                      // com borda e margem própria: a tela parecia um mural de
+                      // fichas soltas, quando o que existe ali é **uma** lista.
+                      AppGroup(
+                        title: 'Integrantes',
+                        dividerIndent: AppSpacing.lg + 40 + AppSpacing.md,
+                        trailing: AppBadge(
+                          label: '${list.length}',
+                          semanticsLabel: list.length == 1
+                              ? '1 integrante'
+                              : '${list.length} integrantes',
+                        ),
+                        children: [
+                          for (final member in list)
+                            _MemberRow(
+                              member: member,
+                              teamId: teamId,
+                              canManage: canManage,
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A equipe como tabela, onde há largura para isso.
+///
+/// **É a mesma lista, com as colunas alinhadas.** No celular cada pessoa é um
+/// bloco que se lê inteiro antes de passar ao próximo; num monitor, com doze
+/// integrantes, a pergunta muda: "quem toca guitarra?", "quem ainda não tem
+/// conta?". Essas se respondem varrendo uma coluna, e para isso os campos
+/// precisam começar sempre no mesmo x. Nenhum campo novo entrou — são os
+/// mesmos do cartão, postos lado a lado.
+class _MembersTable extends StatelessWidget {
+  const _MembersTable({
+    required this.members,
+    required this.teamId,
+    required this.canManage,
+  });
+
+  final List<Member> members;
+  final String teamId;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          title: 'Integrantes',
+          trailing: AppBadge(
+            label: '${members.length}',
+            semanticsLabel: members.length == 1
+                ? '1 integrante'
+                : '${members.length} integrantes',
+          ),
+          padding: const EdgeInsets.only(
+            left: AppSpacing.xs,
+            bottom: AppSpacing.md,
+          ),
+        ),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                color: scheme.surfaceContainerLow,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 260,
+                      child:
+                          Text('Pessoa', style: AppTypography.eyebrow(context)),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: Text(
+                        'Funções',
+                        style: AppTypography.eyebrow(context),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    SizedBox(
+                      width: 150,
+                      child:
+                          Text('Conta', style: AppTypography.eyebrow(context)),
+                    ),
+                    // Largura do menu, para o cabeçalho não desalinhar das
+                    // linhas que o têm.
+                    const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+              for (var i = 0; i < members.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: scheme.outlineVariant,
+                  ),
+                _MemberTableRow(
+                  member: members[i],
+                  teamId: teamId,
+                  canManage: canManage,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberTableRow extends ConsumerWidget {
+  const _MemberTableRow({
+    required this.member,
+    required this.teamId,
+    required this.canManage,
+  });
+
+  final Member member;
+  final String teamId;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: canManage
+          ? () => context.push('/equipe/membros/editar', extra: member)
+          : null,
+      // Sem `hoverColor` o mouse não recebe resposta nenhuma numa linha que é
+      // clicável — no toque o respingo basta, com cursor não.
+      hoverColor: scheme.onSurface.withValues(alpha: 0.04),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 260,
+              child: Row(
+                children: [
+                  AppAvatar(
+                    name: member.displayName,
+                    imageUrl: member.avatarUrl,
+                    radius: 18,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      member.displayName,
+                      style: theme.textTheme.titleSmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (member.role != 'MEMBER') ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    AppBadge(label: member.roleLabel, tone: AppTone.primary),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: member.positions.isEmpty
+                  ? Text(
+                      'Sem função definida',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Wrap(
+                      spacing: AppSpacing.md,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        for (final position in member.positions)
+                          _PositionLabel(position: position),
+                      ],
+                    ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            SizedBox(
+              width: 150,
+              child: member.hasAccount
+                  ? Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Tem conta',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const AppBadge(
+                      label: 'Sem conta',
+                      tone: AppTone.warning,
+                    ),
+            ),
+            SizedBox(
+              width: 48,
+              child: canManage && !member.isOwner
+                  ? _MemberMenu(member: member, teamId: teamId)
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PositionLabel extends StatelessWidget {
+  const _PositionLabel({required this.position});
+
+  final Position position;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PositionIcon(position.name, category: position.category, size: 12),
+        const SizedBox(width: 5),
+        Text(position.name, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }
@@ -245,21 +502,7 @@ class _MemberRow extends ConsumerWidget {
                   runSpacing: AppSpacing.xs,
                   children: [
                     for (final position in member.positions)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          PositionIcon(
-                            position.name,
-                            category: position.category,
-                            size: 12,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            position.name,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
+                      _PositionLabel(position: position),
                   ],
                 ),
               ),
@@ -276,32 +519,40 @@ class _MemberRow extends ConsumerWidget {
           ],
         ),
         trailing: canManage && !member.isOwner
-            ? PopupMenuButton<String>(
-                tooltip: 'Opções de ${member.displayName}',
-                onSelected: (action) => _onAction(context, ref, action),
-                itemBuilder: (menuContext) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                  // Só para quem ainda não tem conta: é a linha em que o líder
-                  // percebe que falta convidar, e até aqui o caminho era sair
-                  // desta lista e procurar "Convites" nas configurações.
-                  if (!member.hasAccount)
-                    const PopupMenuItem(
-                      value: 'invite',
-                      child: Text('Convidar'),
-                    ),
-                  PopupMenuItem(
-                    value: 'remove',
-                    child: Text(
-                      'Remover da equipe',
-                      style: TextStyle(
-                        color: Theme.of(menuContext).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                ],
-              )
+            ? _MemberMenu(member: member, teamId: teamId)
             : null,
       ),
+    );
+  }
+}
+
+/// Editar, convidar e remover — o mesmo menu nas duas arrumações.
+class _MemberMenu extends ConsumerWidget {
+  const _MemberMenu({required this.member, required this.teamId});
+
+  final Member member;
+  final String teamId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      tooltip: 'Opções de ${member.displayName}',
+      onSelected: (action) => _onAction(context, ref, action),
+      itemBuilder: (menuContext) => [
+        const PopupMenuItem(value: 'edit', child: Text('Editar')),
+        // Só para quem ainda não tem conta: é a linha em que o líder percebe
+        // que falta convidar, e até aqui o caminho era sair desta lista e
+        // procurar "Convites" nas configurações.
+        if (!member.hasAccount)
+          const PopupMenuItem(value: 'invite', child: Text('Convidar')),
+        PopupMenuItem(
+          value: 'remove',
+          child: Text(
+            'Remover da equipe',
+            style: TextStyle(color: Theme.of(menuContext).colorScheme.error),
+          ),
+        ),
+      ],
     );
   }
 

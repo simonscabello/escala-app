@@ -74,7 +74,7 @@ class SongDetailScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: song.when(
             loading: () => const AppLoading(),
             error: (error, _) => AppErrorState(

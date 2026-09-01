@@ -31,7 +31,7 @@ class EventHistoryScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Histórico da escala')),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: history.when(
             loading: () => const AppListSkeleton(itemCount: 5),
             error: (error, _) => AppErrorState(

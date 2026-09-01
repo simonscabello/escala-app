@@ -6,6 +6,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_states.dart';
 import '../data/health_repository.dart';
 
 /// Diagnóstico de conectividade. Acessível mesmo deslogado, porque é
@@ -31,12 +32,10 @@ class HealthScreen extends ConsumerWidget {
               children: [
                 const SizedBox(height: AppSpacing.xl),
                 health.when(
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(AppSpacing.xxl),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
+                  // O mesmo indicador do resto do app, e não mais um
+                  // `CircularProgressIndicator` montado à mão: eram três
+                  // desenhos diferentes de "espere" em três telas.
+                  loading: () => const AppLoading(),
                   error: (error, _) => _StatusCard(
                     icon: Icons.cloud_off_rounded,
                     palette: status.danger,

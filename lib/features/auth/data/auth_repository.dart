@@ -55,10 +55,23 @@ class AuthRepository {
     });
   }
 
-  Future<AuthUser> uploadAvatar(String filePath) async {
+  /// Envia a foto como **bytes**, e não como caminho de arquivo.
+  ///
+  /// `MultipartFile.fromFile` usa `dart:io`, que não existe no navegador: no
+  /// Flutter Web o `path` de um `XFile` é uma URL `blob:` e a chamada falha em
+  /// tempo de execução. Ler os bytes funciona nas duas plataformas com o mesmo
+  /// código, sem `kIsWeb` em lugar nenhum.
+  ///
+  /// O `filename` vai junto só para o servidor ter um nome no multipart — o
+  /// backend não confia nele: ele decide o tipo pela assinatura do conteúdo
+  /// (ver `StorageService.saveImage`) e grava com um UUID próprio.
+  Future<AuthUser> uploadAvatar({
+    required List<int> bytes,
+    required String filename,
+  }) async {
     try {
       final form = FormData.fromMap({
-        'file': await MultipartFile.fromFile(filePath),
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
       });
 
       final response = await _dio.post<Map<String, dynamic>>(

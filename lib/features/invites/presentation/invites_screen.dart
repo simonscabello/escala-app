@@ -45,7 +45,7 @@ class InvitesScreen extends ConsumerWidget {
       // navegacao do Android -- o fim da lista ficava por baixo deles.
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: invites.when(
             loading: () => const AppListSkeleton(itemCount: 3),
             error: (error, _) => AppErrorState(

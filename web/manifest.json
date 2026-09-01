@@ -6,7 +6,7 @@
     "background_color": "#1D4ED8",
     "theme_color": "#1D4ED8",
     "description": "Louve! - escalas da equipe de louvor",
-    "orientation": "portrait-primary",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

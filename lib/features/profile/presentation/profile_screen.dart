@@ -33,7 +33,7 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Perfil')),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.screenPadding),
             children: [

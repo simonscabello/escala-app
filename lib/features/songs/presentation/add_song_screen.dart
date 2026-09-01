@@ -196,7 +196,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       appBar: AppBar(title: const Text('Adicionar música')),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: Column(
             children: [
               Padding(

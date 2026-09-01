@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/responsive/app_breakpoints.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_status_colors.dart';
 import 'app_brand_mark.dart';
@@ -40,8 +41,12 @@ class FormScaffold extends StatelessWidget {
               vertical: AppSpacing.xxl,
             ),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppSpacing.formMaxWidth,
+              constraints: BoxConstraints(
+                // Mesma coluna de sempre no celular e no tablet; um pouco mais
+                // larga no monitor (ver `formMaxWidthDesktop`).
+                maxWidth: AppBreakpoints.of(context).isDesktop
+                    ? AppBreakpoints.formMaxWidthDesktop
+                    : AppSpacing.formMaxWidth,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

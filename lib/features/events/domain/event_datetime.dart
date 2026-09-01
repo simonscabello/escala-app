@@ -55,6 +55,16 @@ String formatEventShortWeekday(DateTime utc, String timezone) {
   return DateFormat('EEE', 'pt_BR').format(localTime).replaceAll('.', '');
 }
 
+/// "sáb 09/08" — a escala identificada no menor espaço que ainda a identifica.
+///
+/// Existe para colunas estreitas (o painel lateral da agenda no monitor), onde
+/// "Sábado, 9 de agosto" não cabe e só o número do dia não diz nada.
+String formatEventShortDate(DateTime utc, String timezone) {
+  final localTime = eventLocalTime(utc, timezone);
+  return '${formatEventShortWeekday(utc, timezone)} '
+      '${DateFormat('dd/MM', 'pt_BR').format(localTime)}';
+}
+
 /// O dia da semana por extenso e em minúscula, **sem o "-feira"**: "sábado",
 /// "quinta".
 ///

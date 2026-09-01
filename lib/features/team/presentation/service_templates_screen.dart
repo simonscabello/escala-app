@@ -52,7 +52,7 @@ class ServiceTemplatesScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: templates.when(
             loading: () => const AppListSkeleton(itemCount: 4),
             error: (error, _) => AppErrorState(

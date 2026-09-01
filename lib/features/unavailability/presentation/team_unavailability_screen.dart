@@ -84,7 +84,7 @@ class _TeamUnavailabilityScreenState
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.wide(
           child: Column(
             children: [
               _MonthHeader(

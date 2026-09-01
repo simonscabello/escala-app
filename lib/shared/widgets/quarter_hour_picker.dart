@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/responsive/adaptive_dialog.dart';
 import '../../core/theme/app_spacing.dart';
 
 /// Seletor de hora em passos de 15 minutos.
@@ -15,9 +16,12 @@ Future<TimeOfDay?> showQuarterHourPicker({
   required TimeOfDay initialTime,
   String title = 'Escolha o horário',
 }) {
-  return showModalBottomSheet<TimeOfDay>(
+  // Folha no celular, dialogo no monitor. As duas rodas sao as mesmas; muda so
+  // onde elas aparecem -- no navegador, um seletor de horario subindo do rodape
+  // de uma janela alta fica longe do campo que a pessoa acabou de clicar.
+  return showAdaptiveSheet<TimeOfDay>(
     context: context,
-    showDragHandle: true,
+    maxWidth: 420,
     builder: (sheetContext) => _QuarterHourSheet(
       initialTime: initialTime,
       title: title,

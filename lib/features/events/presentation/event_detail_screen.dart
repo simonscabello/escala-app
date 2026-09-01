@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
@@ -16,6 +15,7 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/share_action.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
@@ -65,9 +65,8 @@ class EventDetailScreen extends ConsumerWidget {
               if (!event.isDraft)
                 IconButton(
                   tooltip: 'Compartilhar escala',
-                  onPressed: () => SharePlus.instance.share(
-                    ShareParams(text: buildScheduleShareText(event)),
-                  ),
+                  onPressed: () =>
+                      shareText(context, buildScheduleShareText(event)),
                   icon: const Icon(Icons.share_outlined),
                 ),
               if (canManage)
@@ -130,7 +129,7 @@ class EventDetailScreen extends ConsumerWidget {
           // entao ninguem estava consumindo o recuo do sistema.
           body: SafeArea(
             top: false,
-            child: AppContentWidth(
+            child: AppContentWidth.reading(
               child: RefreshIndicator(
                 onRefresh: () => ref.refresh(eventProvider(eventId).future),
                 child: _EventDetailBody(
@@ -261,7 +260,7 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
         border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       child: SafeArea(
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.xl,

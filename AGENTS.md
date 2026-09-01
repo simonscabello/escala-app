@@ -55,6 +55,8 @@ PATH global**; prefixe a sessão do PowerShell:
 - `$env:PATH = 'C:\Users\Acer\flutter\bin;' + $env:PATH`
 - `cd app; flutter analyze` — precisa terminar com "No issues found!"
 - `cd app; flutter test`
+- versão Web local: `cd app; flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000`
+- site estático: `cd app; flutter build web --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app` (saída em `app/build/web`)
 - APK para o celular (aponta para produção):
   `cd app; flutter build apk --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app`
 - APK contra o backend local (só serve no emulador):
@@ -101,6 +103,111 @@ O que o plano ainda prevê e **não** foi feito: notificações push de publica�
 e alteração, modo culto offline (letra garantida sem rede), solicitação de
 troca pelo integrante, link web somente leitura da escala, sugestão assistida
 de escalação e testes automatizados do backend.
+
+
+## Versão Web — mesma base, outra arrumação
+
+O app roda no navegador a partir do **mesmo** `lib/`. Não há projeto separado,
+não há segundo frontend e não há regra de negócio duplicada: providers,
+modelos, repositórios, Dio, tema e rotas são os mesmos do Android.
+
+O que muda é o **formato da tela**, e quem decide isso é a largura da janela —
+não a plataforma. Reduzir o Chrome devolve a interface do celular; um tablet
+Android ganha a barra lateral pelo mesmo motivo que o monitor ganha. **Não há
+`kIsWeb` nas telas.**
+
+### Rodar e publicar
+
+```powershell
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3000
+flutter build web --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+```
+
+`localhost:3000`, não `10.0.2.2` — o navegador roda no Windows. A saída é
+`build/web`, um site estático. A URL da API continua sendo de build, como no
+APK, e sem `/api/v1` (o `AppConfig` concatena).
+
+### Os três formatos
+
+Definidos em `lib/core/responsive/app_breakpoints.dart`. **Nenhuma tela escreve
+número de largura à mão.**
+
+| Faixa | Largura | Navegação | Conteúdo |
+| --- | --- | --- | --- |
+| `mobile` | < 600 | barra inferior de três abas | uma coluna, botão flutuante |
+| `tablet` | 600–1024 | barra lateral recolhida (só ícones) | uma coluna com folga |
+| `desktop` | > 1024 | barra lateral aberta | colunas, tabelas, painel lateral |
+
+As ferramentas:
+
+- `AppBreakpoints.of(context)` / `context.formFactor` — a faixa da **janela**.
+  Use quando a decisão é sobre a tela toda (o botão flutuante vira botão de
+  cabeçalho, a barra inferior vira lateral).
+- `ResponsiveBuilder` — a faixa do **espaço recebido**, via `LayoutBuilder`.
+  Use quando a pergunta é "cabem duas colunas aqui?": dentro da casca com a
+  barra lateral aberta, um monitor de 1024px deixa só 756px para a tela, e
+  medir a janela produziria colunas espremidas. Foi por isso que a tabela de
+  integrantes e a montagem da escala olham a largura disponível, não a janela.
+- `ResponsiveLayout` — uma árvore por faixa, só quando a diferença é
+  estrutural.
+- `AppContentWidth`, `AppContentWidth.reading` (até 820) e
+  `AppContentWidth.wide` (até 1180) — o teto de largura do conteúdo. O
+  construtor comum continua em 640 e é o padrão.
+- `showAdaptiveSheet` (`core/responsive/adaptive_dialog.dart`) — folha de baixo
+  no celular, diálogo no centro no monitor, **com o mesmo widget dentro**.
+- `AppSideNav` (`shared/widgets/app_side_nav.dart`) — a barra lateral. É pura
+  apresentação: recebe destinos e callbacks, não conhece Riverpod nem
+  go_router. Quem monta os dados é `MainShell`.
+
+### A casca e as rotas
+
+`MainShell` (`features/events/presentation/main_shell.dart`) escolhe entre a
+barra inferior e a lateral. A regra do celular não mudou: a barra inferior só
+aparece em `/agenda`, `/equipe` e `/perfil`.
+
+Para a barra lateral não sumir ao abrir "Repertório" ou "Convites", as telas de
+configuração passaram para **dentro** do `ShellRoute`. No celular isso não muda
+nada — elas não são uma das três abas, então continuam sem barra inferior.
+
+A barra lateral acende a rota **mais específica** que prefixa o caminho atual
+(`AppSideNav.selectedRouteFor`). Sem isso `/equipe/musicas` acenderia "Equipe".
+
+### O que a Web exigiu do código
+
+Foram poucas coisas, e todas valem para as duas plataformas:
+
+1. **Foto de perfil vai por bytes.** `MultipartFile.fromFile` usa `dart:io`; no
+   navegador o `path` de um `XFile` é uma URL `blob:`. `AuthRepository.uploadAvatar`
+   recebe `bytes` + `filename` e usa `MultipartFile.fromBytes`. O backend nunca
+   confiou no nome nem no mimetype (decide pela assinatura do arquivo), então
+   nada mudou do lado do servidor.
+2. **Compartilhar tem plano B.** `navigator.share` não existe no Firefox nem em
+   boa parte dos navegadores de desktop, e o `share_plus` lança. `shareText`
+   (`shared/widgets/share_action.dart`) cai na área de transferência e avisa —
+   mesmo destino (WhatsApp Web), outro caminho.
+3. **Ler a área de transferência pode falhar.** "Colar o código do convite"
+   agora trata a exceção em vez de não fazer nada.
+4. **CORS das fotos.** Ver a armadilha correspondente abaixo.
+5. **Deep link com sessão ainda desconhecida.** Ver a armadilha correspondente.
+
+### URLs, refresh e hospedagem
+
+A estratégia de URL é a **padrão do go_router**: hash
+(`https://site/#/agenda/<id>`). Isso é deliberado — com hash o servidor só vê
+`/`, e recarregar a página em qualquer rota funciona **sem** configuração de
+hospedagem. Trocar para `PathUrlStrategy` exige configurar o *SPA fallback*
+(toda rota desconhecida serve `index.html`), senão um F5 em `/agenda/<id>`
+devolve 404.
+
+`web/index.html` tem uma abertura própria em azul da marca, removida no evento
+`flutter-first-frame`. Sem ela, os segundos até o primeiro quadro eram uma
+página branca — que parece travamento e, no escuro, é um clarão.
+
+### CORS no backend
+
+`CORS_ORIGINS` já existia e continua sendo a única configuração necessária: em
+produção, o domínio do site (sem barra no fim), separado por vírgula se houver
+mais de um. `*` é recusado no boot em produção, e isso não mudou.
 
 ## Conta do usuário: dados, senha e foto
 
@@ -944,6 +1051,10 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
 - Navegação em `core/router/app_router.dart`, com `redirect` por estado de auth.
   Telas que dependem da equipe usam o helper `_withActiveTeam`.
 - Equipe ativa: `activeTeamIdProvider` (`features/team/data/team_repository.dart`).
+- Responsividade: `core/responsive/`. Pontos de quebra em `AppBreakpoints`,
+  **nunca** número de largura solto numa tela. `AppBreakpoints.of(context)`
+  para decisões sobre a janela; `ResponsiveBuilder` para decisões sobre o
+  espaço recebido. Diálogo x folha por `showAdaptiveSheet`.
 
 ## Armadilhas já pagas — não repita
 
@@ -1008,6 +1119,27 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
     no `flutter test` — só aparece no aparelho. **Um passo, uma chamada de
     navegação.**
 
+12. **`MultipartFile.fromFile` não existe no navegador.** Ele usa `dart:io`, e
+    no Flutter Web o `path` de um `XFile` é uma URL `blob:`. Envio de arquivo
+    em código compartilhado vai por `MultipartFile.fromBytes`.
+13. **O `enableCors` do Nest não cobre os arquivos estáticos.** O
+    `useStaticAssets` é registrado antes do middleware de CORS e responde sem
+    passar por ele. No Android isso nunca apareceu (não há origem a conferir);
+    na Web, o `Image.network` busca os bytes por XHR e **toda foto de perfil
+    quebrava**. O cabeçalho é posto à mão no `setHeaders` de `/uploads`
+    (`backend/src/main.ts`).
+14. **Deep link chega antes de o app saber se há sessão.** No celular o app
+    sempre abre em `/`; na Web, colar `#/agenda/<id>` ou apertar F5 dentro de
+    uma escala entra direto por aquela rota, com o `AuthController` ainda em
+    `unknown`. O redirect precisa mandar para a splash, e por isso guarda o
+    destino (`_PendingLocation` em `app_router.dart`) e volta a ele quando a
+    sessão resolve. Sem isso o link compartilhado sempre caía na agenda.
+15. **`Align` com `heightFactor` e largura adaptativa.** `AppContentWidth`
+    ganhou variantes (`.reading`, `.wide`) que leem `MediaQuery`. O
+    `heightFactor: 1` continua sendo obrigatório pelo motivo de sempre — ver o
+    comentário do widget e `test/app_content_width_test.dart`.
+
+
 ## Definição de pronto
 
 Uma etapa só está pronta quando:
@@ -1018,12 +1150,22 @@ Uma etapa só está pronta quando:
   erro (não basta o caminho feliz);
 - `cd app; flutter analyze` termina com "No issues found!";
 - `cd app; flutter test` passa;
+- `cd app; flutter build web --release --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app` compila;
 - o APK release compila.
 
 Relate o que **não** foi verificado. Não afirme que algo funciona sem ter
 executado.
 
 ## Dívidas conhecidas
+
+- **Sem build WebAssembly.** `flutter build web --wasm` não passa: o
+  `flutter_secure_storage_web` ainda usa `dart:html`/`package:js`. O build JS
+  padrão funciona normalmente; o `--wasm` fica esperando o pacote migrar para
+  `dart:js_interop`.
+- **Sessão na Web depende de contexto seguro.** O `flutter_secure_storage_web`
+  guarda o token cifrado com WebCrypto, que só existe em `https` ou
+  `localhost`. Servir o site em `http://` num IP de rede local deixa a sessão
+  sem onde ser salva.
 
 - **Comentários sem acento.** As **strings visíveis ao usuário já foram
   acertadas**; o que sobrou sem acento são comentários e nomes internos, que não

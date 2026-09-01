@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
@@ -36,8 +37,15 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
     );
 
     if (picked == null) return;
+    // Bytes, e nao `picked.path`: no navegador o caminho e uma URL `blob:` e
+    // `dart:io` nao existe para abri-la. `readAsBytes` e a unica leitura que o
+    // `XFile` oferece nas duas plataformas.
+    final bytes = await picked.readAsBytes();
     await _run(
-      () => ref.read(authControllerProvider.notifier).updateAvatar(picked.path),
+      () => ref.read(authControllerProvider.notifier).updateAvatar(
+            bytes: bytes,
+            filename: picked.name,
+          ),
       done: 'Foto atualizada.',
     );
   }
@@ -75,9 +83,12 @@ class _ProfilePhotoState extends ConsumerState<ProfilePhoto> {
   Future<void> _openOptions() async {
     final hasPhoto = ref.read(authControllerProvider).user?.avatarUrl != null;
 
-    final choice = await showModalBottomSheet<_PhotoAction>(
+    // Folha no celular, dialogo no monitor: sao tres linhas de escolha, e no
+    // navegador elas apareceriam no rodape de uma janela de 1080px, longe do
+    // avatar em que a pessoa acabou de clicar.
+    final choice = await showAdaptiveSheet<_PhotoAction>(
       context: context,
-      showDragHandle: true,
+      maxWidth: 420,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

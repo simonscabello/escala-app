@@ -123,8 +123,13 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> updateAvatar(String filePath) async {
-    _replaceUser(await _repository.uploadAvatar(filePath));
+  Future<void> updateAvatar({
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    _replaceUser(
+      await _repository.uploadAvatar(bytes: bytes, filename: filename),
+    );
   }
 
   Future<void> removeAvatar() async {

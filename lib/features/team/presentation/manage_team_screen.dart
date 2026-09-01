@@ -33,7 +33,7 @@ class ManageTeamScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Gerenciar equipe')),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.xl,

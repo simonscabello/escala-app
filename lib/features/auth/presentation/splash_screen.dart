@@ -8,10 +8,10 @@ import '../../../shared/widgets/app_brand_mark.dart';
 /// O redirect do go_router tira o usuario daqui assim que o estado resolve.
 ///
 /// É o primeiro frame do app, e por isso a única tela em que a marca aparece
-/// grande. A rodinha saiu do centro das atenções e virou um fio no rodapé: ela
-/// informa que algo acontece, mas não é o assunto — quando a sessão está salva
-/// esta tela dura menos de um segundo, e um indicador girando no meio dela
-/// transformava a abertura numa espera.
+/// grande. O indicador fica no mesmo bloco da marca, no centro da viewport —
+/// um `Column` solto no `Scaffold` encolhe à largura do texto e encosta à
+/// esquerda, que é o que fazia a abertura parecer desalinhada em tablet e no
+/// navegador.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
@@ -24,42 +24,43 @@ class SplashScreen extends StatelessWidget {
       // substitui o splash do sistema sem um clarão ou uma troca de marca.
       backgroundColor: AppColors.lightPrimary,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Spacer(flex: 4),
-              const AppBrandGlyph(size: 108, color: Colors.white),
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                'Louve!',
-                style: theme.textTheme.displaySmall?.copyWith(
-                  color: Colors.white,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+              vertical: AppSpacing.xxl,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const AppBrandGlyph(size: 108, color: Colors.white),
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  'Louve!',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Sua escala, clara e no lugar certo.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: AppColors.lightPrimaryContainer,
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Sua escala, clara e no lugar certo.',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: AppColors.lightPrimaryContainer,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const Spacer(flex: 5),
-              SizedBox(
-                width: 120,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                  child: const LinearProgressIndicator(
-                    minHeight: 3,
+                const SizedBox(height: AppSpacing.xxl),
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
                     color: Colors.white,
                     backgroundColor: Color(0x4DFFFFFF),
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-            ],
+              ],
+            ),
           ),
         ),
       ),

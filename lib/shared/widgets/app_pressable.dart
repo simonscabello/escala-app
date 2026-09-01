@@ -37,12 +37,21 @@ class _AppPressableState extends State<AppPressable> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     final inkwell = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: widget.onTap,
         onHighlightChanged: _set,
         borderRadius: widget.borderRadius,
+        // **O equivalente do afundar, para quem usa mouse.** O gesto de
+        // pressionar não existe no ponteiro: no navegador o cartão ficava
+        // indistinguível de um bloco de texto até o clique acontecer. O
+        // `InkWell` já entrega o cursor de mão; isto acrescenta a única outra
+        // coisa que o hover deve dizer — "isto aqui responde". 4% de tinta:
+        // percebe-se ao passar por cima e não muda a cor da superfície.
+        hoverColor: scheme.onSurface.withValues(alpha: 0.04),
         child: widget.child,
       ),
     );

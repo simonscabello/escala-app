@@ -190,6 +190,9 @@ class AppGroupRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        // Resposta ao ponteiro, do mesmo tamanho da do `AppPressable`: no
+        // navegador uma linha de grupo era indistinguível de texto parado.
+        hoverColor: scheme.onSurface.withValues(alpha: 0.04),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: AppSpacing.touchTarget),
           child: row,

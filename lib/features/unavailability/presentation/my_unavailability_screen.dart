@@ -168,7 +168,7 @@ class _MyUnavailabilityScreenState
       ),
       body: SafeArea(
         top: false,
-        child: AppContentWidth(
+        child: AppContentWidth.reading(
           child: items.when(
             loading: () => const AppListSkeleton(itemCount: 3, leadingBlock: true),
             error: (error, _) => AppErrorState(

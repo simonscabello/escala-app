@@ -63,9 +63,6 @@ class AppSpacing {
   /// campo largo demais atrapalha até em monitor.
   static const double formMaxWidth = 420;
 
-  /// A partir daqui a tela deixa de ser "um celular" e sobra margem lateral.
-  static const double wideBreakpoint = 720;
-
   /// Alvo minimo de toque (WCAG 2.5.8 pede 24, o Material pede 48; usamos 48).
   ///
   /// Vale para qualquer coisa tocavel, inclusive linha de lista: uma linha

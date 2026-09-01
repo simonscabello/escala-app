@@ -116,9 +116,28 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
   }
 
   Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    // Ler a area de transferencia falha em parte dos navegadores (o Firefox
+    // nao expoe `readText`, e o Safari exige gesto proprio). No Android nunca
+    // falhou; na Web, sem este `try`, o botao "Colar" quebrava em silencio.
+    ClipboardData? data;
+    try {
+      data = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (_) {
+      data = null;
+    }
+
     final text = data?.text;
-    if (text == null) return;
+    if (text == null) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Seu navegador não deixou ler a área de transferência. Cole o '
+          'código no campo.',
+          tone: AppTone.warning,
+        );
+      }
+      return;
+    }
 
     // Aceita o texto inteiro compartilhado no WhatsApp: extraimos o código.
     final match = RegExp(r'[0-9A-HJKMNP-TV-Z]{5}(?:-[0-9A-HJKMNP-TV-Z]{5}){3}')
