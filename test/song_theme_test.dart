@@ -113,6 +113,28 @@ void main() {
     });
   });
 
+  group('agrupamento por letra', () {
+    test('a inicial vem do rótulo, sem acento', () {
+      expect(songThemeInitialLetter('ACOES_DE_GRACAS'), 'A');
+      expect(songThemeInitialLetter('CEIA'), 'C');
+      expect(songThemeInitialLetter('ESPIRITO_SANTO'), 'E');
+    });
+
+    test('a lista completa tem cabeçalho A antes de Ações de Graças', () {
+      final grupos = groupSongThemesByLetter(songThemeValues);
+      expect(grupos.first.$1, 'A');
+      expect(grupos.first.$2.first, 'ACOES_DE_GRACAS');
+    });
+
+    test('cada letra agrupa só os temas dela, na ordem em que aparecem', () {
+      final grupos = groupSongThemesByLetter(['CEIA', 'NATAL', 'ADORACAO']);
+      expect(grupos.map((g) => g.$1), ['C', 'N', 'A']);
+      expect(grupos[0].$2, ['CEIA']);
+      expect(grupos[1].$2, ['NATAL']);
+      expect(grupos[2].$2, ['ADORACAO']);
+    });
+  });
+
   group('Song', () {
     test('lê os temas do JSON; ausente é lista vazia', () {
       final classificada = Song.fromJson({
@@ -243,11 +265,11 @@ void main() {
       await abrir(
         tester,
         interagir: (tester) async {
-          // A lista aparece inteira: quem não sabe o nome do tema precisa vê-lo
-          // para poder escolher.
           expect(find.text('Adoração'), findsOneWidget);
           expect(find.text('Ceia'), findsOneWidget);
-          // E o teclado não rouba a tela na abertura.
+          // Agrupado por letra, como o repertório.
+          expect(find.text('A'), findsOneWidget);
+          expect(find.text('C'), findsOneWidget);
           expect(
             tester.testTextInput.isVisible,
             isFalse,
@@ -266,6 +288,8 @@ void main() {
 
           expect(find.text('Ações de Graças'), findsOneWidget);
           expect(find.text('Adoração'), findsNothing);
+          // Com busca ativa, sem cabeçalhos de letra.
+          expect(find.text('A'), findsNothing);
 
           await tester.tap(find.text('Ações de Graças'));
           await tester.pumpAndSettle();
@@ -289,7 +313,7 @@ void main() {
       final resultado = await abrir(
         tester,
         interagir: (tester) async {
-          await tester.tap(find.text('Ceia'));
+          await tester.tap(find.text('Adoração'));
           await tester.pumpAndSettle();
 
           await tester.binding.handlePopRoute();
@@ -297,7 +321,7 @@ void main() {
         },
       );
 
-      expect(resultado, {'CEIA'});
+      expect(resultado, {'ADORACAO'});
     });
 
     testWidgets('o que já estava marcado volta marcado, e desmarca', (

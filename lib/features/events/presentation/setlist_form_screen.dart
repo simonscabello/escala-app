@@ -17,6 +17,7 @@ import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/domain/song_sections.dart';
 import '../../songs/presentation/add_song_screen.dart';
+import '../../songs/presentation/song_theme_picker.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -663,12 +664,16 @@ class _PickerEmpty extends StatelessWidget {
   const _PickerEmpty({
     required this.filter,
     required this.searching,
+    required this.themes,
     required this.onCadastrar,
+    required this.onClearThemes,
   });
 
   final SongFilter filter;
   final bool searching;
+  final Set<String> themes;
   final VoidCallback onCadastrar;
+  final VoidCallback onClearThemes;
 
   @override
   Widget build(BuildContext context) {
@@ -680,6 +685,25 @@ class _PickerEmpty extends StatelessWidget {
             'que você já montou aqui.',
         actionLabel: 'Cadastrar música',
         onAction: onCadastrar,
+      );
+    }
+
+    if (themes.isNotEmpty) {
+      return AppEmptyState(
+        icon: Icons.sell_outlined,
+        title: 'Nada com esses temas',
+        message: switch (filter) {
+          SongFilter.canticos =>
+            'Nenhum cântico classificado assim. Se for hino, toque em Hinos.',
+          SongFilter.hinos =>
+            'Nenhum hino classificado assim. Se for cântico, toque em Cânticos.',
+          SongFilter.novas =>
+            'Nenhuma música em aprendizado com esses temas.',
+          SongFilter.arquivadas =>
+            'Nenhuma música arquivada com esses temas.',
+        },
+        actionLabel: 'Tirar os temas',
+        onAction: onClearThemes,
       );
     }
 
@@ -749,6 +773,7 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
   /// montar a escala, e a única saída era cadastrar de novo uma música que já
   /// existia.
   SongFilter _filter = SongFilter.canticos;
+  Set<String> _themes = {};
 
   @override
   Widget build(BuildContext context) {
@@ -759,6 +784,7 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
           teamId: widget.teamId,
           search: _search,
           filter: _filter,
+          themes: _themes,
         ),
       ),
     );
@@ -810,6 +836,11 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
+          SongThemeFilterBar(
+            selected: _themes,
+            onChanged: (themes) => setState(() => _themes = themes),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Expanded(
             child: songs.when(
               loading: () => const AppLoading(),
@@ -827,10 +858,12 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                   return _PickerEmpty(
                     filter: _filter,
                     searching: _search.trim().isNotEmpty,
+                    themes: _themes,
                     onCadastrar: () => Navigator.pop(
                       context,
                       const _PickerResult.cadastrar(),
                     ),
+                    onClearThemes: () => setState(() => _themes = {}),
                   );
                 }
 

@@ -133,3 +133,39 @@ List<String> searchSongThemes(String query) {
       if (normalizeForSearch(entry.value).contains(term)) entry.key,
   ];
 }
+
+/// A inicial do rótulo, sem acento: "Ações de Graças" → `A`.
+///
+/// Mesma regra de [`song_sections.dart`]: o que não começa com letra vai para
+/// `#`, que fica no fim da ordem.
+String songThemeInitialLetter(String value) {
+  final chave = normalizeForSearch(songThemeLabel(value))
+      .replaceAll(RegExp(r'^[^a-z0-9]+'), '');
+  if (chave.isEmpty) return '#';
+  final primeira = chave[0];
+  return RegExp('[a-z]').hasMatch(primeira) ? primeira.toUpperCase() : '#';
+}
+
+/// Agrupa temas pela letra inicial do rótulo, na ordem do catálogo.
+///
+/// Só use quando a lista é longa e o usuário não está buscando — com busca
+/// ativa o resultado é curto e um cabeçalho "A" acima de um item não orienta.
+List<(String letter, List<String> themes)> groupSongThemesByLetter(
+  List<String> themes,
+) {
+  final grupos = <String, List<String>>{};
+  final ordem = <String>[];
+
+  for (final tema in themes) {
+    final letra = songThemeInitialLetter(tema);
+    if (!grupos.containsKey(letra)) {
+      grupos[letra] = [];
+      ordem.add(letra);
+    }
+    grupos[letra]!.add(tema);
+  }
+
+  return [
+    for (final letra in ordem) (letra, grupos[letra]!),
+  ];
+}
