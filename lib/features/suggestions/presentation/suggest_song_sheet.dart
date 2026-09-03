@@ -286,6 +286,9 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         decoration: const InputDecoration(
           hintText: 'Qual música?',
           helperText: 'Buscamos no repertório da equipe e no Spotify',
+          // Sem isto o texto de ajuda ganha uma linha só e termina em "e no…",
+          // que é pior do que não ter ajuda nenhuma.
+          helperMaxLines: 2,
           prefixIcon: Icon(Icons.search_rounded),
         ),
       ),
@@ -300,6 +303,10 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         ..._results.take(6).map(
               (song) => AppCard(
                 margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
                 onTap: () => setState(() => _song = song),
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -316,6 +323,10 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         ..._externalResults.take(6).map(
               (candidate) => AppCard(
                 margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
                 onTap: () => setState(() => _external = candidate),
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -378,6 +389,7 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
 
     final song = _song;
     return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
       surface: CardSurface.sunken,
       child: Row(
         children: [
@@ -481,6 +493,7 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
             // Obrigatório, e a tela diz por quê: é o que o líder lê para
             // decidir, e é o que faz uma recusa ser resposta a um argumento.
             helperText: 'Obrigatório — é o que o líder lê para decidir',
+            helperMaxLines: 2,
           ),
         ),
       ],

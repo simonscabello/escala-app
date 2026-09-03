@@ -250,6 +250,9 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                 labelText: 'Motivo (opcional)',
                 helperText: 'Quem sugeriu vai ler. Pode deixar em branco e '
                     'conversar pessoalmente.',
+                // O aviso de que a pessoa vai ler é a parte que não pode
+                // sumir num "…" -- ela é a razão de o rótulo existir.
+                helperMaxLines: 3,
               ),
             ),
           ],
@@ -310,6 +313,9 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      // `AppCard` não tem padding padrão: sem isto o conteúdo encosta na borda
+      // e o `Clip.antiAlias` do canto arredondado come a primeira letra.
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -387,6 +393,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
           if ((s.declineReason ?? '').isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
               surface: CardSurface.sunken,
               child: Text(
                 s.declineReason!,
@@ -395,13 +402,19 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             ),
           ],
 
-          if (_acoes().isNotEmpty) ...[
+          if (_acoes(theme).isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerRight,
+            // Largura cheia + alinhamento à direita: quando os botões não
+            // couberem numa linha (tela estreita, rótulo longo), as duas
+            // linhas continuam encostadas na direita em vez de uma centralizar.
+            SizedBox(
+              width: double.infinity,
               child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: AppSpacing.xs,
-                children: _acoes(),
+                runSpacing: AppSpacing.xs,
+                children: _acoes(theme),
               ),
             ),
           ],
@@ -439,7 +452,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
         '${outros.length > 1 ? 'ram' : ''}';
   }
 
-  List<Widget> _acoes() {
+  List<Widget> _acoes(ThemeData theme) {
     if (_busy) {
       return const [
         Padding(
@@ -455,7 +468,16 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
 
     return [
       if (widget.canManage && s.status.isPending) ...[
-        TextButton(onPressed: _decline, child: const Text('Por enquanto não')),
+        // Neutro, e não no azul da marca: como `TextButton` padrão ele saía
+        // mais vistoso que o "Acolher" ao lado, e a recusa lia-se como a ação
+        // principal do cartão -- o contrário do que a tela quer dizer.
+        TextButton(
+          onPressed: _decline,
+          style: TextButton.styleFrom(
+            foregroundColor: theme.colorScheme.onSurfaceVariant,
+          ),
+          child: const Text('Por enquanto não'),
+        ),
         FilledButton.tonal(onPressed: _accept, child: const Text('Acolher')),
       ],
       if (widget.canManage && s.status.isResolved)

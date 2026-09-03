@@ -201,6 +201,9 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      // `AppCard` não tem padding padrão: sem isto o conteúdo encosta na borda
+      // e o `Clip.antiAlias` do canto arredondado come a primeira letra.
+      padding: const EdgeInsets.all(AppSpacing.lg),
       surface: CardSurface.sunken,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
