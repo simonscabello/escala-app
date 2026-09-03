@@ -105,7 +105,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                           96,
                         ),
                         itemCount: list.length,
-                        itemBuilder: (_, index) => _SuggestionCard(
+                        itemBuilder: (_, index) => SuggestionCard(
                           suggestion: list[index],
                           teamId: widget.teamId,
                           canManage: team?.canManage ?? false,
@@ -144,8 +144,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
   }
 }
 
-class _SuggestionCard extends ConsumerStatefulWidget {
-  const _SuggestionCard({
+class SuggestionCard extends ConsumerStatefulWidget {
+  const SuggestionCard({
+    super.key,
     required this.suggestion,
     required this.teamId,
     required this.canManage,
@@ -158,10 +159,10 @@ class _SuggestionCard extends ConsumerStatefulWidget {
   final bool isMine;
 
   @override
-  ConsumerState<_SuggestionCard> createState() => _SuggestionCardState();
+  ConsumerState<SuggestionCard> createState() => _SuggestionCardState();
 }
 
-class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
+class _SuggestionCardState extends ConsumerState<SuggestionCard> {
   bool _busy = false;
 
   SongSuggestion get s => widget.suggestion;
@@ -338,6 +339,21 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                 ),
               ),
               _selo(),
+              // Excluir vive aqui, e não junto das decisões: liberta a linha
+              // de baixo (era ela que fazia a lixeira quebrar para baixo) e
+              // afasta a ação destrutiva do "Acolher", que fica ao lado.
+              if (widget.isMine || widget.canManage)
+                IconButton(
+                  tooltip: 'Excluir',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                  onPressed: _busy ? null : _remove,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -380,6 +396,11 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
               Expanded(
                 child: Text(
                   _assinatura(),
+                  // Duas linhas: com um nome a mais a assinatura já batia na
+                  // borda direita e era cortada -- e o "e mais quem sugeriu" é
+                  // justamente a informação que o líder usa para priorizar.
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -402,7 +423,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
             ),
           ],
 
-          if (_acoes(theme).isNotEmpty) ...[
+          if (_acoes().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             // Largura cheia + alinhamento à direita: quando os botões não
             // couberem numa linha (tela estreita, rótulo longo), as duas
@@ -414,7 +435,7 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
-                children: _acoes(theme),
+                children: _acoes(),
               ),
             ),
           ],
@@ -448,11 +469,13 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
     final lista = outros.length == 1
         ? outros.first
         : '${outros.take(outros.length - 1).join(', ')} e ${outros.last}';
-    return 'Sugerida por $quem · $lista também sugeriu'
-        '${outros.length > 1 ? 'ram' : ''}';
+    // Verbo inteiro nas duas formas. Concatenar o sufixo ("sugeriu" + "ram")
+    // produzia "sugeriuram" com duas pessoas ou mais.
+    final verbo = outros.length == 1 ? 'também sugeriu' : 'também sugeriram';
+    return 'Sugerida por $quem · $lista $verbo';
   }
 
-  List<Widget> _acoes(ThemeData theme) {
+  List<Widget> _acoes() {
     if (_busy) {
       return const [
         Padding(
@@ -466,28 +489,17 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
       ];
     }
 
+    // Só as decisões ficam aqui. **Excluir subiu para o cabeçalho**: com os
+    // três lado a lado, "Por enquanto não" + "Acolher" + a lixeira passavam de
+    // 300dp num cartão de 295dp, e a lixeira quebrava sozinha para a linha de
+    // baixo. Duas ações cabem sempre.
     return [
       if (widget.canManage && s.status.isPending) ...[
-        // Neutro, e não no azul da marca: como `TextButton` padrão ele saía
-        // mais vistoso que o "Acolher" ao lado, e a recusa lia-se como a ação
-        // principal do cartão -- o contrário do que a tela quer dizer.
-        TextButton(
-          onPressed: _decline,
-          style: TextButton.styleFrom(
-            foregroundColor: theme.colorScheme.onSurfaceVariant,
-          ),
-          child: const Text('Por enquanto não'),
-        ),
+        TextButton(onPressed: _decline, child: const Text('Por enquanto não')),
         FilledButton.tonal(onPressed: _accept, child: const Text('Acolher')),
       ],
       if (widget.canManage && s.status.isResolved)
         TextButton(onPressed: _reopen, child: const Text('Reabrir')),
-      if (widget.isMine || widget.canManage)
-        IconButton(
-          tooltip: 'Excluir',
-          icon: const Icon(Icons.delete_outline_rounded),
-          onPressed: _remove,
-        ),
     ];
   }
 }
