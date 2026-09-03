@@ -29,6 +29,7 @@ import '../../features/songs/presentation/song_detail_screen.dart';
 import '../../features/songs/presentation/song_form_screen.dart';
 import '../../features/songs/presentation/song_usage_screen.dart';
 import '../../features/songs/presentation/songs_screen.dart';
+import '../../features/suggestions/presentation/suggestions_screen.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
 import '../../features/team/presentation/manage_team_screen.dart';
@@ -223,6 +224,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               ref,
               (id) => WorkloadReportScreen(teamId: id),
             ),
+          ),
+          // Ao lado do repertório e **sem filtro de papel**: quem sugeriu
+          // precisa ver o que aconteceu com a sugestão dele.
+          GoRoute(
+            path: '/equipe/sugestoes',
+            builder: (_, __) =>
+                _withActiveTeam(ref, (id) => SuggestionsScreen(teamId: id)),
           ),
           GoRoute(
             path: '/equipe/musicas',

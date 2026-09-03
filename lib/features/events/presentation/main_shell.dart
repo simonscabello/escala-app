@@ -173,6 +173,13 @@ class _WideShell extends ConsumerWidget {
             label: 'Repertório',
             route: '/equipe/musicas',
           ),
+          // Fora do bloco "Gestão" de propósito: sugerir é da equipe inteira.
+          AppNavDestination(
+            icon: Icons.lightbulb_outline_rounded,
+            selectedIcon: Icons.lightbulb_rounded,
+            label: 'Sugestões',
+            route: '/equipe/sugestoes',
+          ),
         ],
       ),
       const AppNavSection(

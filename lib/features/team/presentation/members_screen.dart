@@ -19,6 +19,7 @@ import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../invites/presentation/invite_actions.dart';
+import '../../suggestions/data/suggestion_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -116,6 +117,19 @@ class MembersScreen extends ConsumerWidget {
                           subtitle:
                               'As músicas da equipe, com letra, cifra e tom',
                           onTap: () => context.push('/equipe/musicas'),
+                        ),
+                        // Ao lado do repertório e para todo mundo, pelo mesmo
+                        // motivo dele: quem sugere é a equipe inteira, e quem
+                        // sugeriu precisa ver o que aconteceu.
+                        AppGroupRow(
+                          icon: Icons.lightbulb_outline_rounded,
+                          title: 'Sugestões',
+                          subtitle:
+                              'Músicas que a equipe pediu, e por quê',
+                          trailing: canManage
+                              ? _SuggestionCountBadge(teamId: teamId)
+                              : null,
+                          onTap: () => context.push('/equipe/sugestoes'),
                         ),
                       ],
                     ),
@@ -602,5 +616,39 @@ class _MemberMenu extends ConsumerWidget {
         showAppSnackBar(context, e.message, tone: AppTone.danger);
       }
     }
+  }
+}
+
+/// Quantas sugestões estão de pé, na linha do menu.
+///
+/// **Sem push no projeto, é por este número que o líder descobre que alguém
+/// sugeriu alguma coisa** — sugestão que ninguém vê é sugestão que ninguém faz
+/// duas vezes. Só para quem pode responder: para o integrante, uma contagem
+/// que ele não pode resolver seria enfeite.
+///
+/// Falha ou carregamento não desenham nada: a linha existe e funciona sem o
+/// selo, e um erro aqui não pode virar um "!" vermelho no menu da equipe.
+class _SuggestionCountBadge extends ConsumerWidget {
+  const _SuggestionCountBadge({required this.teamId});
+
+  final String teamId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final abertas = ref.watch(openSuggestionCountProvider(teamId));
+
+    return abertas.maybeWhen(
+      data: (total) => total == 0
+          ? const SizedBox.shrink()
+          : AppBadge(
+              label: '$total',
+              tone: AppTone.primary,
+              emphasis: BadgeEmphasis.solid,
+              semanticsLabel: total == 1
+                  ? '1 sugestao aguardando resposta'
+                  : '$total sugestoes aguardando resposta',
+            ),
+      orElse: () => const SizedBox.shrink(),
+    );
   }
 }

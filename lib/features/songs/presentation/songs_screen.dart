@@ -14,6 +14,7 @@ import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
 import 'song_theme_picker.dart';
@@ -99,15 +100,35 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
               icon: const Icon(Icons.inventory_2_outlined),
               onPressed: () => context.push('/equipe/musicas/arquivadas'),
             ),
+          // Sugerir é da equipe inteira, e esta é a tela onde se pensa em
+          // música. Para quem lidera fica no cabeçalho, porque o botão
+          // flutuante já é "Adicionar" -- a ação principal dele.
+          if (canManage && !widget.archived)
+            IconButton(
+              tooltip: 'Sugerir uma música',
+              icon: const Icon(Icons.lightbulb_outline_rounded),
+              onPressed: () =>
+                  showSuggestSongSheet(context, teamId: widget.teamId),
+            ),
         ],
       ),
-      floatingActionButton: canManage && !widget.archived
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push('/equipe/musicas/nova'),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Adicionar'),
-            )
-          : null,
+      // Um botão por papel, e não dois na mesma tela: para quem lidera a ação
+      // principal do repertório é cadastrar; para quem canta é sugerir -- e o
+      // integrante não tinha ação nenhuma aqui.
+      floatingActionButton: widget.archived
+          ? null
+          : canManage
+              ? FloatingActionButton.extended(
+                  onPressed: () => context.push('/equipe/musicas/nova'),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Adicionar'),
+                )
+              : FloatingActionButton.extended(
+                  onPressed: () =>
+                      showSuggestSongSheet(context, teamId: widget.teamId),
+                  icon: const Icon(Icons.lightbulb_outline_rounded),
+                  label: const Text('Sugerir'),
+                ),
       body: SafeArea(
         top: false,
         child: AppContentWidth.wide(

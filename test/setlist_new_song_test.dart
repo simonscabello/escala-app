@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
+import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
+import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
 /// A etiqueta "Nova" na tela de montar o repertório.
@@ -50,6 +52,14 @@ void main() {
     });
 
     return ProviderScope(
+      // A tela agora também mostra a faixa de sugestões da equipe, que sai à
+      // rede. Sem este dublê o teste ficaria esperando um Dio de verdade e
+      // falharia por timer pendente -- por um motivo que nada tem a ver com a
+      // etiqueta que ele verifica.
+      overrides: [
+        eventSuggestionsProvider('e1')
+            .overrideWith((ref) => const EventSuggestions(date: '2026-08-16')),
+      ],
       child: MaterialApp(
         home: SetlistFormScreen(teamId: 't1', eventId: 'e1', event: event),
       ),

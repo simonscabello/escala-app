@@ -27,9 +27,21 @@ import 'song_theme_picker.dart';
 /// A pessoa escolhe: título sozinho é ambíguo ("Aleluia" existe em cinco
 /// versões) e casar automaticamente erraria calado.
 class AddSongScreen extends ConsumerStatefulWidget {
-  const AddSongScreen({super.key, required this.teamId, this.onCreated});
+  const AddSongScreen({
+    super.key,
+    required this.teamId,
+    this.onCreated,
+    this.initialSearch,
+  });
 
   final String teamId;
+
+  /// O que já se sabe do nome da música.
+  ///
+  /// Preenchido quando esta tela é aberta a partir de uma sugestão da equipe:
+  /// o nome já foi digitado uma vez por quem sugeriu, e obrigar o líder a
+  /// digitá-lo de novo seria trabalho repetido. A busca dispara sozinha.
+  final String? initialSearch;
 
   /// O que fazer com a música recém-criada.
   ///
@@ -74,6 +86,17 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
   /// tinha classificado; numa vinda do Spotify são os únicos que existem, já
   /// que nenhum serviço externo lê letra.
   Set<String> _themes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final inicial = widget.initialSearch?.trim() ?? '';
+    if (inicial.length >= 2) {
+      _controller.text = inicial;
+      // Sem esperar o debounce: o termo não foi digitado agora, já está certo.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _search(inicial));
+    }
+  }
 
   @override
   void dispose() {

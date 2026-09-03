@@ -98,11 +98,15 @@ Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
 - **Rodízio no seletor da escalação**: "Há 3 semanas · 2 escalas em 8 semanas".
 - **Relatórios** de participação e de uso do repertório (seção Relatórios).
 - **Histórico da escala e trava de edição simultânea** (seção própria).
+- **Sugestões de música pela equipe** — qualquer integrante pede uma música,
+  para o repertório ou para um domingo, com justificativa assinada; quem monta
+  a escala vê as daquela data na tela do repertório (seção Sugestões da
+  equipe).
 
 O que o plano ainda prevê e **não** foi feito: notificações push de publicação
 e alteração, modo culto offline (letra garantida sem rede), solicitação de
-troca pelo integrante, link web somente leitura da escala, sugestão assistida
-de escalação e testes automatizados do backend.
+troca pelo integrante, link web somente leitura da escala e sugestão assistida
+de escalação.
 
 
 ## Versão Web — mesma base, outra arrumação
@@ -637,6 +641,176 @@ viva embaixo e volta intacta. `AddSongScreen` ganhou `onCreated`: nulo mantém o
 caminho normal (vai para o detalhe da música); preenchido devolve a música para
 quem pediu, que a põe no culto e reabre o seletor.
 
+## Sugestões da equipe
+
+O único canal em que quem canta fala com quem monta a escala **sobre
+repertório**. Antes disso o fluxo era de mão única: o líder publicava, a equipe
+lia. A única coisa que voltava era indisponibilidade.
+
+Qualquer integrante sugere uma música — para o repertório em geral, ou para um
+domingo específico. Quem monta a escala vê as sugestões daquela data **na hora
+de montar o repertório**, que é onde a funcionalidade existe para chegar.
+
+### Uma entidade, duas leituras — não duas funcionalidades
+
+`SongSuggestion` tem `targetDate` **opcional**. O ato no mundo real é o mesmo
+("quero que a equipe cante isso"); o que muda é se vem data junto — e o mesmo
+pedido costuma ser as duas coisas ao mesmo tempo ("podíamos aprender essa; quem
+sabe domingo que vem"). Duas tabelas obrigariam a inventar "promover sugestão
+de repertório para sugestão de data", partiriam a contagem de repetidas em dois
+lugares e duplicariam status idênticos.
+
+`targetDate` nulo significa **"para o repertório, sem data"**. É a outra metade
+da funcionalidade, e não um campo que faltou preencher.
+
+### A sugestão aponta para uma DATA, não para a escala
+
+Dia civil (`@db.Date`), como `Unavailability`. **Não existe `eventId`.**
+
+O motivo é duro: o MEMBER **não enxerga escala em rascunho** (`GET /events/:id`
+devolve 404 para ele). Na terça, quando ele pensa "domingo dia 14", ou a escala
+ainda não foi criada, ou existe como rascunho e ele não pode vê-la. Guardar o id
+deixaria o campo impossível de preencher justamente por quem preenche. A escala
+também pode ser apagada e recriada; a data não muda.
+
+O casamento acontece na leitura, pelo dia civil **no fuso da equipe**
+(`civilDateInZone(event.startsAt, team.timezone)`). Um culto das 21h em São
+Paulo cai na **segunda** em UTC — comparar sem o fuso deixaria a faixa da tela
+vazia justamente no culto da noite. Há teste para isso.
+
+### Nada é deduzido: quem resolve é o líder
+
+A dedução tentadora é "a música apareceu no repertório daquele domingo → a
+sugestão foi atendida". É a mesma armadilha que o `isNew` já pagou três vezes: o
+líder pode ter posto a música por conta própria, ou ter acolhido a ideia e
+jogado para março.
+
+- **Acolher não cria música nem liga `isNew`.** O backend registra o
+  acolhimento e o vínculo; quem cria a música é o líder, na tela de cadastro,
+  com `isNew` marcado à mão (ela já nasce marcada ali).
+- **Pôr no culto não acolhe a sugestão.** São dois botões na faixa, de
+  propósito: o líder pode estar experimentando, e a escala ainda é rascunho.
+- **A data passar não muda status.** A sugestão continua `PENDING`; ela só sai
+  da lista aberta, como a agenda separa próximas de passadas. Filtrar por data
+  não é deduzir julgamento — dizer que foi recusada seria.
+
+### `title` é sempre gravado, mesmo com `songId`
+
+Denormalização de propósito. Compra duas coisas:
+
+- a música pode ser **apagada** (`DELETE /songs/:id` só recusa depois de usada
+  em escala). Com `onDelete: SetNull`, a sugestão sobrevive com o texto — a
+  justificativa assinada de alguém não some junto com um cadastro;
+- o MEMBER **não cria música** (`POST /songs` é LEADER+, e o formulário pede
+  tom, tipo e andamento — decisões da equipe). Sugerir precisa aceitar texto
+  livre, ou a funcionalidade morre na primeira tentativa.
+
+A exibição não fica com duas verdades: **havendo `songId`, o título é o da
+música**; o texto gravado é procedência e reserva — é o que permite notar que o
+líder amarrou a música errada.
+
+A busca externa faz a maioria já chegar amarrada: o `GET .../songs/search-external`
+**não tem `@TeamRoles`** (só um throttle de 30/min), então a folha de sugerir usa
+a mesma busca do Spotify que o cadastro usa.
+
+### A justificativa é obrigatória, e a pergunta muda com a data
+
+`reason` é `NOT NULL`, com mínimo de 10 caracteres — obrigatório sem mínimo
+vira ".". Ela filtra sugestão de impulso e, principalmente, **é o que torna a
+recusa possível sem virar pessoal**: o líder responde a um argumento, não ao
+gosto de alguém.
+
+O rótulo na tela depende da data, e isso não é enfeite: se a música **já é** do
+repertório e alguém a pede para o domingo 14, "por que entrar no repertório"
+não faz sentido — ela já entrou.
+
+- sem data → "Por que vale a pena a equipe aprender essa música?"
+- com data → "Por que essa música nesse domingo?"
+
+### Recusar é "Por enquanto não", e o motivo é opcional
+
+`declineReason` é nulável **de propósito**: às vezes o motivo certo (teologia,
+por exemplo) é uma conversa pessoal, e o app não é o canal. Campo em branco é
+uso legítimo, não esquecimento — a tela não empurra ninguém a escrever, e a
+recusa sem motivo aparece só como o estado, sem rótulo "Motivo:" pendurado no
+vazio.
+
+O campo avisa, ali mesmo, que **quem sugeriu vai ler**. Sem isso um líder
+escreve "letra com teologia duvidosa" achando que é nota interna, e o app
+entrega na cara da pessoa — estrago que não dá para desfazer.
+
+**Quem resolveu não aparece em tela nenhuma.** `resolvedById` é gravado para
+auditoria; recusa com o nome do líder do lado azeda a equipe.
+
+`reopen` desfaz a resolução, para o toque errado não virar beco sem saída.
+
+### Repetida não é erro — é o sinal
+
+Três pessoas pedindo a mesma música é o que o líder quer saber. Não bloqueia;
+conta (`alsoSuggestedBy`, agrupado em memória sobre as pendentes da equipe pela
+chave `songId ?? título normalizado`). O que se bloqueia é a **mesma pessoa**
+repetindo a **mesma música** para a **mesma data**.
+
+Essa trava fica no **service, não em índice único**: `targetDate` e `songId` são
+nuláveis, e no Postgres `NULL` é distinto de `NULL` em índice único — a chave
+não travaria nada justamente nos casos sem data e sem cadastro. Mesma armadilha
+que fez `EventSong.serviceId` ser `NOT NULL`.
+
+### Rotas
+
+```
+GET    /teams/:teamId/song-suggestions?scope=open|closed   toda a equipe
+POST   /teams/:teamId/song-suggestions                     toda a equipe
+DELETE /teams/:teamId/song-suggestions/:id                 autor, ou LEADER+
+POST   /teams/:teamId/song-suggestions/:id/accept          LEADER+  { songId? }
+POST   /teams/:teamId/song-suggestions/:id/decline         LEADER+  { reason? }
+POST   /teams/:teamId/song-suggestions/:id/reopen          LEADER+
+GET    /events/:eventId/song-suggestions                   LEADER+
+```
+
+- `scope=open` (padrão) = pendentes que ainda valem: sem data, ou com data que
+  não passou. `closed` = resolvidas + pendentes cujo domingo já foi.
+- **`accept`/`decline`/`reopen` respondem 200, não 201.** Agem sobre recurso
+  que já existe, como o `publish`/`unpublish` da escala.
+- `GET /events/:eventId/song-suggestions` devolve `{ date, forDate[], undated[] }`
+  — uma chamada, duas leituras. É **rota própria, e não um campo em
+  `GET /events/:id`**: aquele é o retorno mais pesado do app e já deixa de
+  carregar letra de propósito; quem paga esta consulta é só quem abriu a
+  montagem do repertório.
+
+### No app
+
+**A entrada fica na aba Equipe, ao lado do Repertório — e não em "Gerenciar
+equipe".** Pelo mesmo motivo que tirou o Repertório de lá: aquela tela só se
+alcança pela engrenagem que aparece para líderes, e quem sugeriu é justamente
+quem precisa ver o que aconteceu com a sugestão dele, inclusive o "por enquanto
+não". O selo de contagem na linha é só para quem pode responder — para o
+integrante, um número que ele não resolve seria enfeite.
+
+Sem push no projeto, **é esse selo que faz o líder descobrir que alguém
+sugeriu**. Sugestão que ninguém vê é sugestão que ninguém faz duas vezes.
+
+- `/equipe/sugestoes` — duas abas, "Abertas" e "Encerradas". O cartão mostra a
+  justificativa **inteira**, sem cortar: ela é o conteúdo, não um detalhe.
+- No **Repertório**, um botão por papel: para quem lidera o flutuante continua
+  "Adicionar" e "Sugerir" vai para o cabeçalho; para o integrante — que não
+  tinha ação nenhuma naquela tela — o flutuante é "Sugerir".
+- Na **montagem do repertório** (`/agenda/:eventId/repertorio`), a
+  `EventSuggestionsBand` no topo: as do dia daquela escala, mais um grupo com
+  as sem data que já têm cadastro. Recolhida quando a escala já tem música,
+  aberta quando está vazia, e some inteira quando não há sugestão. Falha ou
+  carregamento **não desenham nada** — a montagem funciona sem a faixa.
+- `AddSongScreen` ganhou `initialSearch`: acolher uma sugestão sem cadastro abre
+  a busca já preenchida, em vez de o líder redigitar o que quem sugeriu digitou.
+
+**Fora do v1, decidido e não esquecido:** votos/curtidas (transformam um canal
+em enquete e criam o problema de "a mais votada não foi escolhida"),
+comentários (o WhatsApp já existe), relatório de engajamento (sai depois da
+mesma tabela com um `groupBy`, sem migration) e um status "conversar sobre",
+para o caso em que o motivo certo é uma conversa pessoal.
+
+Plano e registro de execução: `docs/superpowers/plans/2026-09-03-sugestoes-de-musica.md`.
+
 ## Vocabulário: "escala", não "culto"
 
 Na interface, a entidade que o líder cria chama-se **escala**. No código e no
@@ -996,8 +1170,9 @@ docker compose exec api npx tsc --noEmit -p tsconfig.spec.json
 O que a suíte cobre hoje: autenticação, isolamento entre equipes e papéis,
 rascunho/publicação, o corte da agenda pelo dia civil, regras de escalação,
 recado individual, trava de edição simultânea, histórico, repertório por culto,
-geração pela grade, duplicação, indisponibilidade, convites e os três
-relatórios. **Ainda sem teste**: cadastro de músicas, catálogo e busca externa,
+geração pela grade, duplicação, indisponibilidade, convites, os três
+relatórios e as sugestões de música — inclusive o casamento por dia civil num
+fuso não-UTC, que é o que quebraria calado. **Ainda sem teste**: cadastro de músicas, catálogo e busca externa,
 fotos de perfil e o CRUD de funções e integrantes.
 
 ## Convenções do backend

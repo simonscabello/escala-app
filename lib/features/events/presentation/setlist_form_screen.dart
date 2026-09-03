@@ -18,6 +18,7 @@ import '../../songs/domain/song_models.dart';
 import '../../songs/domain/song_sections.dart';
 import '../../songs/presentation/add_song_screen.dart';
 import '../../songs/presentation/song_theme_picker.dart';
+import '../../suggestions/presentation/event_suggestions_band.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -169,6 +170,29 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         ),
       ),
     );
+  }
+
+  /// Põe no culto uma música vinda da faixa de sugestões.
+  ///
+  /// **Isto não acolhe a sugestão**, de propósito: o líder pode estar
+  /// experimentando, e a escala ainda é rascunho. Quem diz que a sugestão foi
+  /// acolhida é o botão "Acolher", ali do lado — deduzir o acolhimento de "a
+  /// música entrou" é a mesma armadilha do `isNew`.
+  Future<void> _adicionarSugerida(String songId, EventService culto) async {
+    try {
+      // Busca a música inteira: a sugestão só carrega título e artista, e o
+      // item da escala precisa do tom da equipe e dos links -- os mesmos que o
+      // seletor põe quando a escolha vem de lá.
+      final song = await ref
+          .read(songRepositoryProvider)
+          .find(widget.teamId, songId);
+      if (!mounted) return;
+      setState(() => _lista(culto.id).add(_novoItem(culto, song)));
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    }
   }
 
   EventSong _novoItem(EventService culto, Song song) => EventSong(
@@ -336,6 +360,22 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
                     AppSpacing.xxl,
                   ),
                   children: [
+                    // As sugestões da equipe para ESTE domingo, antes de tudo.
+                    // É a razão de a funcionalidade existir: o líder monta o
+                    // repertório vendo o que a equipe pediu, em vez de
+                    // lembrar do que passou no grupo do WhatsApp.
+                    EventSuggestionsBand(
+                      teamId: widget.teamId,
+                      eventId: widget.eventId,
+                      services: _cultos,
+                      setlistIsEmpty: _total == 0,
+                      servicesWithSong: (songId) => {
+                        for (final culto in _cultos)
+                          if (_lista(culto.id).any((s) => s.songId == songId))
+                            culto.id,
+                      },
+                      onAddToService: _adicionarSugerida,
+                    ),
                     if (_total == 0)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.lg),
