@@ -11,6 +11,9 @@ import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
+import 'package:louvor_app/features/team/data/team_repository.dart';
+import 'package:louvor_app/features/team/domain/service_template.dart';
+import 'package:louvor_app/features/team/domain/team_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
@@ -155,6 +158,21 @@ Future<void> _pumpAgenda(
         eventsProvider.overrideWith(
           (ref, query) async =>
               CachedValue(data: events, fromCache: false),
+        ),
+        // A agenda também consulta a grade de cultos, para propor as datas que
+        // ainda não viraram escala. Aqui ela vai vazia de propósito: estes
+        // testes são sobre a arrumação da lista, e uma grade cadastrada
+        // acrescentaria linhas que mudam conforme o dia em que o teste roda.
+        // Quem cobre as datas em aberto é `open_dates_agenda_test.dart`.
+        serviceTemplatesProvider.overrideWith(
+          (ref, teamId) async => const <ServiceTemplate>[],
+        ),
+        teamProvider.overrideWith(
+          (ref, teamId) async => const Team(
+            id: 't1',
+            name: 'Ministerio de Louvor',
+            timezone: 'America/Sao_Paulo',
+          ),
         ),
         authControllerProvider.overrideWith(
           (ref) => _FakeAuthController(

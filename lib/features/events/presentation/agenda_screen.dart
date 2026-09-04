@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
@@ -20,10 +21,12 @@ import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
+import '../../team/domain/service_template.dart';
 import '../../update/presentation/app_update_banner.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
+import '../domain/open_date.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_times.dart';
 
@@ -33,6 +36,20 @@ String greetingForHour(int hour) {
   if (hour < 12) return 'Bom dia';
   if (hour < 18) return 'Boa tarde';
   return 'Boa noite';
+}
+
+/// O fuso da equipe, pelas fontes na ordem em que valem.
+///
+/// O cadastro da equipe é a resposta certa, mas ele chega numa requisição
+/// própria e pode ainda não ter voltado. Enquanto isso as escalas já carregam o
+/// fuso junto, e usá-lo evita que as datas em aberto apareçam um dia deslocadas
+/// no primeiro quadro. O padrão do app só entra numa equipe sem escala nenhuma.
+String _agendaTimezone(String? teamTimezone, List<Event> events) {
+  if (teamTimezone != null && teamTimezone.isNotEmpty) return teamTimezone;
+  for (final event in events) {
+    if (event.timezone.isNotEmpty) return event.timezone;
+  }
+  return 'America/Sao_Paulo';
 }
 
 class AgendaScreen extends ConsumerStatefulWidget {
@@ -62,6 +79,17 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final team = auth.teams.where((t) => t.teamId == teamId).firstOrNull ??
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, _scope)));
+    // A grade de cultos e o fuso da equipe só interessam a quem monta escala, e
+    // só na aba das próximas — é ali que faz sentido mostrar as datas que ainda
+    // não viraram escala. Para o resto, estes dois providers nem são
+    // observados, e a agenda continua custando uma requisição.
+    final planning = team.canManage && _scope == 'upcoming';
+    final templates = planning
+        ? ref.watch(serviceTemplatesProvider(teamId)).valueOrNull ??
+            const <ServiceTemplate>[]
+        : const <ServiceTemplate>[];
+    final teamTimezone =
+        planning ? ref.watch(teamProvider(teamId)).valueOrNull?.timezone : null;
     // Largura da **janela**: o botão de criar escala muda de lugar (canto
     // inferior no celular, cabeçalho no monitor), e essa decisão é sobre o
     // formato da tela, não sobre o espaço que a lista recebeu.
@@ -141,7 +169,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                         ref.invalidate(eventsProvider((teamId, _scope))),
                   ),
                   data: (cached) => _EventsList(
+                    teamId: teamId,
                     events: cached.data,
+                    openDates: planning
+                        ? openDates(
+                            templates: templates,
+                            events: cached.data,
+                            timezone: _agendaTimezone(
+                              teamTimezone,
+                              cached.data,
+                            ),
+                            now: DateTime.now(),
+                          )
+                        : const [],
                     showFeaturedEvent: _scope == 'upcoming',
                     canManage: team.canManage,
                     membershipId: team.membershipId,
@@ -454,7 +494,9 @@ class _OnboardingCard extends StatelessWidget {
 
 class _EventsList extends StatelessWidget {
   const _EventsList({
+    required this.teamId,
     required this.events,
+    required this.openDates,
     required this.showFeaturedEvent,
     required this.canManage,
     required this.membershipId,
@@ -463,7 +505,13 @@ class _EventsList extends StatelessWidget {
     required this.onRefresh,
   });
 
+  final String teamId;
   final List<Event> events;
+
+  /// As datas da grade ainda sem escala. Vazio para quem não gerencia — ver
+  /// [_OpenDatesGroup].
+  final List<OpenDate> openDates;
+
   final bool showFeaturedEvent;
   final bool canManage;
   final String membershipId;
@@ -478,6 +526,42 @@ class _EventsList extends StatelessWidget {
         : null;
 
     if (events.isEmpty) {
+      // Agenda vazia com datas em aberto é o começo de todo mês: a grade já
+      // sabe quais são os próximos domingos, e dizer "nenhuma escala marcada"
+      // ali seria esconder justamente a lista que resolve a tela.
+      if (openDates.isNotEmpty) {
+        return Column(
+          children: [
+            if (banner != null) banner,
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => RefreshIndicator(
+                  onRefresh: onRefresh,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      0,
+                      AppSpacing.xl,
+                      AppSpacing.xxxl * 2,
+                    ),
+                    children: [
+                      _OpenDatesGroup(
+                        teamId: teamId,
+                        dates: openDates,
+                        // O mesmo ponto de virada da lista de escalas: as duas
+                        // arrumações precisam concordar, senão a agenda muda de
+                        // formato no meio ao ganhar a primeira escala.
+                        wide: constraints.maxWidth >= 880,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
       return Column(
         children: [
           if (banner != null) banner,
@@ -564,7 +648,7 @@ class _EventsList extends StatelessWidget {
                           membershipId: membershipId,
                         ),
                       const SizedBox(height: AppSpacing.xl),
-                      if (remaining.isNotEmpty) ...[
+                      if (remaining.isNotEmpty || openDates.isNotEmpty) ...[
                         // Um fio separa a manchete da lista. É a única divisória
                         // da tela, e por isso não precisa de mais nada em volta.
                         Divider(
@@ -588,6 +672,20 @@ class _EventsList extends StatelessWidget {
                             ),
                         ],
                       ),
+                    // Por último, e não intercalado com as escalas: o que já
+                    // está marcado vem primeiro porque é o que a equipe vai
+                    // cumprir. O que falta marcar é trabalho da liderança, e
+                    // trabalho pendente lido como lista fecha a tela melhor do
+                    // que espalhado no meio do que já está pronto.
+                    if (openDates.isNotEmpty) ...[
+                      if (remaining.isNotEmpty)
+                        const SizedBox(height: AppSpacing.xl),
+                      _OpenDatesGroup(
+                        teamId: teamId,
+                        dates: openDates,
+                        wide: wide,
+                      ),
+                    ],
                   ],
                 ),
               );
@@ -595,6 +693,246 @@ class _EventsList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// As datas que a grade prevê e que ainda não têm escala.
+///
+/// A grade da igreja já diz quais são os próximos domingos e quintas, mas até
+/// aqui isso só existia dentro do formulário de nova escala: a agenda mostrava
+/// o que já tinha sido criado e ficava calada sobre o que faltava. O líder
+/// precisava contar os domingos de cabeça para perceber que o mês estava vazio.
+///
+/// **Nada disto existe no banco.** São datas calculadas na hora (ver
+/// [openDates]), e é justamente por isso que elas podem aparecer: mostrar o mês
+/// inteiro não custa criar dezenas de escalas vazias que depois alguém teria de
+/// apagar uma a uma. Tocar numa cria só aquela; a linha do fim cria todas.
+///
+/// Só para quem gerencia. Para a equipe, uma data sem escala não é informação —
+/// é ruído no meio do que ela abriu o app para ver.
+class _OpenDatesGroup extends ConsumerStatefulWidget {
+  const _OpenDatesGroup({
+    required this.teamId,
+    required this.dates,
+    required this.wide,
+  });
+
+  final String teamId;
+  final List<OpenDate> dates;
+  final bool wide;
+
+  @override
+  ConsumerState<_OpenDatesGroup> createState() => _OpenDatesGroupState();
+}
+
+class _OpenDatesGroupState extends ConsumerState<_OpenDatesGroup> {
+  bool _saving = false;
+
+  Future<void> _createAll() async {
+    final count = widget.dates.length;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: count == 1 ? 'Criar 1 rascunho?' : 'Criar $count rascunhos?',
+      message: 'Cada data vira uma escala em rascunho, com os cultos da grade '
+          'já marcados. A equipe só vê depois que você publicar.',
+      confirmLabel: 'Criar',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      final result = await ref
+          .read(eventRepositoryProvider)
+          .generate(widget.teamId, weeks: openDatesWeeks);
+      if (!mounted) return;
+
+      // A lista de datas em aberto sai da lista de escalas: invalidar uma
+      // recalcula a outra, e as linhas somem sozinhas.
+      ref.invalidate(eventsProvider((widget.teamId, 'upcoming')));
+      showAppSnackBar(
+        context,
+        result.createdCount == 0
+            ? 'Estas datas já tinham escala.'
+            : '${result.createdCount} '
+                '${result.createdCount == 1 ? 'rascunho criado' : 'rascunhos criados'}.',
+        tone: AppTone.success,
+      );
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGroup(
+      title: 'Datas sem escala',
+      subtitle: 'Da grade de cultos da igreja, nas próximas '
+          '$openDatesWeeks semanas.',
+      dividerIndent: AppGroup.textIndent,
+      children: [
+        for (final date in widget.dates)
+          _OpenDateRow(date: date, wide: widget.wide),
+        _CreateDraftsRow(
+          count: widget.dates.length,
+          saving: _saving,
+          onTap: _createAll,
+        ),
+      ],
+    );
+  }
+}
+
+/// Uma data em aberto, na mesma arrumação de [_EventRow] — e de propósito mais
+/// apagada que ela.
+///
+/// Data e horários no cinza do texto de apoio, sem selo e sem linha de estado:
+/// não há nada a resolver ainda, e pintar de âmbar todo domingo do mês faria a
+/// cor de "isto precisa de você" perder o sentido nas escalas que realmente
+/// travaram. O que a linha promete é o toque, e quem diz isso é o "+" à
+/// direita, no lugar onde as escalas existentes têm a seta.
+class _OpenDateRow extends StatelessWidget {
+  const _OpenDateRow({required this.date, required this.wide});
+
+  final OpenDate date;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final timezone = date.timezone;
+
+    final title = Text(
+      formatEventWeekdayDate(date.startsAt, timezone),
+      style: theme.textTheme.titleMedium?.copyWith(
+        color: scheme.onSurfaceVariant,
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+
+    final times = Text(
+      [
+        for (final service in date.services)
+          '${service.label} ${formatEventTime(service.startsAt, timezone)}',
+      ].join('  ·  '),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: scheme.onSurfaceVariant,
+        fontFeatures: AppTypography.tabular,
+      ),
+    );
+
+    return AppPressable(
+      onTap: () => context.push('/agenda/novo?data=${date.dateParam}'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+        ),
+        child: Row(
+          crossAxisAlignment:
+              wide ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+          children: [
+            if (wide) ...[
+              SizedBox(width: 250, child: title),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(child: times),
+            ] else
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    const SizedBox(height: 3),
+                    times,
+                  ],
+                ),
+              ),
+            const SizedBox(width: AppSpacing.md),
+            Padding(
+              padding: const EdgeInsets.only(top: 2, right: 4),
+              child: Icon(
+                Icons.add_circle_outline_rounded,
+                size: 20,
+                color: scheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A última linha do grupo: cria de uma vez as datas listadas acima.
+///
+/// Fica **depois** da lista, e não no cabeçalho, porque ela é o resumo do que
+/// está ali — o líder lê as datas, decide que é isso mesmo e confirma no fim. É
+/// também a posição em que o polegar chega sem cobrir a lista que ele acabou de
+/// conferir.
+class _CreateDraftsRow extends StatelessWidget {
+  const _CreateDraftsRow({
+    required this.count,
+    required this.saving,
+    required this.onTap,
+  });
+
+  final int count;
+  final bool saving;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return AppPressable(
+      onTap: saving ? null : onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: saving
+                  ? CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
+                    )
+                  : Icon(
+                      Icons.event_repeat_rounded,
+                      size: 20,
+                      color: scheme.primary,
+                    ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                count == 1
+                    ? 'Criar o rascunho desta data'
+                    : 'Criar os rascunhos destas $count datas',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
