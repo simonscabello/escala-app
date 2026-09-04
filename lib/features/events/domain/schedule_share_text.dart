@@ -89,15 +89,34 @@ String buildScheduleShareText(Event event) {
 /// em cima e repeti-la sobre a única lista de músicas seria ruído numa
 /// mensagem que se lê no celular. Com dois, o rótulo é o que impede o
 /// vocalista da noite de ensaiar o repertório da manhã.
+///
+/// **Repertório que falta é dito, e não omitido** -- pela mesma razão do
+/// "Sem ensaio" lá em cima: quem recebe este texto não tem o app para
+/// conferir, e a seção que some deixa "esqueceram de mandar" e "ainda não
+/// escolheram" com a mesma cara. Antes isso não aparecia porque a escala só
+/// era publicada com todos os cultos montados; agora ela vai para a equipe com
+/// as músicas em aberto de propósito, e este virou o caso normal.
 void _writeSongs(StringBuffer buffer, Event event, String timezone) {
-  final grupos = event.songsByService
-      .where((grupo) => _songLines(grupo.songs).isNotEmpty)
-      .toList();
+  final grupos = [
+    for (final grupo in event.songsByService)
+      (service: grupo.service, linhas: _songLines(grupo.songs)),
+  ];
   if (grupos.isEmpty) return;
 
   buffer.writeln();
   buffer.writeln('🎶 Músicas');
 
+  // Nada escolhido em culto nenhum: uma linha só. Repetir "Manhã" e "Noite"
+  // aqui para dizer o mesmo dos dois lados devolveria os horários que já
+  // estão no topo da mensagem.
+  if (grupos.every((grupo) => grupo.linhas.isEmpty)) {
+    buffer.writeln('Ainda não escolhidas.');
+    return;
+  }
+
+  // Daqui para baixo pelo menos um culto tem repertório, e aí o culto vazio
+  // **precisa** ser nomeado: sem isso, quem canta à noite lê a lista da manhã
+  // como o repertório do dia inteiro.
   final separar = grupos.length > 1;
   for (final grupo in grupos) {
     if (separar) {
@@ -107,11 +126,14 @@ void _writeSongs(StringBuffer buffer, Event event, String timezone) {
         '${formatEventTime(grupo.service.startsAt, timezone)}',
       );
     }
+    if (grupo.linhas.isEmpty) {
+      buffer.writeln('Ainda não escolhidas.');
+      continue;
+    }
     // A numeração recomeça em cada culto: "a 3ª da noite" é como a equipe
     // fala, e continuar contando de 4 a 6 obrigaria a subtrair de cabeça.
-    final linhas = _songLines(grupo.songs);
-    for (var i = 0; i < linhas.length; i++) {
-      buffer.writeln('${i + 1}. ${linhas[i]}');
+    for (var i = 0; i < grupo.linhas.length; i++) {
+      buffer.writeln('${i + 1}. ${grupo.linhas[i]}');
     }
   }
 }

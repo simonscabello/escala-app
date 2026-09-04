@@ -23,6 +23,7 @@ import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
+import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_song_sheet.dart';
@@ -234,7 +235,12 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
       if (mounted) {
         showAppSnackBar(
           context,
-          'Escala publicada para a equipe.',
+          // Publicar sem repertório é caminho normal, e não descuido: a
+          // confirmação diz o que a equipe recebeu e o que ainda vem.
+          widget.event.hasNoSongs
+              ? 'Escala publicada. A equipe já sabe quem está escalado; '
+                  'as músicas você escolhe depois.'
+              : 'Escala publicada para a equipe.',
           tone: AppTone.success,
         );
       }
@@ -247,12 +253,29 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
     }
   }
 
+  /// O que a barra diz acima do botão.
+  ///
+  /// Repertório em aberto não é mais pendência de publicação, e a frase
+  /// precisa dizer as duas coisas de uma vez: **dá** para publicar, e as
+  /// músicas ainda não estão lá. Dizer só "pronta" esconderia da liderança
+  /// o que ela mesma vai precisar terminar.
+  String _resumo(List<String> blockers) {
+    if (blockers.isNotEmpty) return 'Falta ${blockers.join(' e ')}';
+
+    final semRepertorio = widget.event.servicesWithoutSongs;
+    if (semRepertorio.isEmpty) return 'Pronta para a equipe';
+    if (widget.event.hasNoSongs) {
+      return 'Dá para publicar; as músicas podem vir depois';
+    }
+    return 'Dá para publicar; falta o repertório '
+        'de ${semRepertorio.join(' e ')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final pending = widget.event.publicationPendingItems;
-    final ready = pending.isEmpty;
+    final blockers = widget.event.publicationBlockers;
 
     return Container(
       decoration: BoxDecoration(
@@ -276,9 +299,7 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
                       const AppBadge(label: 'Rascunho', tone: AppTone.warning),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        ready
-                            ? 'Pronta para a equipe'
-                            : 'Falta ${pending.join(' e ')}',
+                        _resumo(blockers),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -971,6 +992,7 @@ class _SongsSection extends StatelessWidget {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final grupos = event.songsByService;
+    final diaDoCulto = eventLocalTime(event.startsAt, timezone);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1002,14 +1024,46 @@ class _SongsSection extends StatelessWidget {
           AppCard(
             color: scheme.surfaceContainerLow,
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(
-              canManage
-                  ? 'Nenhuma música escolhida ainda. Toque em "Montar" para '
-                      'escolher o repertório.'
-                  : 'O repertório ainda não foi definido.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  canManage
+                      ? 'Nenhuma música escolhida ainda. Toque em "Montar" para '
+                          'escolher o repertório.'
+                      : 'O repertório ainda não foi definido.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                // A porta que este vazio abre. A escala agora chega à equipe
+                // com as músicas em aberto, e é exatamente aí que a sugestão
+                // tem chance de ser acolhida -- depois de montado o
+                // repertório, ela já chega atrasada. A data vem preenchida com
+                // a do culto: quem toca aqui está pensando neste domingo.
+                //
+                // Culto que já passou não oferece nada: o servidor recusa
+                // sugestão com data no passado, e o seletor de data da folha
+                // começa em hoje.
+                if (!canManage && !_jaPassou(diaDoCulto)) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => showSuggestSongSheet(
+                        context,
+                        teamId: event.teamId,
+                        targetDate: diaDoCulto,
+                      ),
+                      icon: const Icon(
+                        Icons.lightbulb_outline_rounded,
+                        size: 18,
+                      ),
+                      label: const Text('Sugerir uma música'),
+                    ),
+                  ),
+                ],
+              ],
             ),
           )
         else
@@ -1040,6 +1094,18 @@ class _SongsSection extends StatelessWidget {
       ],
     );
   }
+}
+
+/// O dia do culto já ficou para trás.
+///
+/// Comparado no relógio do aparelho de propósito, e não no fuso da igreja: é o
+/// mesmo corte que o `showDatePicker` da folha de sugerir usa como `firstDate`,
+/// e divergir dele deixaria o seletor abrir com uma data anterior ao próprio
+/// limite.
+bool _jaPassou(DateTime diaDoCulto) {
+  final hoje = DateTime.now();
+  return DateTime(diaDoCulto.year, diaDoCulto.month, diaDoCulto.day)
+      .isBefore(DateTime(hoje.year, hoje.month, hoje.day));
 }
 
 /// Um culto e o repertório dele. Mesma forma da seção de função em "Equipe

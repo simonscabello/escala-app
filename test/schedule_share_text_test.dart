@@ -53,7 +53,11 @@ void main() {
     expect(text, contains('Paleta: Preto e dourado'));
     expect(text, contains('Observações'));
     expect(text, contains('Chegar cedo'));
-    expect(text, isNot(contains('Músicas')));
+    // A seção entra mesmo vazia: escala publicada sem repertório é caso
+    // normal, e sumir com ela deixaria quem recebe sem saber se as músicas
+    // não saíram ou se o texto veio pela metade.
+    expect(text, contains('🎶 Músicas'));
+    expect(text, contains('Ainda não escolhidas.'));
   });
 
   test('domingo com dois cultos lista os dois horários', () {
@@ -275,7 +279,7 @@ void main() {
     expect(text, contains('1. Abre Noite\n2. Abre Manhã (Bm)'));
   });
 
-  test('culto sem música não vira seção vazia no texto', () {
+  test('culto sem música aparece dizendo que o repertório não saiu', () {
     final text = buildScheduleShareText(
       doisCultos(
         songs: [
@@ -285,10 +289,15 @@ void main() {
     );
 
     expect(text, contains('1. Só de Manhã'));
-    // Com um único culto tendo repertório, o cabeçalho não entra -- e a noite
-    // não aparece como uma seção vazia, que só ocuparia linha.
-    expect(text, isNot(contains('Noite 19:00')));
-    expect(text, isNot(contains('Manhã 08:30')));
+    // A noite entra nomeada, e não some: sem ela, quem canta à noite lê
+    // "1. Só de Manhã" como o repertório do dia inteiro. Isto passou a
+    // importar quando a escala pôde ser publicada com músicas em aberto --
+    // antes, o culto vazio só existia em rascunho, que ninguém compartilha.
+    expect(text, contains('Manhã 08:30'));
+    expect(
+      text,
+      contains('Noite 19:00\nAinda não escolhidas.'),
+    );
   });
 
   test('repertório agrupado por culto, com o culto vazio preservado', () {

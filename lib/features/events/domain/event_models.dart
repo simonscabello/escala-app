@@ -392,14 +392,35 @@ class Event {
 
   bool get isDraft => status == 'DRAFT';
 
-  /// O que ainda impede a publicação. Na agenda, `songCount` vem junto de
-  /// cada culto; no detalhe e no cache antigo, a própria lista de músicas é a
-  /// fonte alternativa.
-  List<String> get publicationPendingItems {
-    final pending = <String>[];
-    if (assignments.isEmpty) pending.add('equipe');
+  /// O que ainda impede a publicação.
+  ///
+  /// Só a equipe: escala sem ninguém escalado não é escala, não há o que
+  /// publicar. Repertório em aberto **não** entra aqui -- ele é dito por
+  /// [servicesWithoutSongs], que informa sem travar.
+  List<String> get publicationBlockers {
+    return assignments.isEmpty ? const ['equipe'] : const [];
+  }
 
+  /// Os cultos desta escala que ainda não têm repertório.
+  ///
+  /// Vale em rascunho **e** em escala publicada, e essa é a razão de existir:
+  /// a escala vai para a equipe com as músicas em aberto (o culto de quinta
+  /// costuma ser assim), e quem está escalado precisa ver que o repertório
+  /// ainda não saiu -- em vez de achar que a lista vazia é a lista final.
+  ///
+  /// Na agenda, `songCount` vem junto de cada culto; no detalhe, a própria
+  /// lista de músicas serve de fonte alternativa.
+  ///
+  /// **Sem saber, cala.** `songCount` nulo é cache gravado antes de o campo
+  /// existir, e na agenda `songs` vem sempre vazio de propósito -- ali "não
+  /// sei" e "não tem" teriam a mesma cara. Dizer "músicas a definir" em cima
+  /// do palpite marcaria como pendente toda escala montada que o app ainda não
+  /// recarregou.
+  List<String> get servicesWithoutSongs {
+    final semRepertorio = <String>[];
     for (final service in displayServices) {
+      if (service.songCount == null && songs.isEmpty) continue;
+
       final count = service.songCount ??
           songs.where((song) {
             final serviceId = song.serviceId.isEmpty
@@ -407,10 +428,18 @@ class Event {
                 : song.serviceId;
             return serviceId == service.id;
           }).length;
-      if (count == 0) pending.add('músicas de ${service.label}');
+      if (count == 0) semRepertorio.add(service.label);
     }
-    return pending;
+    return semRepertorio;
   }
+
+  /// Nenhum culto desta escala tem música.
+  ///
+  /// Separado de [servicesWithoutSongs] porque a frase muda: com um culto
+  /// montado e outro não, o que falta tem nome; sem nenhum, nomear os cultos
+  /// só repete a escala inteira.
+  bool get hasNoSongs =>
+      servicesWithoutSongs.length == displayServices.length;
 
   /// Nomes das funções em que o membership aparece nesta escala.
   /// Quantas pessoas distintas estao escaladas. Quem acumula duas funcoes

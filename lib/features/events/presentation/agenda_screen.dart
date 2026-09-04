@@ -832,9 +832,9 @@ class _FeaturedEvent extends ConsumerWidget {
           // A mesma frase do detalhe: abrir a escala não deve reapresentar a
           // mesma informação num formato diferente.
           EventTimesList(event: event, timezone: timezone),
-          if (event.isDraft) ...[
+          if (event.isDraft || event.servicesWithoutSongs.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
-            _DraftPendingLine(event: event),
+            _ScheduleStatusLines(event: event),
           ],
           if (youPositions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
@@ -908,6 +908,9 @@ class _EventRow extends ConsumerWidget {
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final youPositions = event.positionsForMembership(membershipId);
+    // Rascunho fala do que falta para publicar; escala publicada sem
+    // repertório fala do repertório. Uma das duas, ou nenhuma.
+    final temEstado = event.isDraft || event.servicesWithoutSongs.isNotEmpty;
 
     // "Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00".
     final times = [
@@ -1012,10 +1015,13 @@ class _EventRow extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (event.isDraft) _DraftPendingLine(event: event),
+                        if (temEstado)
+                          _ScheduleStatusLines(
+                            event: event,
+                            alignment: CrossAxisAlignment.end,
+                          ),
                         if (youPositions.isNotEmpty) ...[
-                          if (event.isDraft)
-                            const SizedBox(height: AppSpacing.xs),
+                          if (temEstado) const SizedBox(height: AppSpacing.xs),
                           YouHighlight(positionNames: youPositions),
                         ],
                       ],
@@ -1038,9 +1044,9 @@ class _EventRow extends ConsumerWidget {
                           const SizedBox(height: AppSpacing.sm),
                           YouHighlight(positionNames: youPositions),
                         ],
-                        if (event.isDraft) ...[
+                        if (temEstado) ...[
                           const SizedBox(height: AppSpacing.sm),
-                          _DraftPendingLine(event: event),
+                          _ScheduleStatusLines(event: event),
                         ],
                       ],
                     ),
@@ -1053,30 +1059,85 @@ class _EventRow extends ConsumerWidget {
   }
 }
 
-class _DraftPendingLine extends StatelessWidget {
-  const _DraftPendingLine({required this.event});
+/// O estado da escala no item da agenda: até duas linhas curtas.
+///
+/// **Rascunho** responde "dá para publicar?"; **repertório em aberto**
+/// responde "as músicas já saíram?". São perguntas diferentes desde que a
+/// escala passou a poder ir para a equipe sem música -- juntar as duas numa
+/// linha só fazia "falta música" parecer impedimento, que é justamente o que
+/// ele deixou de ser.
+///
+/// Daí os tons: âmbar no que a liderança precisa resolver para publicar,
+/// ardósia no que é só notícia -- para a equipe inteira, inclusive quem só
+/// quer saber se já pode ensaiar.
+class _ScheduleStatusLines extends StatelessWidget {
+  const _ScheduleStatusLines({
+    required this.event,
+    this.alignment = CrossAxisAlignment.start,
+  });
 
   final Event event;
+  final CrossAxisAlignment alignment;
 
   @override
   Widget build(BuildContext context) {
-    final pending = event.publicationPendingItems;
-    final palette = AppStatusColors.of(context).warning;
+    final cores = AppStatusColors.of(context);
+    final semRepertorio = event.servicesWithoutSongs;
+    final blockers = event.publicationBlockers;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: alignment,
+      children: [
+        if (event.isDraft)
+          _StatusLine(
+            icon: blockers.isEmpty
+                ? Icons.check_circle_outline
+                : Icons.pending_actions,
+            text: blockers.isEmpty
+                ? 'Pronta para publicar'
+                : 'Falta ${blockers.join(' e ')}',
+            palette: cores.warning,
+          ),
+        if (semRepertorio.isNotEmpty) ...[
+          if (event.isDraft) const SizedBox(height: AppSpacing.xs),
+          _StatusLine(
+            icon: Icons.music_note_outlined,
+            // Sem nenhuma música, nomear os cultos só repetiria a linha de
+            // horários logo acima.
+            text: event.hasNoSongs
+                ? 'Músicas a definir'
+                : 'Músicas a definir: ${semRepertorio.join(' e ')}',
+            palette: cores.info,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.icon,
+    required this.text,
+    required this.palette,
+  });
+
+  final IconData icon;
+  final String text;
+  final StatusPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          pending.isEmpty ? Icons.check_circle_outline : Icons.pending_actions,
-          size: 16,
-          color: palette.foreground,
-        ),
+        Icon(icon, size: 16, color: palette.foreground),
         const SizedBox(width: AppSpacing.sm),
         Flexible(
           child: Text(
-            pending.isEmpty
-                ? 'Pronta para publicar'
-                : 'Falta ${pending.join(' e ')}',
+            text,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: palette.foreground,
                   fontWeight: FontWeight.w700,
