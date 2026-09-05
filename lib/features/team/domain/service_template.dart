@@ -58,22 +58,27 @@ class ServiceTemplate {
 class AffectedEvent {
   const AffectedEvent({
     required this.eventId,
-    required this.title,
     required this.startsAt,
     required this.label,
+    this.title,
   });
 
   factory AffectedEvent.fromJson(Map<String, dynamic> json) {
     return AffectedEvent(
       eventId: json['eventId'] as String,
-      title: json['title'] as String,
+      title: json['title'] as String?,
       startsAt: DateTime.parse(json['startsAt'] as String).toUtc(),
       label: json['label'] as String,
     );
   }
 
   final String eventId;
-  final String title;
+
+  /// Título da escala afetada, e **nulo é o caso comum**: só culto especial
+  /// recebe nome. Mesmo cast não-nulável que derrubava o aviso de escala no
+  /// mesmo dia -- aqui ele estourava ao salvar uma linha da grade que já tem
+  /// escalas futuras, que é justamente quando esta lista é buscada.
+  final String? title;
 
   /// Horário do **culto**, não da escala: é ele que mudaria.
   final DateTime startsAt;

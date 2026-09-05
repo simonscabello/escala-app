@@ -192,7 +192,7 @@ class SameDayConflict {
     required this.membershipId,
     required this.displayName,
     required this.otherEventId,
-    required this.otherEventTitle,
+    this.otherEventTitle,
   });
 
   factory SameDayConflict.fromJson(Map<String, dynamic> json) {
@@ -200,14 +200,22 @@ class SameDayConflict {
       membershipId: json['membershipId'] as String,
       displayName: json['displayName'] as String,
       otherEventId: json['otherEventId'] as String,
-      otherEventTitle: json['otherEventTitle'] as String,
+      otherEventTitle: json['otherEventTitle'] as String?,
     );
   }
 
   final String membershipId;
   final String displayName;
   final String otherEventId;
-  final String otherEventTitle;
+
+  /// Título da outra escala do mesmo dia. **Nulo é o caso comum**, e não
+  /// ausência de dado: só culto especial recebe nome, o domingo comum é
+  /// identificado pela data. O backend sempre declarou `string | null` aqui;
+  /// era o cast não-nulável deste lado que derrubava a escala inteira por
+  /// causa de um aviso secundário -- e como o estouro acontece dentro do
+  /// `fromJson`, a tela mostrava "Não foi possível carregar a escala", que
+  /// é a mensagem de rede fora do ar.
+  final String? otherEventTitle;
 }
 
 class EventWarnings {
