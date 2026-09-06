@@ -1,0 +1,201 @@
+# Publica o APK como Release do GitHub.
+#
+# Por que existe: a equipe não baixa da Play Store. Até aqui o APK saía da
+# máquina de quem desenvolve e ia parar no WhatsApp ou no Drive, com o líder
+# reenviando o arquivo a cada versão. Com o Release, o `GET /version` da API
+# aponta para uma URL fixa e o próprio app oferece o botão "Atualizar"
+# (ver AppUpdateBanner).
+#
+# **A assinatura é o ponto delicado.** O APK precisa sair assinado com a MESMA
+# chave dos anteriores; um APK assinado com outra chave (a de debug, por
+# exemplo) o Android recusa instalar por cima do app já existente -- a pessoa
+# teria de desinstalar e perder a sessão. Por isso este fluxo exige os quatro
+# segredos abaixo e **falha de propósito** se algum faltar, em vez de produzir
+# calado um arquivo que ninguém consegue instalar.
+#
+#   Settings → Secrets and variables → Actions → New repository secret
+#
+#     ANDROID_KEYSTORE_BASE64   o .jks em base64 (comando no docs/DEPLOY.md)
+#     ANDROID_KEYSTORE_PASSWORD storePassword do android/key.properties
+#     ANDROID_KEY_ALIAS         keyAlias (hoje: louvor)
+#     ANDROID_KEY_PASSWORD      keyPassword
+#
+# Como publicar uma versão:
+#
+#   1. suba o `version:` do pubspec.yaml (ex.: 0.2.0+5) e faça commit;
+#   2. `git tag v0.2.0 && git push origin v0.2.0`;
+#   3. quando o Release aparecer, ajuste no Railway (serviço da API):
+#        APP_LATEST_VERSION = 0.2.0
+#        APP_APK_URL        = URL do louve-0.2.0.apk no Release
+#
+# O passo 3 é manual de propósito: publicar o arquivo e *anunciar* a versão
+# para a equipe são decisões diferentes. Enquanto APP_LATEST_VERSION não subir,
+# o Release fica disponível sem que o app cobre a atualização de ninguém.
+
+name: Release do APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Permite repetir a publicação de uma tag que já existe, sem criá-la de novo.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag já existente a publicar (ex.: v0.2.0)"
+        required: true
+
+permissions:
+  # `gh release create` escreve no repositório. Nada além disso.
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descobrir a tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      # O app compara a versão instalada (package_info_plus) com a que a API
+      # anuncia. Uma tag que não bate com o pubspec produziria um Release
+      # "0.2.0" que se instala e continua se apresentando como 0.1.0 -- e o
+      # aviso de atualização nunca sumiria da tela da equipe.
+      - name: Conferir se a tag bate com o pubspec
+        run: |
+          PUBSPEC=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | cut -d'+' -f1)
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          if [ "$PUBSPEC" != "$TAG_VERSION" ]; then
+            echo "::error::A tag diz $TAG_VERSION e o pubspec.yaml diz $PUBSPEC."
+            echo "::error::Acerte o 'version:' do pubspec, refaça o commit e a tag."
+            exit 1
+          fi
+          echo "Versão $PUBSPEC confirmada."
+
+      # Falha aqui, e não depois do build: quinze minutos de compilação para
+      # descobrir no fim que o arquivo sai inútil seria o pior lugar para
+      # avisar.
+      - name: Conferir os segredos de assinatura
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          faltando=""
+          [ -z "$KEYSTORE" ]       && faltando="$faltando ANDROID_KEYSTORE_BASE64"
+          [ -z "$STORE_PASSWORD" ] && faltando="$faltando ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ]      && faltando="$faltando ANDROID_KEY_ALIAS"
+          [ -z "$KEY_PASSWORD" ]   && faltando="$faltando ANDROID_KEY_PASSWORD"
+          if [ -n "$faltando" ]; then
+            echo "::error::Faltam segredos de assinatura:$faltando"
+            echo "::error::Sem eles o APK sairia assinado com a chave de debug, e"
+            echo "::error::quem já tem o app instalado não conseguiria atualizar."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Mesma versão da máquina de desenvolvimento. Fixa de propósito: o
+          # canal `stable` muda sozinho, e o build da equipe não pode mudar
+          # junto sem alguém decidir.
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Restaurar a chave de assinatura
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/louvor-release.jks"
+          # O android/build.gradle.kts lê este arquivo; o caminho é absoluto
+          # porque o .properties não expande variáveis.
+          cat > android/key.properties <<EOF
+          storeFile=$RUNNER_TEMP/louvor-release.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      # O universal é o que vai no APP_APK_URL: uma URL só, que instala em
+      # qualquer aparelho. Pedir a alguém da equipe que descubra a arquitetura
+      # do próprio celular não é uma pergunta que se faz. Os por-arquitetura
+      # vão junto no Release para quem quiser economizar dados.
+      - name: Build do APK
+        run: |
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+          flutter build apk --release --split-per-abi \
+            --dart-define=API_BASE_URL=https://backend-production-b304.up.railway.app
+
+      - name: Nomear os arquivos com a versão
+        id: artefatos
+        run: |
+          V="${{ steps.tag.outputs.version }}"
+          cd build/app/outputs/flutter-apk
+          mv app-release.apk "louve-$V.apk"
+          mv app-arm64-v8a-release.apk "louve-$V-arm64-v8a.apk"
+          mv app-armeabi-v7a-release.apk "louve-$V-armeabi-v7a.apk"
+          mv app-x86_64-release.apk "louve-$V-x86_64.apk"
+          ls -lh louve-*.apk
+
+      # `gh` já vem no runner: nenhuma ação de terceiro precisa do token.
+      - name: Publicar o Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ steps.tag.outputs.version }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+          cd build/app/outputs/flutter-apk
+
+          NOTAS=$(cat <<EOF
+          Baixe **louve-$V.apk** e abra no celular. Se o Android perguntar,
+          autorize a instalação de apps desta origem.
+
+          Já tem o Louve! instalado? É só instalar por cima — os dados e a
+          sessão continuam.
+
+          Os arquivos por arquitetura são menores e servem para economizar
+          dados de quem sabe qual usar; na dúvida, use o de cima.
+          EOF
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" louve-*.apk --clobber
+          else
+            gh release create "$TAG" louve-*.apk \
+              --title "Louve! $V" \
+              --notes "$NOTAS"
+          fi
+
+          echo "### APK publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aponte o \`APP_APK_URL\` do Railway para:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${{ github.repository }}/releases/download/$TAG/louve-$V.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "E o \`APP_LATEST_VERSION\` para \`$V\`." >> "$GITHUB_STEP_SUMMARY"

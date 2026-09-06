@@ -1185,6 +1185,31 @@ Todos em `/teams/:teamId/reports`, restritos a OWNER/LEADER:
   lista — com os 581 hinos do Cantor Cristão importados de uma vez, a lista
   seria ruído. Tela: `Gerenciar equipe → Uso do repertório`.
 
+## Publicar o APK: Release do GitHub
+
+`.github/workflows/release-apk.yml` publica o APK quando uma tag `v*` é
+empurrada. O repositório é público, então a URL do asset baixa direto — é ela
+que o `APP_APK_URL` da API devolve e que o `AppUpdateBanner` abre.
+
+- **A tag manda, e tem de bater com o pubspec.** O workflow compara `v0.2.0`
+  com o `version:` do `pubspec.yaml` e recusa se divergirem. Sem essa
+  checagem, um Release "0.2.0" que se instala e continua se apresentando como
+  0.1.0 deixaria o aviso de atualização preso na tela da equipe para sempre: o
+  app compara a versão **instalada** (`package_info_plus`) com a que a API
+  anuncia.
+- **Os quatro segredos de assinatura são obrigatórios**, e o workflow falha
+  antes de compilar quando algum falta. Sem eles o Gradle cai na chave de debug
+  (ver o aviso em `android/app/build.gradle.kts`) e o arquivo sai impossível de
+  instalar por cima do app existente — quinze minutos de build para produzir
+  algo inútil, e calado.
+- **`APP_LATEST_VERSION` e `APP_APK_URL` continuam manuais**, no painel do
+  Railway. Publicar o arquivo e anunciar a versão são decisões diferentes: até
+  a variável subir, o Release existe sem cobrar atualização de ninguém.
+- O que vai no `APP_APK_URL` é o **universal**; os por-arquitetura vão junto no
+  Release só para quem quer economizar dados.
+
+O passo a passo completo, com os comandos, está em `docs/DEPLOY.md`, seção 5.
+
 ## Feature flags
 
 `app/lib/core/config/feature_flags.dart` esconde funcionalidades prontas em vez
