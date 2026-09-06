@@ -1,9 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/song_suggestion.dart';
+
+// `dateKey` virou compartilhado (aniversário e afastamento usam o mesmo
+// dia civil). Continua visível por aqui para quem já o importava.
+export '../../../core/date/civil_date.dart' show dateKey;
 
 /// Qual metade da lista se está olhando.
 ///
@@ -129,17 +134,6 @@ class SuggestionRepository {
       throw ApiException.fromDio(e);
     }
   }
-}
-
-/// AAAA-MM-DD a partir de uma data de calendário.
-///
-/// Montado à mão, e não por `toIso8601String()`: aquele devolve o instante, e
-/// um `DateTime` local de meia-noite vira o dia anterior em UTC — que é
-/// exatamente o erro que a sugestão de domingo não pode cometer.
-String dateKey(DateTime date) {
-  final mes = date.month.toString().padLeft(2, '0');
-  final dia = date.day.toString().padLeft(2, '0');
-  return '${date.year}-$mes-$dia';
 }
 
 final suggestionRepositoryProvider = Provider<SuggestionRepository>((ref) {

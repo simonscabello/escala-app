@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../shared/domain/person_fields.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_models.dart';
 
@@ -115,8 +116,18 @@ class AuthController extends StateNotifier<AuthState> {
   /// Edicao dos proprios dados. Depois de mudar o nome recarrega as equipes:
   /// o backend acerta junto o nome exibido na equipe (quando ninguem o
   /// personalizou), e o menu do app mostra esse nome.
-  Future<void> updateProfile({String? name, String? email}) async {
-    final user = await _repository.updateProfile(name: name, email: email);
+  Future<void> updateProfile({
+    String? name,
+    String? email,
+    Patch<DateTime?>? birthDate,
+    Patch<Gender?>? gender,
+  }) async {
+    final user = await _repository.updateProfile(
+      name: name,
+      email: email,
+      birthDate: birthDate,
+      gender: gender,
+    );
     _replaceUser(user);
     if (name != null) {
       unawaited(_loadTeams());

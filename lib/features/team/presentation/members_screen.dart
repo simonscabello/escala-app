@@ -7,6 +7,7 @@ import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/domain/person_fields.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -15,6 +16,8 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/contact_actions.dart';
+import '../../../shared/widgets/on_leave_badge.dart';
 import '../../../shared/widgets/position_icon.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
@@ -22,6 +25,7 @@ import '../../invites/presentation/invite_actions.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
+import 'reset_password_action.dart';
 
 /// A aba Equipe: as músicas da equipe e as pessoas da equipe.
 ///
@@ -45,6 +49,9 @@ class MembersScreen extends ConsumerWidget {
             .firstOrNull ??
         ref.watch(authControllerProvider).teams.firstOrNull;
     final canManage = myTeam?.canManage ?? false;
+    // Um líder não redefine a senha do dono (o servidor devolve 403), então a
+    // opção nem aparece para ele. Esconder é melhor que deixar tentar.
+    final actorIsOwner = myTeam?.role == 'OWNER';
     final wide = AppBreakpoints.of(context).isWide;
 
     return Scaffold(
@@ -134,6 +141,7 @@ class MembersScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xxl),
+                    _Birthdays(members: list, canManage: canManage),
                     if (list.isEmpty) ...[
                       const SectionHeader(title: 'Integrantes'),
                       _NoMembers(canManage: canManage),
@@ -147,6 +155,7 @@ class MembersScreen extends ConsumerWidget {
                         members: list,
                         teamId: teamId,
                         canManage: canManage,
+                        actorIsOwner: actorIsOwner,
                       )
                     else
                       // Uma superfície para a equipe inteira, e não um cartão
@@ -168,6 +177,7 @@ class MembersScreen extends ConsumerWidget {
                               member: member,
                               teamId: teamId,
                               canManage: canManage,
+                              actorIsOwner: actorIsOwner,
                             ),
                         ],
                       ),
@@ -195,11 +205,13 @@ class _MembersTable extends StatelessWidget {
     required this.members,
     required this.teamId,
     required this.canManage,
+    required this.actorIsOwner,
   });
 
   final List<Member> members;
   final String teamId;
   final bool canManage;
+  final bool actorIsOwner;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +280,7 @@ class _MembersTable extends StatelessWidget {
                   member: members[i],
                   teamId: teamId,
                   canManage: canManage,
+                  actorIsOwner: actorIsOwner,
                 ),
               ],
             ],
@@ -283,11 +296,13 @@ class _MemberTableRow extends ConsumerWidget {
     required this.member,
     required this.teamId,
     required this.canManage,
+    required this.actorIsOwner,
   });
 
   final Member member;
   final String teamId;
   final bool canManage;
+  final bool actorIsOwner;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -328,6 +343,10 @@ class _MemberTableRow extends ConsumerWidget {
                   if (member.role != 'MEMBER') ...[
                     const SizedBox(width: AppSpacing.sm),
                     AppBadge(label: member.roleLabel, tone: AppTone.primary),
+                  ],
+                  if (member.onLeave) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    const OnLeaveBadge(),
                   ],
                 ],
               ),
@@ -377,9 +396,12 @@ class _MemberTableRow extends ConsumerWidget {
             ),
             SizedBox(
               width: 48,
-              child: canManage && !member.isOwner
-                  ? _MemberMenu(member: member, teamId: teamId)
-                  : null,
+              child: _MemberMenu(
+                member: member,
+                teamId: teamId,
+                canManage: canManage,
+                actorIsOwner: actorIsOwner,
+              ),
             ),
           ],
         ),
@@ -463,11 +485,13 @@ class _MemberRow extends ConsumerWidget {
     required this.member,
     required this.teamId,
     required this.canManage,
+    required this.actorIsOwner,
   });
 
   final Member member;
   final String teamId;
   final bool canManage;
+  final bool actorIsOwner;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -499,6 +523,15 @@ class _MemberRow extends ConsumerWidget {
             if (member.role != 'MEMBER') ...[
               const SizedBox(width: AppSpacing.sm),
               AppBadge(label: member.roleLabel, tone: AppTone.primary),
+            ],
+            if (member.onLeave) ...[
+              const SizedBox(width: AppSpacing.sm),
+              OnLeaveBadge(
+                until: member.leaveUntil == null
+                    ? null
+                    : formatBirthday(member.leaveUntil!),
+                reason: member.leaveReason,
+              ),
             ],
           ],
         ),
@@ -532,41 +565,96 @@ class _MemberRow extends ConsumerWidget {
               ),
           ],
         ),
-        trailing: canManage && !member.isOwner
-            ? _MemberMenu(member: member, teamId: teamId)
-            : null,
+        trailing: _MemberMenu(
+          member: member,
+          teamId: teamId,
+          canManage: canManage,
+          actorIsOwner: actorIsOwner,
+        ),
       ),
     );
   }
 }
 
-/// Editar, convidar e remover — o mesmo menu nas duas arrumações.
+/// O que dá para fazer com uma pessoa, nas duas arrumações.
+///
+/// **Falar com ela não é privilégio de liderança**, e por isso o menu deixou de
+/// ser só de quem administra: WhatsApp e telefone aparecem para a equipe
+/// inteira, desde que haja número. O resto — editar, convidar, redefinir senha,
+/// remover — continua sendo de quem lidera.
+///
+/// O menu some quando não sobra nada para oferecer, em vez de abrir vazio.
 class _MemberMenu extends ConsumerWidget {
-  const _MemberMenu({required this.member, required this.teamId});
+  const _MemberMenu({
+    required this.member,
+    required this.teamId,
+    required this.canManage,
+    required this.actorIsOwner,
+  });
 
   final Member member;
   final String teamId;
+  final bool canManage;
+
+  /// Um líder não redefine a senha do dono: a rota devolve a senha temporária
+  /// a quem chamou, e isso seria entrar na conta dele.
+  final bool actorIsOwner;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return PopupMenuButton<String>(
-      tooltip: 'Opções de ${member.displayName}',
-      onSelected: (action) => _onAction(context, ref, action),
-      itemBuilder: (menuContext) => [
-        const PopupMenuItem(value: 'edit', child: Text('Editar')),
-        // Só para quem ainda não tem conta: é a linha em que o líder percebe
-        // que falta convidar, e até aqui o caminho era sair desta lista e
-        // procurar "Convites" nas configurações.
-        if (!member.hasAccount)
-          const PopupMenuItem(value: 'invite', child: Text('Convidar')),
+    final phone = member.phoneDigits;
+
+    final itens = <PopupMenuEntry<String>>[
+      if (phone != null) ...[
+        const PopupMenuItem(
+          value: 'whatsapp',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.chat_outlined),
+            title: Text('WhatsApp'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'call',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.call_outlined),
+            title: Text('Ligar'),
+          ),
+        ),
+      ],
+      if (phone != null && canManage) const PopupMenuDivider(),
+      if (canManage) const PopupMenuItem(value: 'edit', child: Text('Editar')),
+      // Só para quem ainda não tem conta: é a linha em que o líder percebe
+      // que falta convidar, e até aqui o caminho era sair desta lista e
+      // procurar "Convites" nas configurações.
+      if (canManage && !member.hasAccount)
+        const PopupMenuItem(value: 'invite', child: Text('Convidar')),
+      // O "esqueci minha senha" deste app, enquanto não há e-mail de
+      // recuperação. Só faz sentido para quem já tem conta.
+      if (canManage && member.hasAccount && (!member.isOwner || actorIsOwner))
+        const PopupMenuItem(
+          value: 'reset-password',
+          child: Text('Redefinir senha'),
+        ),
+      if (canManage && !member.isOwner)
         PopupMenuItem(
           value: 'remove',
           child: Text(
             'Remover da equipe',
-            style: TextStyle(color: Theme.of(menuContext).colorScheme.error),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
-      ],
+    ];
+
+    if (itens.isEmpty) return const SizedBox.shrink();
+
+    return PopupMenuButton<String>(
+      tooltip: 'Opções de ${member.displayName}',
+      onSelected: (action) => _onAction(context, ref, action),
+      itemBuilder: (menuContext) => itens,
     );
   }
 
@@ -575,6 +663,18 @@ class _MemberMenu extends ConsumerWidget {
     WidgetRef ref,
     String action,
   ) async {
+    final phone = member.phoneDigits;
+
+    if (action == 'whatsapp' && phone != null) {
+      await openWhatsApp(context, phone);
+      return;
+    }
+
+    if (action == 'call' && phone != null) {
+      await callPhone(context, phone);
+      return;
+    }
+
     if (action == 'edit') {
       context.push('/equipe/membros/editar', extra: member);
       return;
@@ -587,6 +687,16 @@ class _MemberMenu extends ConsumerWidget {
         teamId: teamId,
         membershipId: member.id,
         displayName: member.displayName,
+      );
+      return;
+    }
+
+    if (action == 'reset-password') {
+      await resetMemberPassword(
+        context,
+        ref,
+        teamId: teamId,
+        member: member,
       );
       return;
     }
@@ -616,6 +726,137 @@ class _MemberMenu extends ConsumerWidget {
         showAppSnackBar(context, e.message, tone: AppTone.danger);
       }
     }
+  }
+}
+
+/// Quem faz aniversário nos próximos dois meses.
+///
+/// **É o uso que justifica o campo existir.** Uma data de nascimento guardada e
+/// nunca mostrada seria mais um telefone: coletado e esquecido. Aqui ela vira a
+/// única coisa que a equipe faz com ela — lembrar de parabenizar.
+///
+/// O ano não aparece. Quem lê quer saber **quando**, e anunciar a idade de todo
+/// mundo na tela da equipe é uma decisão que ninguém tomou.
+class _Birthdays extends StatelessWidget {
+  const _Birthdays({required this.members, required this.canManage});
+
+  final List<Member> members;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final comData = members.where((m) => m.birthDate != null).toList();
+    final proximos = comData.where((m) => m.daysToBirthday! <= 60).toList()
+      ..sort((a, b) => a.daysToBirthday!.compareTo(b.daysToBirthday!));
+
+    if (proximos.isEmpty) {
+      // A explicação só vale a pena quando ninguém preencheu **e** existe
+      // alguém que poderia: com a equipe inteira sem conta, a linha viraria
+      // uma cobrança impossível de atender.
+      final alguemPodePreencher = members.any((m) => m.hasAccount);
+      if (!canManage || comData.isNotEmpty || !alguemPodePreencher) {
+        return const SizedBox.shrink();
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+        child: AppCard(
+          surface: CardSurface.sunken,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.cake_outlined,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  'Ninguém cadastrou a data de nascimento ainda. Cada pessoa '
+                  'preenche a sua em Perfil → Meus dados.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      child: AppGroup(
+        title: 'Aniversários',
+        dividerIndent: AppSpacing.lg + 40 + AppSpacing.md,
+        children: [
+          for (final member in proximos)
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.xs,
+              ),
+              leading: AppAvatar(
+                name: member.displayName,
+                imageUrl: member.avatarUrl,
+                radius: 20,
+              ),
+              title: Text(
+                member.displayName,
+                style: theme.textTheme.titleSmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                formatBirthday(member.birthDate!),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: _CountdownLabel(days: member.daysToBirthday!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Hoje", "Amanhã", "em 12 dias" — a distância, não a data.
+///
+/// A data já está na linha de baixo. O que muda a atitude de quem lê é saber
+/// se dá para deixar para depois.
+class _CountdownLabel extends StatelessWidget {
+  const _CountdownLabel({required this.days});
+
+  final int days;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (days == 0) {
+      return const AppBadge(
+        label: 'Hoje',
+        tone: AppTone.primary,
+        emphasis: BadgeEmphasis.solid,
+      );
+    }
+
+    if (days == 1) {
+      return const AppBadge(label: 'Amanhã', tone: AppTone.primary);
+    }
+
+    return Text(
+      'em $days dias',
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
   }
 }
 

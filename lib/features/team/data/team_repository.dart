@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
@@ -196,6 +197,7 @@ class TeamRepository {
     String teamId, {
     required String displayName,
     String? phone,
+    String? notes,
     List<String> positionIds = const [],
   }) async {
     return _guard(() async {
@@ -204,6 +206,7 @@ class TeamRepository {
         data: {
           'displayName': displayName,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
           if (positionIds.isNotEmpty) 'positionIds': positionIds,
         },
       );
@@ -223,16 +226,23 @@ class TeamRepository {
     });
   }
 
+  /// O afastamento vai **inteiro** ou não vai: `onLeave`, a previsão e o
+  /// motivo saem juntos do formulário, e mandar um sem o outro deixaria no
+  /// banco a metade que ninguém escreveu.
   Future<Member> updateMember(
     String teamId,
     String membershipId, {
     String? displayName,
     String? phone,
+    String? notes,
     List<String>? positionIds,
 
     /// `LEADER` ou `MEMBER`. `OWNER` o servidor não aceita: o dono é quem criou
     /// a equipe, e isso não se atribui.
     String? role,
+    bool? onLeave,
+    DateTime? leaveUntil,
+    String? leaveReason,
   }) async {
     return _guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
@@ -240,11 +250,39 @@ class TeamRepository {
         data: {
           if (displayName != null) 'displayName': displayName,
           if (phone != null) 'phone': phone,
+          // String vazia é intenção de apagar, e o servidor a lê como `null`.
+          if (notes != null) 'notes': notes,
           if (positionIds != null) 'positionIds': positionIds,
           if (role != null) 'role': role,
+          if (onLeave != null) ...{
+            'onLeave': onLeave,
+            // Desligar já limpa os dois no servidor; mandá-los aqui seria
+            // repetir a regra em dois lugares.
+            if (onLeave) 'leaveUntil':
+                leaveUntil == null ? null : dateKey(leaveUntil),
+            if (onLeave) 'leaveReason': leaveReason ?? '',
+          },
         },
       );
       return Member.fromJson(response.data!);
+    });
+  }
+
+  /// Redefine a senha de um integrante e devolve a temporária — **uma vez**.
+  ///
+  /// Substitui a recuperação por e-mail, que o projeto não tem: quem esquece a
+  /// senha fala com quem lidera, e a pessoa entra com esta e é obrigada a
+  /// trocar no próximo acesso. As sessões abertas caem junto, do lado do
+  /// servidor.
+  ///
+  /// A senha **não volta a aparecer**: ela nunca é gravada em claro, nem aqui
+  /// nem lá. Se a tela perder o texto, o caminho é redefinir de novo.
+  Future<String> resetMemberPassword(String teamId, String membershipId) async {
+    return _guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/teams/$teamId/members/$membershipId/reset-password',
+      );
+      return response.data!['temporaryPassword'] as String;
     });
   }
 

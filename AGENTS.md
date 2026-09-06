@@ -218,10 +218,12 @@ mais de um. `*` é recusado no boot em produção, e isso não mudou.
 Cada pessoa cuida da própria conta em `Perfil`. Nada disso tem `:id` na rota —
 todas as três agem sobre o dono do token:
 
-- `PATCH /users/me` — nome e e-mail (o e-mail é o login; duplicado dá 409
-  `EMAIL_ALREADY_USED`). Mudar o nome também acerta o `displayName` na equipe,
-  **mas só quando ninguém o personalizou** (o líder pode ter trocado "José
-  Carlos da Silva" por "Zeca", e corrigir o nome da conta não deve desfazer).
+- `PATCH /users/me` — nome, e-mail, **data de nascimento e gênero** (o e-mail é
+  o login; duplicado dá 409 `EMAIL_ALREADY_USED`). Mudar o nome também acerta o
+  `displayName` na equipe, **mas só quando ninguém o personalizou** (o líder
+  pode ter trocado "José Carlos da Silva" por "Zeca", e corrigir o nome da conta
+  não deve desfazer). Nascimento e gênero aceitam `null` para limpar; campo
+  ausente é "não mexi nele" — ver a seção Ficha do integrante.
 - `POST /users/me/avatar` — `multipart/form-data`, campo `file`.
 - `DELETE /users/me/avatar`.
 - Trocar a senha continua em `POST /auth/change-password`, que exige a atual e
@@ -1029,6 +1031,73 @@ No app, em `Equipe → Integrantes → (pessoa)`, no fim do formulário. A tela
 convidado ela mostra o papel atual e o motivo, sem seletor — um seletor
 desabilitado convidaria a insistir.
 
+**Redefinir a senha** fica no menu da linha do integrante (`Redefinir senha`,
+`reset_password_action.dart`), e só aparece para quem já tem conta — pela mesma
+razão, ela some quando um líder olha a linha do dono, em vez de deixar tentar e
+levar 403. O diálogo mostra a senha temporária **uma vez**, com copiar e
+"WhatsApp"; ela nunca é gravada em claro, e perder a tela significa redefinir de
+novo.
+
+**Até onde vai a derrubada de sessão.** `revokeAllForUser` revoga os *refresh
+tokens*: nenhum aparelho renova a sessão, e a senha antiga não entra mais em
+lugar nenhum. O *access token* que já estava na mão continua valendo até
+expirar (`JWT_ACCESS_TTL_SECONDS`, uma hora) — o `JwtAuthGuard` verifica o JWT
+sem ir ao banco, e o `mustChangePassword` que ele lê é o do payload antigo. Um
+app aberto responde nessa janela. O texto do diálogo diz isso; fechar a janela
+exigiria uma coluna de versão do token conferida a cada requisição, e essa
+decisão não foi tomada.
+
+## Ficha do integrante: o que é da pessoa e o que é da equipe
+
+A ficha está partida em dois lugares, e a divisão não é arrumação — é quem
+responde pelo dado.
+
+**Na conta (`users`), porque é da pessoa:** `birth_date` e `gender`. Não mudam
+de equipe para equipe, e quem os conhece é o dono da conta. Preenchidos em
+`Perfil → Meus dados`, por `PATCH /users/me`.
+
+- **O preço está assumido:** integrante cadastrado pelo líder e ainda sem conta
+  vem com `birthDate: null`, e o líder **não** preenche por ele. A tela diz isso
+  ("aparece quando Fulano criar a conta"), em vez de mostrar um campo vazio que
+  parece cadastro esquecido. Se um dia a decisão mudar, o campo desce para
+  `memberships` — é uma migration pequena.
+- `birth_date` é `@db.Date`, dia civil, nunca timestamp. Mesma armadilha já paga
+  em `Unavailability`: guardar com hora faz quem nasceu no dia 1º virar dia 30.
+  O par `toDateOnly`/`toDateKey` mora em `src/common/date-only.ts` (backend) e
+  `lib/core/date/civil_date.dart` (app).
+- 400 `BIRTH_DATE_IN_FUTURE` e `BIRTH_DATE_TOO_OLD` (ano < 1900): o
+  `class-validator` garante o formato, mas não sabe que ninguém nasceu amanhã.
+- `Gender` é `MALE | FEMALE | OTHER`, e `null` é "não informou" — estado padrão
+  e legítimo. Nada no sistema decide nada por ele.
+
+**No vínculo (`memberships`), porque é da equipe:** `notes`, `on_leave`,
+`leave_until` e `leave_reason`, junto de `phone`, que já morava ali.
+
+- `notes` é a anotação de quem lidera ("chega depois das 9h"). **O corte é no
+  servidor:** `MembershipsService.list` recebe `canSeeNotes` e devolve `null`
+  para quem é `MEMBER` — campo que não pode ser lido não sai da API.
+- **Afastamento liga e desliga à mão.** `leave_until` é *previsão* de retorno, e
+  não gatilho: quem sabe que a pessoa voltou é a liderança, não o calendário.
+  Voltar antes do previsto é comum, e um retorno automático na data recolocaria
+  na escala alguém que ninguém conferiu. Quando a previsão vence, a API devolve
+  `leaveOverdue: true` e a tela cobra a decisão em vez de tomá-la.
+- **Desligar o afastamento limpa a previsão e o motivo** (`leaveFields`, no
+  serviço). Sem isso, quem se afasta de novo em setembro reapareceria com
+  "previsão: 12 de março" — texto que ninguém escreveu, dito com a autoridade de
+  um campo preenchido.
+- O afastamento **não impede escalar**: aparece como etiqueta âmbar na lista,
+  na ficha e no seletor da escalação, ao lado da de indisponibilidade. Uma é o
+  aviso de longo prazo, a outra é a do dia; quem está nos dois estados vê os
+  dois selos. O rótulo é **"Em afastamento"**, e não "Afastado": o app sabe o
+  gênero de quem preencheu e não sabe o de quem não preencheu, e um adjetivo
+  erraria o nome de metade da equipe toda vez que aparecesse.
+
+**Onde os campos aparecem:** os aniversários dos próximos 60 dias abrem a aba
+Equipe ("Hoje", "Amanhã", "em 12 dias"), sem o ano — quem lê quer saber quando
+parabenizar, e anunciar a idade de todo mundo é decisão que ninguém tomou. O
+`phone` finalmente tem uso: WhatsApp e ligação no menu do integrante, para a
+equipe inteira e não só para quem lidera.
+
 ## Convidados
 
 Músico de fora chamado para uma ocasião: `Membership` com `isGuest = true`,
@@ -1368,5 +1437,8 @@ executado.
   a letra quando a conexão cai durante o ensaio ou o culto.
 - **Sem link web da escala.** Convidado e quem não tem o APK dependem do texto
   compartilhado.
-- **Telefone coletado e não usado.** É gravado e devolvido pela API, mas nenhuma
-  tela faz nada com ele: ou vira ação de WhatsApp/ligação, ou sai do cadastro.
+- **Sessão aberta sobrevive à redefinição de senha por até uma hora.** O refresh
+  token é revogado na hora, mas o access token em mãos vale até expirar e o
+  `JwtAuthGuard` não vai ao banco. Fechar isso exige versão de token (ou
+  `password_changed_at`) conferida por requisição — custo de uma leitura a cada
+  chamada. Ver a seção "Quem lidera junto".

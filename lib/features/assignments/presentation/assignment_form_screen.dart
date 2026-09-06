@@ -15,6 +15,7 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/position_icon.dart';
+import '../../../shared/widgets/on_leave_badge.dart';
 import '../../../shared/widgets/unavailable_badge.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../events/data/event_repository.dart';
@@ -1683,6 +1684,14 @@ class _PickerTile extends StatelessWidget {
                         if (unavailable) ...[
                           const SizedBox(width: AppSpacing.sm),
                           const UnavailableBadge(),
+                        ],
+                        // Afastado é o aviso de longo prazo; indisponível é o
+                        // do dia. Quem está nos dois estados vê os dois selos,
+                        // porque eles dizem coisas diferentes — e nenhum dos
+                        // dois impede escalar.
+                        if (member.onLeave) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          const OnLeaveBadge(),
                         ],
                         if (member.isGuest) ...[
                           const SizedBox(width: AppSpacing.sm),

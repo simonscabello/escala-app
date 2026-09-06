@@ -98,7 +98,7 @@ class ProfileScreen extends ConsumerWidget {
                     // A foto se troca tocando no avatar aqui em cima, que já
                     // tem o selo de câmera. Repeti-la dentro de "Meus dados"
                     // daria dois caminhos para o mesmo gesto.
-                    subtitle: 'Nome e e-mail',
+                    subtitle: 'Nome, e-mail e data de nascimento',
                     onTap: () => context.push('/perfil/dados'),
                   ),
                   AppGroupRow(

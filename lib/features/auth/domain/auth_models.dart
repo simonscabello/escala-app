@@ -1,9 +1,14 @@
+import '../../../core/date/civil_date.dart';
+import '../../../shared/domain/person_fields.dart';
+
 class AuthUser {
   const AuthUser({
     required this.id,
     required this.name,
     required this.email,
     required this.mustChangePassword,
+    this.birthDate,
+    this.gender,
     this.avatarUrl,
   });
 
@@ -11,6 +16,14 @@ class AuthUser {
   final String name;
   final String email;
   final bool mustChangePassword;
+
+  /// Dia civil, sem hora. Mora na conta porque e da PESSOA: nao muda de equipe
+  /// para equipe, e quem a conhece e o dono da conta. Quem ainda nao criou
+  /// conta nao tem aniversario cadastrado, e a lista da equipe diz isso.
+  final DateTime? birthDate;
+
+  /// Nulo = nao informou. E o padrao, e nao um cadastro pela metade.
+  final Gender? gender;
 
   /// Caminho da foto relativo ao host da API ("/uploads/avatars/x.jpg"), ou
   /// null. Quem monta o endereco completo e o AppAvatar.
@@ -25,6 +38,8 @@ class AuthUser {
       name: json['name'] as String,
       email: json['email'] as String,
       mustChangePassword: json['mustChangePassword'] as bool? ?? false,
+      birthDate: parseDateKey(json['birthDate'] as String?),
+      gender: Gender.fromApi(json['gender'] as String?),
       avatarUrl: json['avatarUrl'] as String?,
     );
   }

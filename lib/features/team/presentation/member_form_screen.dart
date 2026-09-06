@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/domain/person_fields.dart';
+import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_submit_button.dart';
@@ -35,10 +38,15 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _phone;
+  late final TextEditingController _notes;
+  late final TextEditingController _leaveReason;
   late final Set<String> _selected;
 
   /// `LEADER` ou `MEMBER`. Nulo enquanto não há membro (cadastro novo).
   late String? _role;
+
+  late bool _onLeave;
+  DateTime? _leaveUntil;
 
   bool _loading = false;
   String? _error;
@@ -48,15 +56,40 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     super.initState();
     _name = TextEditingController(text: widget.member?.displayName ?? '');
     _phone = TextEditingController(text: widget.member?.phone ?? '');
+    _notes = TextEditingController(text: widget.member?.notes ?? '');
+    _leaveReason = TextEditingController(text: widget.member?.leaveReason ?? '');
     _selected = {...?widget.member?.positions.map((p) => p.id)};
     _role = widget.member?.role;
+    _onLeave = widget.member?.onLeave ?? false;
+    _leaveUntil = widget.member?.leaveUntil;
   }
 
   @override
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _notes.dispose();
+    _leaveReason.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLeaveUntil() async {
+    final hoje = today();
+    final selected = await showDatePicker(
+      context: context,
+      locale: const Locale('pt', 'BR'),
+      initialDate: _leaveUntil ?? hoje.add(const Duration(days: 30)),
+      // Previsão de retorno é para a frente. Uma data no passado só produziria
+      // a etiqueta de previsão vencida no instante em que fosse gravada.
+      firstDate: hoje,
+      lastDate: DateTime(hoje.year + 3),
+      helpText: 'Previsão de retorno',
+    );
+
+    if (selected == null || !mounted) return;
+    setState(() {
+      _leaveUntil = DateTime(selected.year, selected.month, selected.day);
+    });
   }
 
   Future<void> _submit() async {
@@ -78,7 +111,11 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           widget.member!.id,
           displayName: _name.text.trim(),
           phone: _phone.text.trim(),
+          notes: _notes.text.trim(),
           positionIds: _selected.toList(),
+          onLeave: _onLeave,
+          leaveUntil: _leaveUntil,
+          leaveReason: _leaveReason.text.trim(),
           // Só quando mudou de fato. Reenviar o papel do dono daria
           // CANNOT_DEMOTE_OWNER mesmo sem ninguém ter tocado no campo.
           role: _role != widget.member!.role ? _role : null,
@@ -88,6 +125,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           widget.teamId,
           displayName: _name.text.trim(),
           phone: _phone.text.trim(),
+          notes: _notes.text.trim(),
           positionIds: _selected.toList(),
         );
       }
@@ -194,11 +232,28 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
                 controller: _phone,
                 decoration: const InputDecoration(
                   labelText: 'Telefone (opcional)',
+                  helperText: 'Vira o atalho de WhatsApp na lista da equipe',
                 ),
                 keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.done,
+                textInputAction: TextInputAction.next,
                 enabled: !_loading,
               ),
+              const SizedBox(height: AppSpacing.lg),
+              TextFormField(
+                controller: _notes,
+                decoration: const InputDecoration(
+                  labelText: 'Observações (opcional)',
+                  helperText: 'Só quem lidera vê. Ex.: "chega depois das 9h"',
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 3,
+                maxLength: 500,
+                enabled: !_loading,
+              ),
+              // Convidado não tem conta nem convite: falar de aniversário
+              // com ele seria prometer uma tela que nunca chega.
+              if (widget.isEditing && !widget.member!.isGuest)
+                _PersonFacts(member: widget.member!),
             ],
           ),
         ),
@@ -254,6 +309,28 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             onChanged: (v) => setState(() => _role = v),
           ),
         ],
+        if (widget.isEditing && !widget.member!.isGuest) ...[
+          const SizedBox(height: AppSpacing.xxl),
+          _LeaveField(
+            onLeave: _onLeave,
+            until: _leaveUntil,
+            reason: _leaveReason,
+            enabled: !_loading,
+            overdue: widget.member!.leaveOverdue,
+            onPickUntil: _pickLeaveUntil,
+            onClearUntil: () => setState(() => _leaveUntil = null),
+            onChanged: (value) => setState(() {
+              _onLeave = value;
+              // Desligar limpa a previsão e o motivo na tela pelo mesmo motivo
+              // que o servidor os limpa: um afastamento novo, meses depois,
+              // não pode nascer com o texto do anterior.
+              if (!value) {
+                _leaveUntil = null;
+                _leaveReason.clear();
+              }
+            }),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
         AppSubmitButton(
@@ -261,6 +338,211 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           loading: _loading,
           onPressed: _submit,
         ),
+      ],
+    );
+  }
+}
+
+/// Nascimento e gênero, **em leitura**.
+///
+/// Eles moram na conta da pessoa, e é ela quem os preenche em Perfil → Meus
+/// dados. Aqui aparecem por dois motivos: quem lidera precisa ver o que já
+/// existe, e a ausência precisa ter explicação. Sem esta caixa, um aniversário
+/// em branco no meio de um formulário editável parece um campo que o líder
+/// esqueceu de preencher — e ele passaria a tarde procurando onde se preenche.
+class _PersonFacts extends StatelessWidget {
+  const _PersonFacts({required this.member});
+
+  final Member member;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final linhas = <String>[
+      if (member.birthDate != null)
+        '${formatBirthday(member.birthDate!)} · ${ageOn(member.birthDate!, today())} anos',
+      if (member.gender != null) member.gender!.label,
+    ];
+
+    final String texto;
+    if (linhas.isNotEmpty) {
+      texto = linhas.join('  ·  ');
+    } else if (!member.hasAccount) {
+      texto = 'Aparece quando ${member.displayName} criar a conta e preencher.';
+    } else {
+      texto = 'Ainda não preencheu. Só a própria pessoa pode informar.';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.cake_outlined,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nascimento e gênero',
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    texto,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: linhas.isEmpty ? scheme.onSurfaceVariant : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Afastamento temporário: licença, viagem longa, estudo fora.
+///
+/// **Liga e desliga à mão, e a data não desliga nada.** Quem sabe que a pessoa
+/// voltou é quem lidera, não o calendário: voltar antes do previsto é comum, e
+/// um retorno automático na data recolocaria na escala alguém que ninguém
+/// conferiu. Por isso a previsão é informação, e quando ela vence a tela cobra
+/// a decisão em vez de tomá-la.
+///
+/// Não é o mesmo que remover: a pessoa continua na equipe, no histórico e nos
+/// relatórios. E não é o mesmo que indisponibilidade, que é a própria pessoa
+/// marcando dias soltos — aqui é a liderança dizendo que ela está fora por um
+/// tempo.
+class _LeaveField extends StatelessWidget {
+  const _LeaveField({
+    required this.onLeave,
+    required this.until,
+    required this.reason,
+    required this.enabled,
+    required this.overdue,
+    required this.onChanged,
+    required this.onPickUntil,
+    required this.onClearUntil,
+  });
+
+  final bool onLeave;
+  final DateTime? until;
+  final TextEditingController reason;
+  final bool enabled;
+  final bool overdue;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onPickUntil;
+  final VoidCallback onClearUntil;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Afastamento', style: theme.textTheme.titleMedium),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Continua na equipe e no histórico, mas a etiqueta aparece na hora '
+            'de escalar.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SwitchListTile.adaptive(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+          ),
+          tileColor: scheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          title: const Text('Em afastamento'),
+          value: onLeave,
+          onChanged: enabled ? onChanged : null,
+        ),
+        if (onLeave) ...[
+          if (overdue) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                const AppBadge(
+                  label: 'Previsão vencida',
+                  tone: AppTone.warning,
+                  icon: Icons.schedule_rounded,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'A data já passou. Desligue o afastamento ou marque outra.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          InkWell(
+            onTap: enabled ? onPickUntil : null,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Previsão de retorno (opcional)',
+                helperText: 'Só um aviso. Ninguém volta sozinho na data.',
+                enabled: enabled,
+                suffixIcon: until != null
+                    ? IconButton(
+                        tooltip: 'Remover previsão',
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: enabled ? onClearUntil : null,
+                      )
+                    : const Icon(Icons.event_rounded, size: 20),
+              ),
+              child: Text(
+                until != null ? formatFullDate(until!) : 'Sem data definida',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: until != null ? null : scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          TextFormField(
+            controller: reason,
+            enabled: enabled,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: 120,
+            decoration: const InputDecoration(
+              labelText: 'Motivo (opcional)',
+              helperText: 'Ex.: licença-maternidade, intercâmbio, saúde',
+            ),
+          ),
+        ],
       ],
     );
   }

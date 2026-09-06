@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../shared/domain/person_fields.dart';
 import '../domain/auth_models.dart';
 
 class MeResult {
@@ -48,10 +50,24 @@ class AuthRepository {
 
   /// Envia so o que mudou: mandar o e-mail atual de volta gastaria uma
   /// checagem de unicidade a toa.
-  Future<AuthUser> updateProfile({String? name, String? email}) async {
+  ///
+  /// Nascimento e genero sao os dois campos que a pessoa pode **apagar**, e a
+  /// API distingue os dois casos: campo ausente = "nao mexi", `null` = "quero
+  /// limpar". Por isso eles chegam aqui envelopados em [Patch] em vez de um
+  /// `String?` solto, que nao conseguiria dizer a diferenca.
+  Future<AuthUser> updateProfile({
+    String? name,
+    String? email,
+    Patch<DateTime?>? birthDate,
+    Patch<Gender?>? gender,
+  }) async {
     return _patchUser({
       if (name != null) 'name': name,
       if (email != null) 'email': email,
+      if (birthDate != null)
+        'birthDate':
+            birthDate.value == null ? null : dateKey(birthDate.value!),
+      if (gender != null) 'gender': gender.value?.apiValue,
     });
   }
 
@@ -147,3 +163,15 @@ class AuthRepository {
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.watch(dioProvider));
 });
+
+/// Um valor que a tela **quis** enviar, inclusive quando o valor e nulo.
+///
+/// Sem isto, `birthDate: null` significa as duas coisas ao mesmo tempo: "nao
+/// toquei neste campo" e "apague o que estava la". Envelopar resolve sem
+/// inventar sentinela ("" ou uma data impossivel), que e o outro jeito de
+/// fazer isso e o jeito que quebra calado.
+class Patch<T> {
+  const Patch(this.value);
+
+  final T value;
+}
