@@ -1202,7 +1202,13 @@ que o `APP_APK_URL` da API devolve e que o `AppUpdateBanner` abre.
   (ver o aviso em `android/app/build.gradle.kts`) e o arquivo sai impossível de
   instalar por cima do app existente — quinze minutos de build para produzir
   algo inútil, e calado.
-- **`APP_LATEST_VERSION` e `APP_APK_URL` continuam manuais**, no painel do
+- **`APP_APK_URL` se configura uma vez e nunca mais**: ele aponta para
+  `releases/latest/download/louve.apk`, atalho do GitHub que segue sozinho o
+  Release mais novo. É por isso que o workflow publica, além do
+  `louve-<versão>.apk`, uma cópia de **nome fixo** — sem ela a URL levaria o
+  número da versão e precisaria ser reescrita a cada publicação, com um botão
+  "Atualizar" baixando 404 no dia em que alguém errasse.
+- **`APP_LATEST_VERSION` é a única coisa a mexer por versão**, no painel do
   Railway. Publicar o arquivo e anunciar a versão são decisões diferentes: até
   a variável subir, o Release existe sem cobrar atualização de ninguém.
 - O que vai no `APP_APK_URL` é o **universal**; os por-arquitetura vão junto no

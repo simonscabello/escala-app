@@ -24,13 +24,20 @@
 #
 #   1. suba o `version:` do pubspec.yaml (ex.: 0.2.0+5) e faça commit;
 #   2. `git tag v0.2.0 && git push origin v0.2.0`;
-#   3. quando o Release aparecer, ajuste no Railway (serviço da API):
+#   3. quando o Release aparecer, suba no Railway (serviço da API):
 #        APP_LATEST_VERSION = 0.2.0
-#        APP_APK_URL        = URL do louve-0.2.0.apk no Release
 #
-# O passo 3 é manual de propósito: publicar o arquivo e *anunciar* a versão
-# para a equipe são decisões diferentes. Enquanto APP_LATEST_VERSION não subir,
-# o Release fica disponível sem que o app cobre a atualização de ninguém.
+# **Só essa.** O APP_APK_URL é configurado UMA vez e nunca mais:
+#
+#   APP_APK_URL = https://github.com/simonscabello/escala-app/releases/latest/download/louve.apk
+#
+# O `latest/download` do GitHub segue sozinho o Release mais novo, e o workflow
+# publica sempre uma cópia de nome fixo (louve.apk) para esse endereço achar.
+#
+# O passo 3 continua manual de propósito: publicar o arquivo e *anunciar* a
+# versão para a equipe são decisões diferentes. Enquanto APP_LATEST_VERSION não
+# subir, o Release fica disponível para quem quiser testar sem que o app cobre
+# a atualização de ninguém.
 
 name: Release do APK
 
@@ -159,7 +166,14 @@ jobs:
           mv app-arm64-v8a-release.apk "louve-$V-arm64-v8a.apk"
           mv app-armeabi-v7a-release.apk "louve-$V-armeabi-v7a.apk"
           mv app-x86_64-release.apk "louve-$V-x86_64.apk"
-          ls -lh louve-*.apk
+          # Cópia com nome FIXO, e é ela que o APP_APK_URL aponta:
+          # https://github.com/<repo>/releases/latest/download/louve.apk
+          # sempre cai no Release mais novo. Sem isto, a URL carregaria a
+          # versão no nome e teria de ser reescrita no Railway a cada
+          # publicação -- um campo a mais para errar de madrugada, e um botão
+          # "Atualizar" que baixa 404 quando se erra.
+          cp "louve-$V.apk" louve.apk
+          ls -lh louve*.apk
 
       # `gh` já vem no runner: nenhuma ação de terceiro precisa do token.
       - name: Publicar o Release
@@ -179,23 +193,29 @@ jobs:
 
           Os arquivos por arquitetura são menores e servem para economizar
           dados de quem sabe qual usar; na dúvida, use o de cima.
+
+          (\`louve.apk\`, sem número, é a cópia de nome fixo que o botão
+          "Atualizar" dentro do app baixa. É o mesmo arquivo do primeiro item.)
           EOF
           )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" louve-*.apk --clobber
+            gh release upload "$TAG" louve*.apk --clobber
           else
-            gh release create "$TAG" louve-*.apk \
+            gh release create "$TAG" louve*.apk \
               --title "Louve! $V" \
               --notes "$NOTAS"
           fi
 
-          echo "### APK publicado" >> "$GITHUB_STEP_SUMMARY"
+          echo "### APK $V publicado" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Aponte o \`APP_APK_URL\` do Railway para:" >> "$GITHUB_STEP_SUMMARY"
+          echo "Falta **um** passo para a equipe ser avisada: no Railway," >> "$GITHUB_STEP_SUMMARY"
+          echo "serviço da API, defina" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "https://github.com/${{ github.repository }}/releases/download/$TAG/louve-$V.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "APP_LATEST_VERSION = $V" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "E o \`APP_LATEST_VERSION\` para \`$V\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "O \`APP_APK_URL\` **não muda nunca mais** -- ele aponta para" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`releases/latest/download/louve.apk\`, que segue sozinho o" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release mais novo." >> "$GITHUB_STEP_SUMMARY"
