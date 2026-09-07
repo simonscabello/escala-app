@@ -17,6 +17,7 @@ import 'package:louvor_app/features/team/domain/service_template.dart';
 import 'package:louvor_app/features/team/domain/team_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 /// A grade da igreja já dizia quais são os próximos domingos, mas isso só
 /// existia dentro do formulário de nova escala. Aqui ela aparece na agenda: as
@@ -103,9 +104,23 @@ void main() {
     // A data vai na rota, no formato que o formulário entende.
     expect(harness.dataPedida, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
     final pedida = DateTime.parse(harness.dataPedida!);
-    final hoje = DateTime.now();
+    // "Hoje" é o de São Paulo, e não o do relógio de quem roda o teste.
+    //
+    // `openDates` conta o dia civil no fuso da EQUIPE -- é a regra do produto,
+    // e a mesma que separa "próximas" de "passadas" na agenda. Comparar com
+    // `DateTime.now()` media o dia da MÁQUINA: passava no Brasil e reprovava
+    // no CI, que roda em UTC, em toda execução entre 21h e meia-noite de
+    // Brasília, quando lá já é o dia seguinte e aqui ainda não. O teste
+    // falhava dizendo que a agenda propôs uma data no passado; ela tinha
+    // proposto hoje.
+    final hojeNaEquipe = tz.TZDateTime.from(
+      DateTime.now(),
+      tz.getLocation(_fusoDaEquipe),
+    );
     expect(
-      pedida.isBefore(DateTime(hoje.year, hoje.month, hoje.day)),
+      pedida.isBefore(
+        DateTime(hojeNaEquipe.year, hojeNaEquipe.month, hojeNaEquipe.day),
+      ),
       isFalse,
       reason: 'a primeira data em aberto não pode estar no passado',
     );
@@ -151,6 +166,11 @@ Future<void> _tocarEmCriar(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// O fuso da equipe do teste. É o mesmo do `_evento` e o mesmo que a agenda
+/// usa para contar os dias -- toda asserção sobre "hoje" tem de medir por
+/// ele, não pelo relógio da máquina que roda a suíte.
+const _fusoDaEquipe = 'America/Sao_Paulo';
+
 /// Domingo de manhã e de noite, mais a quinta — a grade da igreja de verdade.
 const _grade = [
   ServiceTemplate(
@@ -183,7 +203,7 @@ Event _evento(DateTime startsAt) => Event.fromJson({
       'notes': null,
       'colorPalette': null,
       'status': 'PUBLISHED',
-      'timezone': 'America/Sao_Paulo',
+      'timezone': _fusoDaEquipe,
       'assignments': const [],
       'songs': const [],
     });
