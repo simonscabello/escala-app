@@ -18,23 +18,23 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Escalas de louvor - app da equipe">
+  <meta name="description" content="Pauta - escala, agenda e repertorio da sua equipe">
   <!-- Sem isto o navegador de celular renderiza a pagina numa viewport de
        980px e reduz tudo: a versao Web abria com a letra minuscula no telefone
        e nao respondia aos pontos de quebra. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-  <meta name="theme-color" content="#1D4ED8">
+  <meta name="theme-color" content="#312E81">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Louve!">
+  <meta name="apple-mobile-web-app-title" content="Pauta">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Louve!</title>
+  <title>Pauta</title>
   <link rel="manifest" href="manifest.json">
 
   <style>
@@ -43,7 +43,7 @@
        Entre abrir a pagina e o primeiro quadro renderizado o navegador baixa e
        compila alguns megabytes: sem nada aqui, o que se ve nesse intervalo e
        uma pagina branca -- e branco puro, alem de parecer travamento, e um
-       clarao para quem abriu o app no escuro. Esta tela repete o azul e a
+       clarao para quem abriu o app no escuro. Esta tela repete o violeta e a
        marca da splash do aplicativo, entao a transicao para o primeiro quadro
        do Flutter nao tem troca de cor nem de identidade.
 
@@ -55,10 +55,10 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      background-color: #1D4ED8;
+      background-color: #312E81;
     }
 
-    #louve-boot {
+    #pauta-boot {
       position: fixed;
       inset: 0;
       display: flex;
@@ -66,60 +66,64 @@
       align-items: center;
       justify-content: center;
       gap: 20px;
-      background-color: #1D4ED8;
+      background-color: #312E81;
       color: #FFFFFF;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       transition: opacity 200ms ease-out;
       z-index: 10;
     }
 
-    #louve-boot.is-done {
+    #pauta-boot.is-done {
       opacity: 0;
       pointer-events: none;
     }
 
-    #louve-boot .name {
-      font-size: 28px;
+    /* Caixa alta com espacejamento aberto, como o logotipo dentro do app
+       (AppTypography.wordmark). A Plus Jakarta Sans so existe depois que o
+       Flutter carrega, entao aqui a peca e a fonte do sistema -- o que
+       sustenta a marca neste intervalo e a forma, nao a familia. */
+    #pauta-boot .name {
+      font-size: 30px;
       font-weight: 700;
-      letter-spacing: -0.5px;
+      letter-spacing: 2.4px;
     }
 
-    #louve-boot .tagline {
+    #pauta-boot .tagline {
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.78);
+      color: #EDE9FE;
     }
 
-    #louve-boot .spinner {
+    #pauta-boot .spinner {
       width: 26px;
       height: 26px;
       border: 2.5px solid rgba(255, 255, 255, 0.3);
       border-top-color: #FFFFFF;
       border-radius: 50%;
-      animation: louve-spin 900ms linear infinite;
+      animation: pauta-spin 900ms linear infinite;
     }
 
     /* Quem pediu menos movimento no sistema nao ganha uma rodinha girando. */
     @media (prefers-reduced-motion: reduce) {
-      #louve-boot .spinner { animation: none; }
-      #louve-boot { transition: none; }
+      #pauta-boot .spinner { animation: none; }
+      #pauta-boot { transition: none; }
     }
 
-    @keyframes louve-spin {
+    @keyframes pauta-spin {
       to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
-  <div id="louve-boot">
+  <div id="pauta-boot">
     <img src="icons/Icon-192.png" width="72" height="72" alt="">
-    <div class="name">Louve!</div>
-    <div class="tagline">Sua escala, clara e no lugar certo.</div>
+    <div class="name">PAUTA</div>
+    <div class="tagline">Sua equipe no mesmo ritmo.</div>
     <div class="spinner"></div>
   </div>
 
   <script>
     window.addEventListener('flutter-first-frame', function () {
-      var boot = document.getElementById('louve-boot');
+      var boot = document.getElementById('pauta-boot');
       if (!boot) return;
       boot.classList.add('is-done');
       // Removido de vez depois da transicao: um elemento fixo com

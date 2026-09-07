@@ -1,18 +1,17 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_typography.dart';
 
 /// A marca do app.
 ///
 /// Existe como componente porque estava desenhada à mão em três lugares — na
 /// abertura com 80px e raio de cartão, no cabeçalho dos formulários com 56px, e
-/// cada uma com o seu tom de azul. Marca desenhada de novo a cada tela é a
-/// definição de não ter marca.
+/// cada uma com o seu tom. Marca desenhada de novo a cada tela é a definição de
+/// não ter marca.
 ///
 /// **É o único lugar do app com gradiente**, e por isso ele pode existir: um
-/// degradê curto entre dois azuis vizinhos, que dá volume à peça sem virar
+/// degradê curto entre dois violetas vizinhos, que dá volume à peça sem virar
 /// efeito. Espalhado por botões e cabeçalhos, seria exatamente o excesso que o
 /// resto da interface evita; concentrado num quadrado de 60px que aparece duas
 /// vezes na vida do usuário, é o que faz a marca parecer feita e não escolhida
@@ -27,7 +26,7 @@ class AppBrandMark extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Semantics(
-      label: 'Louve!',
+      label: 'Pauta',
       excludeSemantics: true,
       child: Container(
         width: size,
@@ -54,119 +53,86 @@ class AppBrandMark extends StatelessWidget {
         ),
         child: AppBrandGlyph(
           size: size,
-          color: scheme.onPrimary,
+          // Qual das duas artes cabe aqui é uma pergunta sobre o ladrilho, não
+          // sobre o tema: no claro o quadrado é índigo e pede o símbolo branco;
+          // no escuro o `primary` é um violeta claro, e ali a arte branca
+          // sumiria. Medir a luminância do que está atrás resolve os dois casos
+          // sem o widget precisar saber qual tema está ativo.
+          onDark: ThemeData.estimateBrightnessForColor(scheme.primary) ==
+              Brightness.dark,
         ),
       ),
     );
   }
 }
 
-/// O glifo isolado da marca, para superfícies que já usam o azul do Louve!.
+/// O símbolo oficial da marca, isolado.
 ///
-/// No ícone ele vive dentro do quadrado azul; na abertura nativa e na splash o
-/// fundo já é azul, então repetir o quadrado criaria uma moldura sem função.
+/// No ícone ele vive dentro do quadrado violeta; na abertura nativa e na splash
+/// o fundo já é violeta, então repetir o quadrado criaria uma moldura sem
+/// função.
+///
+/// **É um arquivo, não um desenho em código.** Até o rebranding esta classe
+/// pintava o glifo num `CustomPainter`, com as coordenadas duplicadas no
+/// gerador dos ícones — duas fontes para a mesma forma, que era o problema que
+/// o `CustomPainter` tinha vindo resolver. Com a marca entregue pelo design, a
+/// única cópia fiel é o próprio arquivo: qualquer redesenho em Dart seria uma
+/// terceira versão do P, parecida e diferente.
+///
+/// A identidade entrega **duas artes** do mesmo símbolo, e nenhuma serve nos
+/// dois fundos: a colorida vai de índigo a azul-marinho e sobre o violeta
+/// profundo da marca entrega 1,19:1 — some. Por isso [onDark] escolhe o arquivo
+/// em vez de tingir um só: um `ColorFilter` sobre a arte colorida jogaria fora
+/// o degradê que ela tem.
 class AppBrandGlyph extends StatelessWidget {
   const AppBrandGlyph({
     super.key,
     required this.size,
-    required this.color,
+    required this.onDark,
   });
 
   final double size;
-  final Color color;
+
+  /// `true` quando o símbolo fica sobre violeta ou sobre qualquer fundo escuro
+  /// — é quando entra a arte branca.
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(painter: _LouveGlyph(color)),
+    return Image.asset(
+      onDark
+          ? 'assets/branding/pauta_symbol_on_dark.png'
+          : 'assets/branding/pauta_symbol_on_light.png',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      // A marca é decorativa em todo lugar onde aparece: quem a envolve
+      // (`AppBrandMark`, a splash) já diz "Pauta" ao leitor de tela, e repetir
+      // aqui faria o leitor anunciar a marca duas vezes seguidas.
+      excludeFromSemantics: true,
     );
   }
 }
 
-/// Marca com o nome ao lado, para cabeçalhos de formulário.
+/// Marca com o nome ao lado, para cabeçalhos de formulário e para a barra
+/// lateral.
+///
+/// O nome é **texto**, e não o `pauta_logo.png`: o logotipo horizontal tem a
+/// palavra em azul-marinho fixo, que no tema escuro ficaria quase invisível
+/// sobre a página. Composto assim, o símbolo vem do arquivo oficial e a palavra
+/// segue o tema.
 class AppBrandLockup extends StatelessWidget {
   const AppBrandLockup({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const AppBrandMark(size: 40),
         const SizedBox(width: AppSpacing.md),
-        Text('Louve!', style: theme.textTheme.titleMedium),
+        Text('PAUTA', style: AppTypography.wordmark(context, size: 17)),
       ],
     );
   }
-}
-
-/// O "!" do nome, com o pingo virado cabeça de nota.
-///
-/// **É o mesmo desenho do ícone do launcher**, e é por isso que ele é código e
-/// não um `Icons.` qualquer: antes a marca de dentro do app era um
-/// `graphic_eq_rounded` e a do launcher era uma nota musical — duas marcas
-/// diferentes para o mesmo produto, cada uma inventada onde foi precisa.
-///
-/// As coordenadas são as mesmas dos 108dp da tela do adaptive icon do Android
-/// (`tools/generate_brand_assets.py`), reescaladas para o tamanho pedido. Mexer
-/// aqui sem mexer lá faz as duas divergirem de novo.
-class _LouveGlyph extends CustomPainter {
-  const _LouveGlyph(this.color);
-
-  final Color color;
-
-  /// A grade em que o glifo foi desenhado.
-  static const double _grade = 108;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final k = size.width / _grade;
-    final paint = Paint()
-      ..color = color
-      ..isAntiAlias = true;
-
-    // Haste cônica de pontas redondas: é o "!" de uma fonte de texto, e não um
-    // retângulo -- é o que faz a peça ler como letra antes de ler como desenho.
-    const cx = 54.0,
-        topo = 22.0,
-        base = 58.0,
-        larguraTopo = 16.0,
-        larguraBase = 9.5;
-    final haste = Path()
-      ..moveTo((cx - larguraTopo / 2) * k, topo * k)
-      ..lineTo((cx + larguraTopo / 2) * k, topo * k)
-      ..lineTo((cx + larguraBase / 2) * k, base * k)
-      ..lineTo((cx - larguraBase / 2) * k, base * k)
-      ..close()
-      ..addOval(
-        Rect.fromCircle(
-          center: Offset(cx * k, topo * k),
-          radius: larguraTopo / 2 * k,
-        ),
-      )
-      ..addOval(
-        Rect.fromCircle(
-          center: Offset(cx * k, base * k),
-          radius: larguraBase / 2 * k,
-        ),
-      );
-    canvas.drawPath(haste, paint);
-
-    // O pingo: elipse inclinada, como a cabeça de nota da partitura. A
-    // inclinação é o que separa "música" de "pingo gordo".
-    canvas.save();
-    canvas.translate(cx * k, 76 * k);
-    canvas.rotate(-25 * math.pi / 180);
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset.zero, width: 32 * k, height: 21 * k),
-      paint,
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_LouveGlyph oldDelegate) => oldDelegate.color != color;
 }

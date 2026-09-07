@@ -56,8 +56,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return FormScaffold(
       showBrand: true,
-      title: 'Entrar',
-      subtitle: 'Acesse as escalas da sua equipe de louvor.',
+      title: 'Que bom te ver por aqui!',
+      subtitle: 'Escala, agenda e repertório da sua equipe em um lugar só.',
       children: [
         Form(
           key: _formKey,

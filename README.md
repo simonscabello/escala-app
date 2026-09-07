@@ -1,8 +1,13 @@
-# Escalas de Louvor — App
+# Pauta — App
 
-App Flutter para a equipe ver e o líder montar escalas. **Um projeto, duas
-plataformas**: o aplicativo Android e a versão Web para desktop saem do mesmo
-código, com as mesmas regras, os mesmos modelos e a mesma API.
+**Pauta** — sua equipe no mesmo ritmo. App Flutter para a equipe ver e o líder
+montar escalas. **Um projeto, duas plataformas**: o aplicativo Android e a
+versão Web para desktop saem do mesmo código, com as mesmas regras, os mesmos
+modelos e a mesma API.
+
+O pacote Dart continua se chamando `louvor_app` e o `applicationId` do Android
+continua o mesmo: são identificadores de instalação e assinatura, não marca.
+Trocá-los publicaria outro aplicativo.
 
 Projeto **independente** do backend: só se comunicam por HTTP. Arquitetura e
 convenções: [`AGENTS.md`](AGENTS.md) e [`docs/`](docs/).
@@ -173,12 +178,12 @@ Build e execução locais:
 docker build \
   --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app \
   --build-arg FLUTTER_VERSION=3.44.8 \
-  -t louve-web .
+  -t pauta-web .
 ```
 
 ```powershell
-docker build --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app --build-arg FLUTTER_VERSION=3.44.8 -t louve-web .
-docker run --rm -e PORT=8080 -p 8080:8080 louve-web
+docker build --build-arg API_BASE_URL=https://backend-production-b304.up.railway.app --build-arg FLUTTER_VERSION=3.44.8 -t pauta-web .
+docker run --rm -e PORT=8080 -p 8080:8080 pauta-web
 ```
 
 O site fica em `http://localhost:8080`. O Caddy faz fallback de SPA

@@ -71,13 +71,16 @@ Future<void> resetMemberPassword(
 }
 
 class _TemporaryPasswordDialog extends StatelessWidget {
-  const _TemporaryPasswordDialog({required this.member, required this.password});
+  const _TemporaryPasswordDialog({
+    required this.member,
+    required this.password,
+  });
 
   final Member member;
   final String password;
 
   String get _message =>
-      'Sua senha do Louve! foi redefinida.\n\nSenha temporária: $password\n\n'
+      'Sua senha da Pauta foi redefinida.\n\nSenha temporária: $password\n\n'
       'Entre com ela e o app vai pedir para você escolher uma senha nova.';
 
   @override

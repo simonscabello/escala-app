@@ -1,17 +1,40 @@
 import 'package:flutter/material.dart';
 
-/// Tokens de cor da identidade azul (claro e escuro).
+/// Tokens de cor da identidade Pauta (claro e escuro).
 ///
-/// **Os neutros carregam um traço do azul da marca** (matiz ~220, saturação
+/// **A marca é violeta/índigo**, e os três valores que a definem aparecem aqui
+/// literalmente, cada um no papel em que faz trabalho:
+///
+/// | `#4F46E5` | índigo   | `primary` no claro, `inversePrimary` no escuro |
+/// | `#312E81` | violeta profundo | texto sobre a tinta clara; tinta no escuro |
+/// | `#EDE9FE` | lavanda  | texto sobre o violeta profundo, no escuro |
+/// | `#22C55E` | verde    | `success` do tema escuro |
+///
+/// **Os neutros carregam um traço do violeta da marca** (matiz 246, saturação
 /// baixa) em vez de serem cinzas puros. É o que faz a tela parecer de um
 /// produto e não de um painel administrativo: sem nomear nenhuma cor, tudo
-/// pertence à mesma família. Cinza neutro ao lado de um azul saturado sempre
-/// lê como "tema padrão com a cor trocada".
+/// pertence à mesma família. Cinza neutro ao lado de um violeta saturado sempre
+/// lê como "tema padrão com a cor trocada". A matiz 246 fica entre o índigo
+/// (243) e a lavanda (251) — os neutros são a média da marca, não um quarto
+/// tom.
 ///
-/// **A página ficou um passo mais funda** (#EDF1F7 → #E9EEF6) quando o cartão
-/// perdeu a sombra. Não é gosto: com a sombra removida, é a diferença de cor
-/// que passa a sustentar sozinha a forma do cartão, e a separação anterior era
-/// justa demais para esse trabalho. Cor e elevação são o mesmo orçamento —
+/// **A troca de azul para violeta foi feita a luminância constante.** Cada
+/// neutro é o antigo com a matiz girada e a claridade reajustada até a
+/// luminância relativa (WCAG) bater com a de antes. Não é preciosismo: violeta
+/// tem menos verde que azul-ardósia, e o verde pesa 0,72 na fórmula de
+/// luminância — girar a matiz mantendo a claridade HSL teria escurecido a
+/// paleta inteira e derrubado os contrastes que `test/theme_contrast_test.dart`
+/// cobra. Com a luminância presa, **toda a arquitetura tonal abaixo sobrevive
+/// intacta à mudança de marca**, e o que muda é só a cor.
+///
+/// O `#F8FAFC` do enunciado da marca ("background neutral") não é o fundo da
+/// página aqui, e a razão está na regra 3: um fundo tão claro não sustenta o
+/// cartão branco sem sombra. Ele descreve a *família* do neutro claro, que é o
+/// que os tokens de superfície seguem.
+///
+/// **A página é um passo mais funda que o cartão** porque o cartão não tem
+/// sombra. Não é gosto: com a sombra removida, é a diferença de cor que passa a
+/// sustentar sozinha a forma do cartão. Cor e elevação são o mesmo orçamento —
 /// gastar menos numa exige gastar mais na outra.
 ///
 /// Três regras sustentam a paleta, e cada uma existe porque uma versão anterior
@@ -30,23 +53,47 @@ import 'package:flutter/material.dart';
 class AppColors {
   const AppColors._();
 
-  // --- Light ---
-  static const Color lightPrimary = Color(0xFF1D4ED8);
-  static const Color lightOnPrimary = Color(0xFFFFFFFF);
-  static const Color lightPrimaryContainer = Color(0xFFDBE6FE);
-  static const Color lightOnPrimaryContainer = Color(0xFF0B2A6B);
+  // --- A marca, antes de virar papel de tema ---
+  //
+  // Os três valores da identidade, nomeados pela cor e não pela função. Todo
+  // token abaixo que for exatamente um deles aponta para cá: assim a pergunta
+  // "onde está o violeta da Pauta?" tem uma resposta, e não seis ocorrências
+  // do mesmo hexadecimal espalhadas pelo arquivo.
 
-  static const Color lightSecondary = Color(0xFF475569);
+  /// Índigo. A cor que o app é.
+  static const Color brandIndigo = Color(0xFF4F46E5);
+
+  /// Violeta profundo. A superfície de abertura — splash do Android, boot da
+  /// Web, splash do Flutter — e a tinta do primário no tema escuro.
+  static const Color brandDeepViolet = Color(0xFF312E81);
+
+  /// Lavanda. O claro da marca: texto sobre o violeta profundo.
+  static const Color brandLavender = Color(0xFFEDE9FE);
+
+  // --- Light ---
+
+  static const Color lightPrimary = brandIndigo;
+  static const Color lightOnPrimary = Color(0xFFFFFFFF);
+  static const Color lightPrimaryContainer = Color(0xFFE5E3FE);
+
+  /// O violeta profundo da marca, como texto sobre a tinta clara.
+  static const Color lightOnPrimaryContainer = brandDeepViolet;
+
+  static const Color lightSecondary = Color(0xFF535076);
   static const Color lightOnSecondary = Color(0xFFFFFFFF);
-  static const Color lightSecondaryContainer = Color(0xFFE2E8F0);
-  static const Color lightOnSecondaryContainer = Color(0xFF1E293B);
+  static const Color lightSecondaryContainer = Color(0xFFE8E6F2);
+  static const Color lightOnSecondaryContainer = Color(0xFF282448);
 
   /// Âmbar: o papel de **atenção**, que não é erro.
   ///
   /// "Falta o tom desta música", "ninguém escalado ainda", "esta pessoa avisou
   /// que não pode" são coisas para notar, não para se assustar — e usar o
-  /// vermelho nelas gastava o alarme em situações comuns. O azul não servia:
+  /// vermelho nelas gastava o alarme em situações comuns. O violeta não serve:
   /// ele é a cor do que está certo e do que se toca.
+  ///
+  /// **Não mudou com a marca**, e é de propósito: âmbar é um papel semântico,
+  /// não um tom derivado do primário. Girá-lo junto com os neutros só teria
+  /// tirado dele a distância que o faz ser lido como aviso.
   static const Color lightTertiary = Color(0xFF9A4E06);
   static const Color lightOnTertiary = Color(0xFFFFFFFF);
   static const Color lightTertiaryContainer = Color(0xFFFDECD3);
@@ -68,52 +115,56 @@ class AppColors {
   /// **Não é uma cor de destaque.** Nada nasce verde; ele só aparece depois de
   /// uma ação que terminou bem, e some sozinho. Usar verde para enfeitar
   /// gastaria o sinal.
-  static const Color lightSuccess = Color(0xFF0E7A46);
+  ///
+  /// O `#22C55E` da marca é claro demais para virar texto sobre o cartão branco
+  /// (2,28:1, contra os 4,5:1 exigidos). Ele é o verde do tema **escuro**, onde
+  /// a mesma cor entrega 7,5:1; aqui fica a versão escura da mesma matiz.
+  static const Color lightSuccess = Color(0xFF0E7B36);
   static const Color lightOnSuccess = Color(0xFFFFFFFF);
-  static const Color lightSuccessContainer = Color(0xFFD6F2E2);
-  static const Color lightOnSuccessContainer = Color(0xFF0A5133);
+  static const Color lightSuccessContainer = Color(0xFFD6F2E1);
+  static const Color lightOnSuccessContainer = Color(0xFF0A5224);
 
   /// A página. Funda o bastante para o cartão branco existir sem sombra.
-  static const Color lightSurface = Color(0xFFE9EEF6);
-  static const Color lightOnSurface = Color(0xFF0E1729);
-  static const Color lightOnSurfaceVariant = Color(0xFF4C5A72);
+  static const Color lightSurface = Color(0xFFEEECF7);
+  static const Color lightOnSurface = Color(0xFF161236);
+  static const Color lightOnSurfaceVariant = Color(0xFF59547F);
 
   /// A superfície do cartão.
   static const Color lightSurfaceContainerLowest = Color(0xFFFFFFFF);
 
   /// Preenchimento de campo e cartão discreto.
-  static const Color lightSurfaceContainerLow = Color(0xFFF3F6FB);
-  static const Color lightSurfaceContainer = Color(0xFFDFE6F1);
-  static const Color lightSurfaceContainerHigh = Color(0xFFD3DCEB);
-  static const Color lightSurfaceContainerHighest = Color(0xFFC6D2E5);
+  static const Color lightSurfaceContainerLow = Color(0xFFF6F5FC);
+  static const Color lightSurfaceContainer = Color(0xFFE5E4F3);
+  static const Color lightSurfaceContainerHigh = Color(0xFFDCD9EE);
+  static const Color lightSurfaceContainerHighest = Color(0xFFD1CEE9);
 
   /// Borda de controle: campo, botão contornado, o que se toca. 3:1.
-  ///
-  /// Escurecido junto com a página: no valor anterior ele caía em exatamente
-  /// 3,00:1 sobre o fundo novo — passava no teste por arredondamento, que não é
-  /// o mesmo que passar.
-  static const Color lightOutline = Color(0xFF72829B);
+  static const Color lightOutline = Color(0xFF807DA3);
 
   /// Fio de divisão entre blocos, e a borda de cabelo do cartão sem sombra.
   /// Decorativo — separa, não delimita um controle, então não precisa dos 3:1.
-  static const Color lightOutlineVariant = Color(0xFFDCE3EE);
+  static const Color lightOutlineVariant = Color(0xFFE2E1F0);
 
-  static const Color lightInverseSurface = Color(0xFF16202E);
-  static const Color lightOnInverseSurface = Color(0xFFF1F5FA);
-  static const Color lightInversePrimary = Color(0xFF93B4FF);
+  static const Color lightInverseSurface = Color(0xFF1E1C3A);
+  static const Color lightOnInverseSurface = Color(0xFFF4F4FB);
+  static const Color lightInversePrimary = Color(0xFFB4ABFF);
   static const Color lightScrim = Color(0xFF000000);
   static const Color lightShadow = Color(0xFF000000);
 
   // --- Dark ---
-  static const Color darkPrimary = Color(0xFF93B4FF);
-  static const Color darkOnPrimary = Color(0xFF06265E);
-  static const Color darkPrimaryContainer = Color(0xFF123A85);
-  static const Color darkOnPrimaryContainer = Color(0xFFDBE6FE);
+  static const Color darkPrimary = Color(0xFFB4ABFF);
+  static const Color darkOnPrimary = Color(0xFF1E1B4B);
 
-  static const Color darkSecondary = Color(0xFFA8B6CC);
-  static const Color darkOnSecondary = Color(0xFF1E293B);
-  static const Color darkSecondaryContainer = Color(0xFF2A3648);
-  static const Color darkOnSecondaryContainer = Color(0xFFE2E8F0);
+  /// O violeta profundo da marca, como tinta de container no escuro.
+  static const Color darkPrimaryContainer = brandDeepViolet;
+
+  /// A lavanda da marca, no valor exato, sobre o violeta profundo.
+  static const Color darkOnPrimaryContainer = brandLavender;
+
+  static const Color darkSecondary = Color(0xFFB5B2D2);
+  static const Color darkOnSecondary = Color(0xFF282448);
+  static const Color darkSecondaryContainer = Color(0xFF353154);
+  static const Color darkOnSecondaryContainer = Color(0xFFE8E6F2);
 
   static const Color darkTertiary = Color(0xFFF0B357);
   static const Color darkOnTertiary = Color(0xFF412402);
@@ -125,37 +176,38 @@ class AppColors {
   static const Color darkErrorContainer = Color(0xFF8C1D18);
   static const Color darkOnErrorContainer = Color(0xFFF9DEDC);
 
-  static const Color darkSuccess = Color(0xFF6EDBA0);
-  static const Color darkOnSuccess = Color(0xFF04321D);
-  static const Color darkSuccessContainer = Color(0xFF12482F);
-  static const Color darkOnSuccessContainer = Color(0xFFC9F2DC);
+  /// O verde da marca, no valor exato. Ver a nota em [lightSuccess].
+  static const Color darkSuccess = Color(0xFF22C55E);
+  static const Color darkOnSuccess = Color(0xFF043215);
+  static const Color darkSuccessContainer = Color(0xFF124926);
+  static const Color darkOnSuccessContainer = Color(0xFFCAF2D9);
 
   /// A página, e o ponto mais escuro do tema.
   ///
-  /// Quase preto, mas **azulado, nunca cinza** — no escuro é onde o traço de
-  /// matiz mais aparece, e um cinza puro faria o azul da marca parecer um
+  /// Quase preto, mas **violeta, nunca cinza** — no escuro é onde o traço de
+  /// matiz mais aparece, e um cinza puro faria o violeta da marca parecer um
   /// adesivo colado por cima.
-  static const Color darkSurface = Color(0xFF070B11);
-  static const Color darkOnSurface = Color(0xFFE7EDF6);
-  static const Color darkOnSurfaceVariant = Color(0xFFA2B0C5);
+  static const Color darkSurface = Color(0xFF0B0916);
+  static const Color darkOnSurface = Color(0xFFEDEBF8);
+  static const Color darkOnSurfaceVariant = Color(0xFFAFACCB);
 
   /// A superfície do cartão — **mais clara** que a página, ao contrário do que
   /// o nome do Material 3 sugere. Ver a regra 1 no topo do arquivo.
-  static const Color darkSurfaceContainerLowest = Color(0xFF141C27);
+  static const Color darkSurfaceContainerLowest = Color(0xFF1B1930);
 
   /// Preenchimento de campo e cartão discreto: acima da página, abaixo do
   /// cartão.
-  static const Color darkSurfaceContainerLow = Color(0xFF0D131B);
-  static const Color darkSurfaceContainer = Color(0xFF1A2431);
-  static const Color darkSurfaceContainerHigh = Color(0xFF232F3E);
-  static const Color darkSurfaceContainerHighest = Color(0xFF2C394A);
+  static const Color darkSurfaceContainerLow = Color(0xFF121122);
+  static const Color darkSurfaceContainer = Color(0xFF22203C);
+  static const Color darkSurfaceContainerHigh = Color(0xFF2E2A4B);
+  static const Color darkSurfaceContainerHighest = Color(0xFF373457);
 
-  static const Color darkOutline = Color(0xFF5D6D85);
-  static const Color darkOutlineVariant = Color(0xFF263141);
+  static const Color darkOutline = Color(0xFF6B6793);
+  static const Color darkOutlineVariant = Color(0xFF302D4C);
 
-  static const Color darkInverseSurface = Color(0xFFE6ECF5);
-  static const Color darkOnInverseSurface = Color(0xFF161D27);
-  static const Color darkInversePrimary = Color(0xFF1D4ED8);
+  static const Color darkInverseSurface = Color(0xFFECEAF7);
+  static const Color darkOnInverseSurface = Color(0xFF1C1A2F);
+  static const Color darkInversePrimary = brandIndigo;
   static const Color darkScrim = Color(0xFF000000);
   static const Color darkShadow = Color(0xFF000000);
 

@@ -97,6 +97,33 @@ class AppTypography {
     );
   }
 
+  /// O nome da marca desenhado como logotipo: **PAUTA**, em caixa alta.
+  ///
+  /// É o único lugar em que o nome sobe para maiúsculas. Em texto corrido ele
+  /// se escreve "Pauta"; aqui ele não é uma palavra, é a peça gráfica ao lado
+  /// do símbolo — e a caixa alta com espacejamento aberto é o que faz as cinco
+  /// letras terem a mesma presença do quadrado que as acompanha.
+  ///
+  /// O espacejamento é positivo e generoso pela mesma razão da [eyebrow]: em
+  /// caixa alta as letras encostam. Aqui ele é maior porque a peça é maior — a
+  /// proporção é ~0,08em, e não um número fixo, para o logotipo não afrouxar
+  /// quando cresce na abertura.
+  static TextStyle wordmark(
+    BuildContext context, {
+    double size = 17,
+    Color? color,
+  }) {
+    final theme = Theme.of(context);
+    return TextStyle(
+      fontFamily: fontFamily,
+      fontSize: size,
+      fontWeight: FontWeight.w700,
+      letterSpacing: size * 0.08,
+      height: 1.1,
+      color: color ?? theme.colorScheme.onSurface,
+    );
+  }
+
   /// O horário como âncora da linha: grande, tabular, peso médio.
   static TextStyle time(BuildContext context, {bool emphasized = true}) {
     final theme = Theme.of(context);

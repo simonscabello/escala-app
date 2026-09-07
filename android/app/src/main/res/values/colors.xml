@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_primary">#1D4ED8</color>
-    <!-- O azul da marca (AppColors.lightPrimary). A camada de frente do
-         adaptive icon e branca, entao o contraste do icone nasce daqui: o
-         #DBE6FE anterior deixava o glifo azul sobre azul palido, que a 48px
-         virava uma mancha. -->
-    <color name="ic_launcher_background">#1D4ED8</color>
+    <!-- O violeta profundo da marca (AppColors.brandDeepViolet). E a cor da
+         janela enquanto o processo sobe: a splash do Flutter usa exatamente
+         este valor, entao a troca do splash do sistema para o primeiro quadro
+         nao tem clarao nem mudanca de cor. -->
+    <color name="brand_primary">#312E81</color>
+    <!-- Fundo do adaptive icon. Mesmo violeta profundo, e nao o indigo: a
+         camada de frente e o simbolo branco da marca, e e sobre este tom que
+         ele entrega 11,13:1 -- o mesmo par do icone completo entregue pelo
+         design. Escrito pelo flutter_launcher_icons a partir do pubspec; para
+         mudar, mude la. -->
+    <color name="ic_launcher_background">#312E81</color>
 </resources>

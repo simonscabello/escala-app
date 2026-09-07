@@ -203,7 +203,8 @@ hospedagem. Trocar para `PathUrlStrategy` exige configurar o *SPA fallback*
 (toda rota desconhecida serve `index.html`), senão um F5 em `/agenda/<id>`
 devolve 404.
 
-`web/index.html` tem uma abertura própria em azul da marca, removida no evento
+`web/index.html` tem uma abertura própria no violeta profundo da marca,
+removida no evento
 `flutter-first-frame`. Sem ela, os segundos até o primeiro quadro eram uma
 página branca — que parece travamento e, no escuro, é um clarão.
 
@@ -823,7 +824,9 @@ escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
 
 ## Identidade visual e acessibilidade
 
-Azul (`#1D4ED8`) é a marca.
+Índigo (`#4F46E5`) é a marca da Pauta. Violeta profundo (`#312E81`) é a
+superfície de abertura; lavanda (`#EDE9FE`) é o claro sobre ela. Os neutros
+carregam um traço dessa família (matiz 246) em vez de serem cinzas puros.
 
 ### A direção: "programa impresso"
 
@@ -838,10 +841,11 @@ regras, e elas explicam a maior parte das decisões visuais do app:
 3. **A hora é a âncora.** Em qualquer lugar onde apareça horário, ele vem
    primeiro, grande e em algarismo tabular. A pergunta de quem abre este app é
    "que horas eu preciso estar lá".
-4. **O azul é racionado.** Ele significa **você** e **agora** — onde você entra
-   na escala, qual aba está aberta, qual botão é a ação principal. Ícone tingido
-   de azul só porque é um ícone foi removido de todas as telas: multiplicar a
-   cor da marca por linha de lista é o que a faz parar de significar algo.
+4. **O violeta é racionado.** Ele significa **você** e **agora** — onde você
+   entra na escala, qual aba está aberta, qual botão é a ação principal. Ícone
+   tingido de violeta só porque é um ícone foi removido de todas as telas:
+   multiplicar a cor da marca por linha de lista é o que a faz parar de
+   significar algo.
 
 O que **não** existe no app, de propósito: sombra em cartão, gradiente fora da
 marca, ladrilho colorido atrás de ícone, e mais de um raio de canto para o mesmo
@@ -976,7 +980,7 @@ não deve reapresentar a mesma informação num formato diferente.
 
 - **Não volte às etiquetas coloridas.** Eram um `Wrap` de pílulas com
   `primaryContainer` de fundo, e saíram por dois motivos: o texto do ensaio
-  estourava a largura, e aquele azul é **a mesma cor** da faixa de "alguém
+  estourava a largura, e aquele violeta é **a mesma cor** da faixa de "alguém
   avisou que não pode" logo abaixo — três linhas de informação corriqueira com
   o peso visual de um alerta. A cor sobrou só no ícone do culto.
 - Em coluna as horas caem na mesma vertical e ficam comparáveis de relance, que

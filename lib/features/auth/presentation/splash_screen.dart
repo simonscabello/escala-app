@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_brand_mark.dart';
 
 /// Exibida enquanto o AuthController verifica se existe sessao salva.
@@ -12,17 +13,20 @@ import '../../../shared/widgets/app_brand_mark.dart';
 /// um `Column` solto no `Scaffold` encolhe à largura do texto e encosta à
 /// esquerda, que é o que fazia a abertura parecer desalinhada em tablet e no
 /// navegador.
+///
+/// **Nada anima aqui além do indicador.** A abertura é o intervalo entre tocar
+/// no ícone e ver a escala; qualquer coisa que precise de tempo para acontecer
+/// só faz esse intervalo parecer maior.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      // A mesma cor da abertura nativa do Android: o primeiro frame do Flutter
-      // substitui o splash do sistema sem um clarão ou uma troca de marca.
-      backgroundColor: AppColors.lightPrimary,
+      // A mesma cor da abertura nativa do Android e do boot da Web: o primeiro
+      // frame do Flutter substitui o splash do sistema sem um clarão ou uma
+      // troca de marca.
+      backgroundColor: AppColors.brandDeepViolet,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -33,20 +37,22 @@ class SplashScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const AppBrandGlyph(size: 108, color: Colors.white),
+                const AppBrandGlyph(size: 96, onDark: true),
                 const SizedBox(height: AppSpacing.xl),
                 Text(
-                  'Louve!',
-                  style: theme.textTheme.displaySmall?.copyWith(
+                  'PAUTA',
+                  style: AppTypography.wordmark(
+                    context,
+                    size: 34,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
                 Text(
-                  'Sua escala, clara e no lugar certo.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: AppColors.lightPrimaryContainer,
-                  ),
+                  'Sua equipe no mesmo ritmo.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.brandLavender,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppSpacing.xxl),

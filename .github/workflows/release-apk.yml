@@ -34,6 +34,13 @@
 # O `latest/download` do GitHub segue sozinho o Release mais novo, e o workflow
 # publica sempre uma cópia de nome fixo (louve.apk) para esse endereço achar.
 #
+# **O nome dos arquivos continua `louve`, e não `pauta`, de propósito.** A marca
+# mudou; este nome não é marca, é o identificador que o `APP_APK_URL` já aponta
+# em produção. Renomear aqui sem trocar a variável no Railway no mesmo minuto
+# quebra o botão "Atualizar" de quem já tem o app instalado. Quando for a hora,
+# as duas coisas mudam juntas — ou o workflow publica os dois nomes por uma
+# versão, e só então o antigo sai.
+#
 # O passo 3 continua manual de propósito: publicar o arquivo e *anunciar* a
 # versão para a equipe são decisões diferentes. Enquanto APP_LATEST_VERSION não
 # subir, o Release fica disponível para quem quiser testar sem que o app cobre
@@ -188,7 +195,7 @@ jobs:
           Baixe **louve-$V.apk** e abra no celular. Se o Android perguntar,
           autorize a instalação de apps desta origem.
 
-          Já tem o Louve! instalado? É só instalar por cima — os dados e a
+          Já tem a Pauta instalada? É só instalar por cima — os dados e a
           sessão continuam.
 
           Os arquivos por arquitetura são menores e servem para economizar
@@ -203,7 +210,7 @@ jobs:
             gh release upload "$TAG" louve*.apk --clobber
           else
             gh release create "$TAG" louve*.apk \
-              --title "Louve! $V" \
+              --title "Pauta $V" \
               --notes "$NOTAS"
           fi
 

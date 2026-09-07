@@ -1,7 +1,7 @@
 name: louvor_app
-description: Louve! - escalas da equipe de louvor
+description: Pauta - sua equipe no mesmo ritmo
 publish_to: "none"
-version: 0.2.0+5
+version: 0.3.0+6
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -50,25 +50,50 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 # O arquivo cheio atende Android antigo; foreground e monochrome preservam as
-# camadas do ícone adaptativo e o ícone temático do Android 13+. As fontes são
+# camadas do ícone adaptativo e o ícone temático do Android 13+. As camadas são
 # geradas por tools/generate_brand_assets.py. Sem pasta ios neste projeto.
+#
+# **As duas camadas adaptativas apontam para o símbolo branco, não para o
+# colorido.** O fundo é o violeta profundo da marca, e o símbolo colorido sobre
+# ele entrega de 1,19:1 a 1,61:1 — some. O branco dá 11,13:1, que é exatamente o
+# que o ícone completo entregue pelo design mostra: peça clara sobre violeta.
+# O colorido é o símbolo para fundo claro, e é assim que o app o usa.
+#
+# **E apontam para o derivado, não para o master.** O símbolo entregue ocupa
+# 42,2% de raio; a máscara redonda do Android garante 30,6%. Sem a redução, as
+# pontas do P saem cortadas no lançador.
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: assets/branding/louve_icon.png
-  adaptive_icon_background: "#1D4ED8"
-  adaptive_icon_foreground: assets/branding/louve_foreground.png
-  adaptive_icon_monochrome: assets/branding/louve_monochrome.png
+  image_path: assets/branding/pauta_icon.png
+  adaptive_icon_background: "#312E81"
+  adaptive_icon_foreground: assets/branding/pauta_adaptive_foreground.png
+  adaptive_icon_monochrome: assets/branding/pauta_adaptive_foreground.png
+  # O recuo já está embutido no arquivo derivado, medido contra o círculo real
+  # da máscara. Um recuo por cima dele encolheria a peça duas vezes.
   adaptive_icon_foreground_inset: 0
   web:
     # O gerador do pacote usa a mesma imagem para ícones normais e maskable.
     # Nossa fonte gera o normal com cantos transparentes e o maskable cheio.
     generate: false
-    background_color: "#1D4ED8"
-    theme_color: "#1D4ED8"
+    background_color: "#312E81"
+    theme_color: "#312E81"
 
 flutter:
   uses-material-design: true
+
+  # O símbolo oficial da marca, nas duas artes que a identidade entrega: a
+  # branca para fundo violeta/escuro e a colorida para fundo claro. `AppBrandMark`
+  # escolhe entre elas pela luminância do ladrilho, porque no tema escuro o
+  # quadrado da marca é claro e a arte branca sumiria dentro dele.
+  #
+  # São os derivados de 512px, e não os masters de 1254: o app nunca desenha a
+  # marca acima de ~110dp, e empacotar 600 KB para pintar 40px é peso que a
+  # versão Web baixa no primeiro quadro. Os masters ficam em assets/branding
+  # como fonte, fora do bundle.
+  assets:
+    - assets/branding/pauta_symbol_on_dark.png
+    - assets/branding/pauta_symbol_on_light.png
 
   # A fonte vai empacotada no APK de proposito. Com o pacote google_fonts ela
   # era baixada de fonts.gstatic.com na primeira execucao: o app dependia de um
