@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ desenha a abertura pelo sistema. Usar apenas o glifo evita
-         mostrar um quadrado azul dentro de outro fundo azul. -->
+    <!-- Android 12+ desenha a abertura pelo sistema. Usar apenas o simbolo
+         evita mostrar um quadrado violeta dentro de outro fundo violeta. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowSplashScreenBackground">@color/brand_primary</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>

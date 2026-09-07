@@ -7,8 +7,12 @@
     <color name="brand_primary">#312E81</color>
     <!-- Fundo do adaptive icon. Mesmo violeta profundo, e nao o indigo: a
          camada de frente e o simbolo branco da marca, e e sobre este tom que
-         ele entrega 11,13:1 -- o mesmo par do icone completo entregue pelo
+         ele entrega 11,13:1, o mesmo par do icone completo entregue pelo
          design. Escrito pelo flutter_launcher_icons a partir do pubspec; para
-         mudar, mude la. -->
+         mudar, mude la.
+
+         Nenhum comentario deste arquivo pode conter dois hifens seguidos: o
+         packageReleaseResources recusa a sequencia dentro de comentario XML, e
+         o build so quebra no Android, depois de analyze e test passarem. -->
     <color name="ic_launcher_background">#312E81</color>
 </resources>
