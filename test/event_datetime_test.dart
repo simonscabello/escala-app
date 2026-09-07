@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/events/domain/event_datetime.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() {
   setUpAll(() async {
@@ -54,7 +55,15 @@ void main() {
 
   test('mostra o ano apenas quando difere do ano corrente', () {
     const tzName = 'America/Sao_Paulo';
-    final thisYear = DateTime.now().year;
+    // O ano corrente é o do fuso da EQUIPE, e não o do relógio de quem roda a
+    // suíte: `formatEventWeekdayDate` compara com `TZDateTime.now(location)`.
+    //
+    // Os dois só divergem nas três horas entre 21h de 31 de dezembro em
+    // Brasília e a meia-noite em UTC -- janela estreita, mas é a mesma classe
+    // de erro que já reprovou `open_dates_agenda_test.dart` no CI. Um teste
+    // que falha uma vez por ano, de madrugada, é o pior tipo de teste: ninguém
+    // acredita nele, e ele acaba sendo ignorado quando estiver certo.
+    final thisYear = tz.TZDateTime.now(tz.getLocation(tzName)).year;
 
     final atual = formatEventWeekdayDate(
       DateTime.utc(thisYear, 8, 9, 12),
