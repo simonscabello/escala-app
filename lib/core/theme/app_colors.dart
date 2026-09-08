@@ -211,6 +211,62 @@ class AppColors {
   static const Color darkScrim = Color(0xFF000000);
   static const Color darkShadow = Color(0xFF000000);
 
+  // --- A manchete ---
+  //
+  // **A única superfície do app que é escura nos dois temas.** A próxima
+  // escala é a razão de a agenda existir, e ela precisava de um degrau de
+  // hierarquia acima do cartão comum — que no tema claro já é branco, o ponto
+  // mais alto da escala de superfícies. Não havia para onde subir clareando.
+  //
+  // Subiu escurecendo: o violeta profundo da marca vira o chão da manchete, e
+  // o texto passa a ser branco. É o mesmo movimento do `inverseSurface` do
+  // Material (a superfície que se destaca invertendo, e não somando tinta),
+  // com a diferença de que aqui ela carrega a cor da marca em vez do neutro.
+  //
+  // **O gradiente é curto de propósito** — dois passos da mesma matiz, não um
+  // arco-íris. O que ele faz é dar profundidade ao bloco sem que nenhuma parte
+  // da área fique com contraste diferente da outra: os dois extremos foram
+  // escolhidos para que branco e [onHeroVariant] passem o mínimo do WCAG sobre
+  // **qualquer** ponto da rampa, e não só sobre a média. `theme_contrast_test`
+  // cobra os dois extremos separadamente.
+  //
+  // No escuro a rampa desce um pouco mais: sobre a página quase preta, o
+  // violeta do tema claro brilharia como um anúncio.
+
+  static const Color lightHeroTop = Color(0xFF3F3AA8);
+  static const Color lightHeroBottom = brandDeepViolet;
+  static const Color darkHeroTop = Color(0xFF3A3596);
+  static const Color darkHeroBottom = Color(0xFF241F5C);
+
+  /// Texto sobre a manchete: o que se lê primeiro.
+  static const Color onHero = Color(0xFFFFFFFF);
+
+  /// Texto de apoio sobre a manchete.
+  ///
+  /// Lavanda acinzentada, e não branco com alfa: sobre um gradiente, o alfa
+  /// entrega um contraste diferente em cada ponto da rampa — o que passa em
+  /// cima reprova embaixo. Uma cor opaca tem uma razão só, e ela é medida.
+  static const Color onHeroVariant = Color(0xFFC7C3F0);
+
+  /// A rampa da manchete, do topo para a base.
+  static LinearGradient heroGradient(ColorScheme scheme) {
+    final dark = scheme.brightness == Brightness.dark;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: dark
+          ? const [darkHeroTop, darkHeroBottom]
+          : const [lightHeroTop, lightHeroBottom],
+    );
+  }
+
+  /// Os dois extremos da rampa, para quem precisa medir contraste contra ela.
+  static List<Color> heroRamp(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? const [darkHeroTop, darkHeroBottom]
+        : const [lightHeroTop, lightHeroBottom];
+  }
+
   static ColorScheme lightScheme() {
     return const ColorScheme(
       brightness: Brightness.light,

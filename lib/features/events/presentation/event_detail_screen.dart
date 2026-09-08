@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
@@ -23,6 +24,7 @@ import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
+import 'event_schedule_facts.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
@@ -422,11 +424,15 @@ class _HistoryLink extends StatelessWidget {
 
 /// A manchete da escala: data, título, horários, local e "onde você entra".
 ///
-/// Mesmo cartão e mesma folga do destaque da agenda. Chegou a ficar sem
-/// moldura, e a lição foi a mesma dos dois lados: sem fundo, o bloco não se lê
-/// como um objeto — parece texto derramado no começo da tela. A hierarquia
-/// contra os blocos de baixo (equipe, músicas) vem do corpo da data e da folga
-/// interna, não de tirar o chão dele.
+/// **A mesma superfície do destaque da agenda**, e isso é o ponto: quem toca no
+/// cartão violeta da agenda chega numa tela que abre com o mesmo cartão
+/// violeta. A continuidade entre as duas telas passou a ser visível, em vez de
+/// ser só a mesma informação repetida em outro tom.
+///
+/// Chegou a ficar sem moldura, e a lição foi a mesma dos dois lados: sem fundo,
+/// o bloco não se lê como um objeto — parece texto derramado no começo da tela.
+/// A hierarquia contra os blocos de baixo (equipe, músicas) vem do corpo da
+/// data, da folga interna e da superfície, não de tirar o chão dele.
 class _EventHeader extends StatelessWidget {
   const _EventHeader({
     required this.event,
@@ -441,10 +447,10 @@ class _EventHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final hasLocation = event.location?.isNotEmpty ?? false;
 
     return AppCard(
+      gradient: AppColors.heroGradient(theme.colorScheme),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -452,21 +458,33 @@ class _EventHeader extends StatelessWidget {
           // Sem selo de data: ele dizia "DOM 9 AGO" logo ao lado de "Domingo,
           // 9 de agosto". A data por extenso sozinha basta.
           Text(
-            formatEventWeekdayDate(event.startsAt, timezone),
-            style: theme.textTheme.displaySmall,
+            // A mesma quebra da agenda, pela mesma razão: a manchete não muda
+            // de forma conforme o comprimento do dia da semana.
+            heroDateText(
+              context,
+              formatEventWeekdayDate(event.startsAt, timezone),
+            ),
+            style: theme.textTheme.displaySmall?.copyWith(
+              color: AppColors.onHero,
+            ),
           ),
           if (event.hasTitle)
             Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
                 event.title!,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: scheme.primary,
+                  color: AppColors.onHeroVariant,
                 ),
               ),
             ),
           const SizedBox(height: AppSpacing.lg),
-          EventTimesList(event: event, timezone: timezone),
+          EventTimesList(
+            event: event,
+            timezone: timezone,
+            color: AppColors.onHeroVariant,
+            hourColor: AppColors.onHero,
+          ),
           // Fora de etiqueta: um endereço longo não caberia e estouraria a
           // linha. Aqui ele tem a largura toda e corta com "…".
           if (hasLocation) ...[
@@ -475,13 +493,18 @@ class _EventHeader extends StatelessWidget {
               icon: Icons.location_on_outlined,
               text: event.location!,
               maxLines: 1,
+              color: AppColors.onHeroVariant,
             ),
           ],
           if (youPositions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             Align(
               alignment: Alignment.centerLeft,
-              child: YouHighlight(positionNames: youPositions),
+              child: YouHighlight(
+                positionNames: youPositions,
+                background: AppColors.onHero.withValues(alpha: 0.16),
+                foreground: AppColors.onHero,
+              ),
             ),
           ],
         ],
@@ -540,23 +563,28 @@ class _MetaLine extends StatelessWidget {
     required this.icon,
     required this.text,
     required this.maxLines,
+    this.color,
   });
 
   final IconData icon;
   final String text;
   final int maxLines;
 
+  /// A tinta da linha sobre a manchete violeta. Nula em cartão comum.
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final ink = color ?? scheme.onSurfaceVariant;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 15, color: scheme.onSurfaceVariant),
+          child: Icon(icon, size: 15, color: ink),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -564,7 +592,7 @@ class _MetaLine extends StatelessWidget {
             text,
             maxLines: maxLines,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(color: color),
           ),
         ),
       ],

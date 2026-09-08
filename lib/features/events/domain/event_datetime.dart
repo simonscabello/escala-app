@@ -1,6 +1,8 @@
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../core/date/civil_date.dart';
+
 DateTime eventLocalTime(DateTime utc, String timezone) {
   return tz.TZDateTime.from(utc, tz.getLocation(timezone));
 }
@@ -112,4 +114,44 @@ String formatRehearsalTime(
   final hora = formatEventTime(rehearsalAt, timezone);
   if (isSameLocalDay(rehearsalAt, startsAt, timezone)) return hora;
   return '${formatEventShortWeekday(rehearsalAt, timezone)} $hora';
+}
+
+/// "DOM", "QUI" — o dia da semana dentro do bloco de data.
+///
+/// Caixa alta porque ali ele não é uma palavra numa frase: é o rótulo de cima
+/// de um bloco de dois andares, e em minúscula sumia debaixo do número.
+String formatEventBadgeWeekday(DateTime utc, String timezone) {
+  return formatEventShortWeekday(utc, timezone).toUpperCase();
+}
+
+/// "13" — o número do dia, o andar de baixo do bloco de data.
+///
+/// Sem zero à esquerda: "03" ocupa a mesma largura de "13" e lê como código.
+/// O alinhamento entre linhas vem dos algarismos tabulares, não do zero.
+String formatEventDayNumber(DateTime utc, String timezone) {
+  return DateFormat('d', 'pt_BR').format(eventLocalTime(utc, timezone));
+}
+
+/// "Setembro 2026" — o cabeçalho de um mês na lista da agenda.
+///
+/// Com o ano sempre, e não só quando difere do atual: aqui o título é a única
+/// coisa separando dezembro de janeiro, e a agenda atravessa a virada do ano
+/// com dois blocos vizinhos que se chamariam "Dezembro" e "Janeiro" sem dizer
+/// de quando. É o inverso da regra de [formatEventWeekdayDate], onde a data
+/// aparece dentro de uma frase e o ano repetido vira ruído.
+String formatEventMonthYear(DateTime utc, String timezone) {
+  // O rótulo vem de `monthYearLabel`, que é o mesmo do calendário de
+  // indisponibilidade. O que esta função acrescenta é o fuso: um culto de
+  // 1º de setembro às 00:30 em São Paulo é 03:30 UTC, e agrupá-lo pelo
+  // instante o jogaria para o mês errado na virada.
+  return monthYearLabel(eventLocalTime(utc, timezone));
+}
+
+/// A chave de agrupamento por mês: "2026-09".
+///
+/// Separada do rótulo porque dois meses de anos diferentes podem gerar o mesmo
+/// nome, e agrupar pelo texto juntaria setembro de 2026 com setembro de 2027.
+String eventMonthKey(DateTime utc, String timezone) {
+  final localTime = eventLocalTime(utc, timezone);
+  return '${localTime.year}-${localTime.month.toString().padLeft(2, '0')}';
 }

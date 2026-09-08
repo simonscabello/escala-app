@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
@@ -146,9 +147,7 @@ class _MonthHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final title = capitalizeWeekday(
-      DateFormat("MMMM 'de' y", 'pt_BR').format(month),
-    );
+    final title = monthYearLabel(month);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(

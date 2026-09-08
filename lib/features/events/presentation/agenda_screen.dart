@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_card.dart';
-import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
@@ -18,7 +16,6 @@ import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
-import '../../../shared/widgets/you_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/service_template.dart';
@@ -27,8 +24,8 @@ import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/open_date.dart';
-import 'duplicate_event_dialog.dart';
-import 'event_times.dart';
+import 'agenda_event_tile.dart';
+import 'agenda_hero_card.dart';
 
 /// Saudação por horário. Detalhe pequeno, mas é o que separa uma tela de
 /// listagem de um app que parece ter sido feito para aquela pessoa.
@@ -50,6 +47,39 @@ String _agendaTimezone(String? teamTimezone, List<Event> events) {
     if (event.timezone.isNotEmpty) return event.timezone;
   }
   return 'America/Sao_Paulo';
+}
+
+/// O fuso de uma escala, com o mesmo padrão do resto da tela.
+String _eventTimezone(Event event) =>
+    event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+
+/// As escalas separadas por mês, na ordem em que já vieram.
+///
+/// **A chave é o ano-mês, e não o rótulo.** Agrupar pelo texto juntaria
+/// "Setembro 2026" com "Setembro 2027" — improvável na aba das próximas, certo
+/// na das passadas, que é justamente onde a lista atravessa anos.
+List<({String key, String label, List<Event> events})> groupEventsByMonth(
+  List<Event> events,
+) {
+  final ordem = <String>[];
+  final porMes = <String, List<Event>>{};
+  final rotulos = <String, String>{};
+
+  for (final event in events) {
+    final timezone = _eventTimezone(event);
+    final key = eventMonthKey(event.startsAt, timezone);
+    if (!porMes.containsKey(key)) {
+      ordem.add(key);
+      porMes[key] = <Event>[];
+      rotulos[key] = formatEventMonthYear(event.startsAt, timezone);
+    }
+    porMes[key]!.add(event);
+  }
+
+  return [
+    for (final key in ordem)
+      (key: key, label: rotulos[key]!, events: porMes[key]!),
+  ];
 }
 
 class AgendaScreen extends ConsumerStatefulWidget {
@@ -133,7 +163,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   AppSpacing.xl,
                   0,
                   AppSpacing.xl,
-                  AppSpacing.md,
+                  AppSpacing.lg,
                 ),
                 child: Align(
                   alignment: Alignment.centerLeft,
@@ -157,10 +187,11 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               ),
               Expanded(
                 child: events.when(
-                  // Esqueleto no formato dos cartões que vêm, em vez da rodinha
-                  // centralizada: a tela já mostra que é uma lista de escalas
-                  // enquanto carrega, e o conteúdo entra sem sacudir o layout.
-                  loading: () => const AppListSkeleton(itemCount: 4),
+                  // Esqueleto no formato do que vem — manchete e linhas —, em
+                  // vez da rodinha centralizada: a tela já mostra que é uma
+                  // agenda enquanto carrega, e o conteúdo entra sem sacudir o
+                  // layout.
+                  loading: () => const _AgendaSkeleton(),
                   error: (error, _) => AppErrorState(
                     message: error is ApiException
                         ? error.message
@@ -207,6 +238,11 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
 /// para ver. O cumprimento continua ali, no lugar que ele merece — o de uma
 /// linha só.
 ///
+/// **A saudação subiu de corpo e o cabeçalho ganhou folga.** Ele é a abertura
+/// da tela principal do app, e estava com o mesmo tamanho de um título de
+/// bloco; a diferença entre "esta é a sua agenda" e "esta é mais uma lista"
+/// está quase toda aqui.
+///
 /// No monitor o cabeçalho recebe a ação principal à direita, e o seletor de
 /// equipe sai daqui: ele passou para a barra lateral, onde vale para o app
 /// inteiro em vez de só para esta tela.
@@ -238,9 +274,9 @@ class _GreetingHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
-        AppSpacing.lg,
         AppSpacing.xl,
-        AppSpacing.md,
+        AppSpacing.xl,
+        AppSpacing.lg,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -251,22 +287,20 @@ class _GreetingHeader extends StatelessWidget {
               children: [
                 Text(
                   name.isEmpty ? greeting : '$greeting, $name',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  maxLines: 1,
+                  style: theme.textTheme.headlineMedium,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
-                    Icon(Icons.groups_rounded, size: 14, color: scheme.primary),
-                    const SizedBox(width: 5),
+                    Icon(Icons.groups_rounded, size: 16, color: scheme.primary),
+                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         teamName,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
+                        style: theme.textTheme.titleSmall?.copyWith(
                           color: scheme.primary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -320,6 +354,91 @@ class _GreetingHeader extends StatelessWidget {
   }
 }
 
+/// A agenda carregando, na forma que ela vai ter.
+///
+/// A manchete é um bloco alto; as escalas seguintes são linhas com o bloco de
+/// data à esquerda, dentro de uma superfície só. Um esqueleto de quatro cartões
+/// soltos prometia outra tela — e a promessa quebrada é o que faz o conteúdo
+/// "pular" quando chega.
+class _AgendaSkeleton extends StatelessWidget {
+  const _AgendaSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return ExcludeSemantics(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.xxl,
+        ),
+        children: [
+          // A manchete: um bloco, e não barras de texto. Ela é uma superfície
+          // inteira de cor, e é isso que a pessoa vê chegar.
+          Container(
+            height: 210,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppCard(
+            child: Column(
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: AppGroup.textIndent,
+                      color: scheme.outlineVariant,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Row(
+                      children: [
+                        const AppSkeleton(
+                          width: 54,
+                          height: 52,
+                          radius: AppSpacing.radiusSm,
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Larguras diferentes por linha: barras idênticas
+                              // leem-se como tabela travada, não como texto
+                              // chegando.
+                              AppSkeleton(
+                                width: i.isEven ? 180 : 150,
+                                height: 15,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              AppSkeleton(
+                                width: i.isEven ? 210 : 240,
+                                height: 11,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AgendaOnboarding extends ConsumerWidget {
   const _AgendaOnboarding();
 
@@ -348,9 +467,7 @@ class _AgendaOnboarding extends ConsumerWidget {
                 Text(
                   '${greetingForHour(DateTime.now().hour)}, '
                   '${user?.firstName ?? ''}',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: theme.textTheme.headlineMedium,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -492,7 +609,18 @@ class _OnboardingCard extends StatelessWidget {
   }
 }
 
-class _EventsList extends StatelessWidget {
+/// A lista da agenda, em três degraus.
+///
+/// **A próxima escala, a seguinte, e o resto por mês.** É a ordem em que a
+/// pergunta aparece: "quando é a próxima?" tem uma resposta só e ela é a
+/// manchete; "e depois dessa?" tem uma segunda resposta e merece o próprio
+/// bloco, porque é o que a pessoa consulta para se organizar na semana; daí em
+/// diante a pergunta muda de natureza — vira "como está o mês" —, e a resposta
+/// é uma lista agrupada, não mais um destaque.
+///
+/// Nenhuma escala aparece duas vezes: a manchete sai da lista, a seguinte sai
+/// do agrupamento por mês, e os meses recebem o que sobrou.
+class _EventsList extends StatefulWidget {
   const _EventsList({
     required this.teamId,
     required this.events,
@@ -520,74 +648,53 @@ class _EventsList extends StatelessWidget {
   final Future<void> Function() onRefresh;
 
   @override
+  State<_EventsList> createState() => _EventsListState();
+}
+
+class _EventsListState extends State<_EventsList> {
+  /// Onde "Ver todas" leva. O primeiro cabeçalho de mês é o começo da lista
+  /// completa; a âncora existe para o atalho ter destino real em vez de virar
+  /// um rótulo decorativo.
+  final _monthsAnchor = GlobalKey();
+
+  void _showAll() {
+    final context = _monthsAnchor.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final banner = fromCache && cachedAt != null
-        ? CacheStampBanner(cachedAt: cachedAt!)
+    final banner = widget.fromCache && widget.cachedAt != null
+        ? CacheStampBanner(cachedAt: widget.cachedAt!)
         : null;
 
-    if (events.isEmpty) {
-      // Agenda vazia com datas em aberto é o começo de todo mês: a grade já
-      // sabe quais são os próximos domingos, e dizer "nenhuma escala marcada"
-      // ali seria esconder justamente a lista que resolve a tela.
-      if (openDates.isNotEmpty) {
-        return Column(
-          children: [
-            if (banner != null) banner,
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) => RefreshIndicator(
-                  onRefresh: onRefresh,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.xl,
-                      0,
-                      AppSpacing.xl,
-                      AppSpacing.xxxl * 2,
-                    ),
-                    children: [
-                      _OpenDatesGroup(
-                        teamId: teamId,
-                        dates: openDates,
-                        // O mesmo ponto de virada da lista de escalas: as duas
-                        // arrumações precisam concordar, senão a agenda muda de
-                        // formato no meio ao ganhar a primeira escala.
-                        wide: constraints.maxWidth >= 880,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-
-      return Column(
-        children: [
-          if (banner != null) banner,
-          Expanded(
-            child: RefreshableMessage(
-              onRefresh: onRefresh,
-              child: AppEmptyState(
-                icon: Icons.event_available_outlined,
-                title: showFeaturedEvent
-                    ? 'Nenhuma escala marcada'
-                    : 'Nenhuma escala passada',
-                message: showFeaturedEvent
-                    ? (canManage
-                        ? 'Toque em "Nova escala" para criar a primeira da '
-                            'equipe.'
-                        : 'Quando o líder criar uma escala, ela aparece aqui.')
-                    : 'As escalas que já aconteceram ficam guardadas aqui.',
-              ),
-            ),
-          ),
-        ],
+    if (widget.events.isEmpty) {
+      return _EmptyAgenda(
+        teamId: widget.teamId,
+        openDates: widget.openDates,
+        showFeaturedEvent: widget.showFeaturedEvent,
+        canManage: widget.canManage,
+        banner: banner,
+        onRefresh: widget.onRefresh,
       );
     }
 
-    final featured = showFeaturedEvent ? events.first : null;
-    final remaining = (showFeaturedEvent ? events.skip(1) : events).toList();
+    final events = widget.events;
+    final featured = widget.showFeaturedEvent ? events.first : null;
+    // A "seguinte" só existe quando há manchete: na aba das passadas todas as
+    // escalas são iguais entre si, e eleger a segunda não significaria nada.
+    final afterNext =
+        featured != null && events.length > 1 ? events.elementAt(1) : null;
+    final rest = featured == null
+        ? events
+        : events.skip(afterNext == null ? 1 : 2).toList();
+    final months = groupEventsByMonth(rest);
 
     return Column(
       children: [
@@ -598,15 +705,15 @@ class _EventsList extends StatelessWidget {
           // número que decide se cabem duas colunas.
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // 880 e o ponto em que as colunas da linha (data 250, horarios,
-              // "voce" 200, menu) cabem sem espremer nenhuma. Abaixo disso a
+              // 880 e o ponto em que as colunas da linha (data, horarios,
+              // "voce", menu) cabem sem espremer nenhuma. Abaixo disso a
               // linha volta a se empilhar -- inclusive num tablet de 600px com
               // a barra lateral recolhida, onde sobram ~500px de lista.
               final wide = constraints.maxWidth >= 880;
               final twoColumns = featured != null && wide;
 
               return RefreshIndicator(
-                onRefresh: onRefresh,
+                onRefresh: widget.onRefresh,
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(
                     AppSpacing.xl,
@@ -624,10 +731,10 @@ class _EventsList extends StatelessWidget {
                           children: [
                             Expanded(
                               flex: 3,
-                              child: _FeaturedEvent(
+                              child: ScheduleHeroCard(
                                 event: featured,
-                                canManage: canManage,
-                                membershipId: membershipId,
+                                canManage: widget.canManage,
+                                membershipId: widget.membershipId,
                               ),
                             ),
                             const SizedBox(width: AppSpacing.lg),
@@ -635,54 +742,89 @@ class _EventsList extends StatelessWidget {
                               flex: 2,
                               child: _AgendaSummary(
                                 events: events,
-                                membershipId: membershipId,
-                                canManage: canManage,
+                                membershipId: widget.membershipId,
+                                canManage: widget.canManage,
                               ),
                             ),
                           ],
                         )
                       else
-                        _FeaturedEvent(
+                        ScheduleHeroCard(
                           event: featured,
-                          canManage: canManage,
-                          membershipId: membershipId,
+                          canManage: widget.canManage,
+                          membershipId: widget.membershipId,
                         ),
                       const SizedBox(height: AppSpacing.xl),
-                      if (remaining.isNotEmpty || openDates.isNotEmpty) ...[
-                        // Um fio separa a manchete da lista. É a única divisória
-                        // da tela, e por isso não precisa de mais nada em volta.
-                        Divider(
-                          height: 1,
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                        const SizedBox(height: AppSpacing.xl),
-                      ],
                     ],
-                    if (remaining.isNotEmpty)
+                    if (afterNext != null) ...[
                       AppGroup(
-                        title: showFeaturedEvent ? 'Depois dessa' : 'Passadas',
+                        title: 'Depois dessa',
                         dividerIndent: AppGroup.textIndent,
+                        // O atalho só existe quando há de fato mais lista
+                        // abaixo. Com duas escalas na agenda, "Ver todas"
+                        // apontaria para o nada.
+                        trailing: months.isEmpty
+                            ? null
+                            : TextButton.icon(
+                                onPressed: _showAll,
+                                iconAlignment: IconAlignment.end,
+                                icon: const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Ver todas'),
+                              ),
                         children: [
-                          for (final event in remaining)
-                            _EventRow(
-                              event: event,
-                              canManage: canManage,
-                              membershipId: membershipId,
-                              wide: wide,
-                            ),
+                          CompactScheduleTile(
+                            event: afterNext,
+                            canManage: widget.canManage,
+                            membershipId: widget.membershipId,
+                            wide: wide,
+                          ),
                         ],
                       ),
+                      if (months.isNotEmpty || widget.openDates.isNotEmpty)
+                        const SizedBox(height: AppSpacing.xl),
+                    ],
+                    for (var i = 0; i < months.length; i++) ...[
+                      if (i > 0) const SizedBox(height: AppSpacing.xl),
+                      KeyedSubtree(
+                        // O primeiro mês é o destino de "Ver todas"; os
+                        // demais só precisam de identidade estável para o
+                        // Flutter não reaproveitar o estado do mês anterior
+                        // quando a lista muda.
+                        key: i == 0
+                            ? _monthsAnchor
+                            : ValueKey('mes-${months[i].key}'),
+                        child: AppGroup(
+                          title: months[i].label,
+                          dividerIndent: AppGroup.textIndent,
+                          // A contagem no lugar em que a referência põe um
+                          // ícone de calendário: mesmo peso visual, e diz
+                          // alguma coisa.
+                          trailing: _MonthCount(count: months[i].events.length),
+                          children: [
+                            for (final event in months[i].events)
+                              CompactScheduleTile(
+                                event: event,
+                                canManage: widget.canManage,
+                                membershipId: widget.membershipId,
+                                wide: wide,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                     // Por último, e não intercalado com as escalas: o que já
                     // está marcado vem primeiro porque é o que a equipe vai
                     // cumprir. O que falta marcar é trabalho da liderança, e
                     // trabalho pendente lido como lista fecha a tela melhor do
                     // que espalhado no meio do que já está pronto.
-                    if (openDates.isNotEmpty) ...[
-                      if (remaining.isNotEmpty)
-                        const SizedBox(height: AppSpacing.xl),
+                    if (widget.openDates.isNotEmpty) ...[
+                      if (months.isNotEmpty) const SizedBox(height: AppSpacing.xl),
                       _OpenDatesGroup(
-                        teamId: teamId,
-                        dates: openDates,
+                        teamId: widget.teamId,
+                        dates: widget.openDates,
                         wide: wide,
                       ),
                     ],
@@ -690,6 +832,110 @@ class _EventsList extends StatelessWidget {
                 ),
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Quantas escalas o mês tem, ao lado do nome dele.
+class _MonthCount extends StatelessWidget {
+  const _MonthCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        count == 1 ? '1 escala' : '$count escalas',
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontFeatures: AppTypography.tabular,
+        ),
+      ),
+    );
+  }
+}
+
+/// Agenda sem nenhuma escala.
+///
+/// Com datas em aberto ela **não** está vazia: a grade já sabe quais são os
+/// próximos domingos, e dizer "nenhuma escala marcada" ali seria esconder
+/// justamente a lista que resolve a tela.
+class _EmptyAgenda extends StatelessWidget {
+  const _EmptyAgenda({
+    required this.teamId,
+    required this.openDates,
+    required this.showFeaturedEvent,
+    required this.canManage,
+    required this.banner,
+    required this.onRefresh,
+  });
+
+  final String teamId;
+  final List<OpenDate> openDates;
+  final bool showFeaturedEvent;
+  final bool canManage;
+  final Widget? banner;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    if (openDates.isNotEmpty) {
+      return Column(
+        children: [
+          if (banner != null) banner!,
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => RefreshIndicator(
+                onRefresh: onRefresh,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl,
+                    0,
+                    AppSpacing.xl,
+                    AppSpacing.xxxl * 2,
+                  ),
+                  children: [
+                    _OpenDatesGroup(
+                      teamId: teamId,
+                      dates: openDates,
+                      // O mesmo ponto de virada da lista de escalas: as duas
+                      // arrumações precisam concordar, senão a agenda muda de
+                      // formato no meio ao ganhar a primeira escala.
+                      wide: constraints.maxWidth >= 880,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        if (banner != null) banner!,
+        Expanded(
+          child: RefreshableMessage(
+            onRefresh: onRefresh,
+            child: AppEmptyState(
+              icon: Icons.event_available_outlined,
+              title: showFeaturedEvent
+                  ? 'Nenhuma escala marcada'
+                  : 'Nenhuma escala passada',
+              message: showFeaturedEvent
+                  ? (canManage
+                      ? 'Toque em "Nova escala" para criar a primeira da '
+                          'equipe.'
+                      : 'Quando o líder criar uma escala, ela aparece aqui.')
+                  : 'As escalas que já aconteceram ficam guardadas aqui.',
+            ),
           ),
         ),
       ],
@@ -776,99 +1022,13 @@ class _OpenDatesGroupState extends ConsumerState<_OpenDatesGroup> {
       dividerIndent: AppGroup.textIndent,
       children: [
         for (final date in widget.dates)
-          _OpenDateRow(date: date, wide: widget.wide),
+          OpenDateTile(date: date, wide: widget.wide),
         _CreateDraftsRow(
           count: widget.dates.length,
           saving: _saving,
           onTap: _createAll,
         ),
       ],
-    );
-  }
-}
-
-/// Uma data em aberto, na mesma arrumação de [_EventRow] — e de propósito mais
-/// apagada que ela.
-///
-/// Data e horários no cinza do texto de apoio, sem selo e sem linha de estado:
-/// não há nada a resolver ainda, e pintar de âmbar todo domingo do mês faria a
-/// cor de "isto precisa de você" perder o sentido nas escalas que realmente
-/// travaram. O que a linha promete é o toque, e quem diz isso é o "+" à
-/// direita, no lugar onde as escalas existentes têm a seta.
-class _OpenDateRow extends StatelessWidget {
-  const _OpenDateRow({required this.date, required this.wide});
-
-  final OpenDate date;
-  final bool wide;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final timezone = date.timezone;
-
-    final title = Text(
-      formatEventWeekdayDate(date.startsAt, timezone),
-      style: theme.textTheme.titleMedium?.copyWith(
-        color: scheme.onSurfaceVariant,
-      ),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-    );
-
-    final times = Text(
-      [
-        for (final service in date.services)
-          '${service.label} ${formatEventTime(service.startsAt, timezone)}',
-      ].join('  ·  '),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: scheme.onSurfaceVariant,
-        fontFeatures: AppTypography.tabular,
-      ),
-    );
-
-    return AppPressable(
-      onTap: () => context.push('/agenda/novo?data=${date.dateParam}'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-        ),
-        child: Row(
-          crossAxisAlignment:
-              wide ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-          children: [
-            if (wide) ...[
-              SizedBox(width: 250, child: title),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(child: times),
-            ] else
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    title,
-                    const SizedBox(height: 3),
-                    times,
-                  ],
-                ),
-              ),
-            const SizedBox(width: AppSpacing.md),
-            Padding(
-              padding: const EdgeInsets.only(top: 2, right: 4),
-              child: Icon(
-                Icons.add_circle_outline_rounded,
-                size: 20,
-                color: scheme.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -972,9 +1132,7 @@ class _AgendaSummary extends StatelessWidget {
         _SummaryTile(
           icon: Icons.person_pin_circle_outlined,
           value: '${yours.length}',
-          label: yours.length == 1
-              ? 'escala com você'
-              : 'escalas com você',
+          label: yours.length == 1 ? 'escala com você' : 'escalas com você',
           detail: yours.isEmpty
               ? 'Você não está escalado nas próximas.'
               : yours
@@ -982,7 +1140,7 @@ class _AgendaSummary extends StatelessWidget {
                   .map(
                     (e) => '${formatEventShortDate(
                       e.startsAt,
-                      e.timezone.isEmpty ? 'America/Sao_Paulo' : e.timezone,
+                      _eventTimezone(e),
                     )} · '
                         '${e.positionsForMembership(membershipId).join(', ')}',
                   )
@@ -1072,417 +1230,6 @@ class _SummaryTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// A próxima escala: a manchete da tela, **dentro de uma superfície**.
-///
-/// Esta é a razão de o app existir — quem abre quer saber quando é e onde entra
-/// em dois segundos —, e por isso ela leva a tipografia de manchete: data em
-/// 32px com espacejamento apertado, muito acima do corpo das escalas seguintes.
-///
-/// Já esteve **sem** cartão, solta na página, para levar a hierarquia ao limite:
-/// uma coisa grande, uma lista quieta. Em aparelho real não funcionou. Sem
-/// fundo, o bloco parava de se ler como um objeto e virava texto derramado
-/// entre o cumprimento acima e a lista abaixo — e, pior, um objeto tocável sem
-/// nada delimitando onde ele começa e termina.
-///
-/// O cartão voltou, com folga interna maior que a das linhas seguintes. A lição
-/// vale para o resto do app: **a hierarquia se faz pelo tamanho do texto e pela
-/// folga, não pela ausência de moldura.** Tirar a moldura não promove o
-/// conteúdo; só tira o chão dele.
-class _FeaturedEvent extends ConsumerWidget {
-  const _FeaturedEvent({
-    required this.event,
-    required this.canManage,
-    required this.membershipId,
-  });
-
-  final Event event;
-  final bool canManage;
-  final String membershipId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final timezone =
-        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
-    final youPositions = event.positionsForMembership(membershipId);
-
-    return AppCard(
-      onTap: () => context.push('/agenda/${event.id}'),
-      // Folga de manchete: `xl` contra os `md` das linhas do grupo abaixo. É
-      // parte do que a distingue, junto com o corpo da data.
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            event.isDraft ? 'RASCUNHO' : 'PRÓXIMA ESCALA',
-            style: AppTypography.eyebrow(context).copyWith(
-              color: event.isDraft
-                  ? AppStatusColors.of(context).warning.foreground
-                  : null,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  formatEventWeekdayDate(event.startsAt, timezone),
-                  style: theme.textTheme.displaySmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (canManage && FeatureFlags.duplicateSchedule)
-                _HeroMenu(event: event)
-              else
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
-                  ),
-                ),
-            ],
-          ),
-          // A data é a identidade da escala e fica sempre na mesma posição; o
-          // título só existe em culto especial e entra abaixo, em azul, para
-          // se ler como exceção.
-          if (event.hasTitle)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                event.title!,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: scheme.primary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          const SizedBox(height: AppSpacing.lg),
-          // A mesma frase do detalhe: abrir a escala não deve reapresentar a
-          // mesma informação num formato diferente.
-          EventTimesList(event: event, timezone: timezone),
-          if (event.isDraft || event.servicesWithoutSongs.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            _ScheduleStatusLines(event: event),
-          ],
-          if (youPositions.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: YouHighlight(positionNames: youPositions),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroMenu extends ConsumerWidget {
-  const _HeroMenu({required this.event});
-
-  final Event event;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return PopupMenuButton<String>(
-      tooltip: 'Mais opções desta escala',
-      icon: Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),
-      onSelected: (value) async {
-        if (value == 'duplicate') {
-          await showDuplicateEventDialog(
-            context: context,
-            ref: ref,
-            source: event,
-          );
-        }
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'duplicate', child: Text('Duplicar escala')),
-      ],
-    );
-  }
-}
-
-/// Uma escala seguinte, como linha do grupo.
-///
-/// Perdeu a moldura própria e o ícone de relógio: dentro de um grupo, a
-/// separação já vem do fio, e o relógio era decoração diante de uma linha que
-/// começa literalmente com um horário.
-///
-/// **Duas arrumações, o mesmo conteúdo.** No celular tudo se empilha numa
-/// coluna: é a única forma de caber em 375px. Onde há largura, a mesma linha
-/// vira colunas — data, horários, sua função — e a lista passa a ser lida de
-/// cima a baixo por coluna, que é o que faz uma agenda de trinta escalas
-/// funcionar num monitor. As duas usam exatamente os mesmos campos do modelo.
-class _EventRow extends ConsumerWidget {
-  const _EventRow({
-    required this.event,
-    required this.canManage,
-    required this.membershipId,
-    this.wide = false,
-  });
-
-  final Event event;
-  final bool canManage;
-  final String membershipId;
-  final bool wide;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final timezone =
-        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
-    final youPositions = event.positionsForMembership(membershipId);
-    // Rascunho fala do que falta para publicar; escala publicada sem
-    // repertório fala do repertório. Uma das duas, ou nenhuma.
-    final temEstado = event.isDraft || event.servicesWithoutSongs.isNotEmpty;
-
-    // "Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00".
-    final times = [
-      for (final service in event.displayServices)
-        '${service.label} ${formatEventTime(service.startsAt, timezone)}',
-      if (event.rehearsalAt == null)
-        'Sem ensaio'
-      else
-        // Com o dia abreviado quando o ensaio é em outro dia: antes esta linha
-        // mostrava só a hora, e um ensaio de sábado parecia ser no dia do
-        // culto.
-        'Ensaio ${formatRehearsalTime(
-          event.rehearsalAt!,
-          event.startsAt,
-          timezone,
-        )}',
-    ].join('  ·  ');
-
-    final title = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (event.isDraft && !wide) ...[
-          const AppBadge(label: 'Rascunho', tone: AppTone.warning),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        // A data por extenso abre o item: é o que identifica a escala, e fica
-        // na mesma posição em todos, o que deixa a lista legível de cima a
-        // baixo.
-        Text(
-          formatEventWeekdayDate(event.startsAt, timezone),
-          style: theme.textTheme.titleMedium,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (event.hasTitle)
-          Text(
-            event.title!,
-            style: theme.textTheme.labelLarge?.copyWith(color: scheme.primary),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
-    );
-
-    final timesText = Text(
-      times,
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        fontFeatures: AppTypography.tabular,
-      ),
-    );
-
-    final trailing = canManage && FeatureFlags.duplicateSchedule
-        // O menu do item só existe por causa de "Duplicar escala"; com a
-        // funcionalidade escondida, a linha volta a ser só um atalho.
-        ? PopupMenuButton<String>(
-            tooltip: 'Mais opções desta escala',
-            onSelected: (value) async {
-              if (value == 'duplicate') {
-                await showDuplicateEventDialog(
-                  context: context,
-                  ref: ref,
-                  source: event,
-                );
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'duplicate', child: Text('Duplicar escala')),
-            ],
-          )
-        : Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm, right: 4),
-            child: Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
-            ),
-          );
-
-    return AppPressable(
-      onTap: () => context.push('/agenda/${event.id}'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-        ),
-        child: wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(width: 250, child: title),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(child: timesText),
-                  const SizedBox(width: AppSpacing.lg),
-                  SizedBox(
-                    width: 200,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (temEstado)
-                          _ScheduleStatusLines(
-                            event: event,
-                            alignment: CrossAxisAlignment.end,
-                          ),
-                        if (youPositions.isNotEmpty) ...[
-                          if (temEstado) const SizedBox(height: AppSpacing.xs),
-                          YouHighlight(positionNames: youPositions),
-                        ],
-                      ],
-                    ),
-                  ),
-                  trailing,
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        title,
-                        const SizedBox(height: 3),
-                        timesText,
-                        if (youPositions.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          YouHighlight(positionNames: youPositions),
-                        ],
-                        if (temEstado) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          _ScheduleStatusLines(event: event),
-                        ],
-                      ],
-                    ),
-                  ),
-                  trailing,
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-/// O estado da escala no item da agenda: até duas linhas curtas.
-///
-/// **Rascunho** responde "dá para publicar?"; **repertório em aberto**
-/// responde "as músicas já saíram?". São perguntas diferentes desde que a
-/// escala passou a poder ir para a equipe sem música -- juntar as duas numa
-/// linha só fazia "falta música" parecer impedimento, que é justamente o que
-/// ele deixou de ser.
-///
-/// Daí os tons: âmbar no que a liderança precisa resolver para publicar,
-/// ardósia no que é só notícia -- para a equipe inteira, inclusive quem só
-/// quer saber se já pode ensaiar.
-class _ScheduleStatusLines extends StatelessWidget {
-  const _ScheduleStatusLines({
-    required this.event,
-    this.alignment = CrossAxisAlignment.start,
-  });
-
-  final Event event;
-  final CrossAxisAlignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = AppStatusColors.of(context);
-    final semRepertorio = event.servicesWithoutSongs;
-    final blockers = event.publicationBlockers;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: alignment,
-      children: [
-        if (event.isDraft)
-          _StatusLine(
-            icon: blockers.isEmpty
-                ? Icons.check_circle_outline
-                : Icons.pending_actions,
-            text: blockers.isEmpty
-                ? 'Pronta para publicar'
-                : 'Falta ${blockers.join(' e ')}',
-            palette: cores.warning,
-          ),
-        if (semRepertorio.isNotEmpty) ...[
-          if (event.isDraft) const SizedBox(height: AppSpacing.xs),
-          _StatusLine(
-            icon: Icons.music_note_outlined,
-            // Sem nenhuma música, nomear os cultos só repetiria a linha de
-            // horários logo acima.
-            text: event.hasNoSongs
-                ? 'Músicas a definir'
-                : 'Músicas a definir: ${semRepertorio.join(' e ')}',
-            palette: cores.info,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _StatusLine extends StatelessWidget {
-  const _StatusLine({
-    required this.icon,
-    required this.text,
-    required this.palette,
-  });
-
-  final IconData icon;
-  final String text;
-  final StatusPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: palette.foreground),
-        const SizedBox(width: AppSpacing.sm),
-        Flexible(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: palette.foreground,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../events/domain/event_datetime.dart';
 
@@ -194,9 +195,7 @@ class _MonthGrid extends StatelessWidget {
     // weekday: seg=1 ... dom=7. Com a semana começando no domingo, o domingo
     // vai para a coluna 0.
     final leading = DateTime(month.year, month.month, 1).weekday % 7;
-    final title = capitalizeWeekday(
-      DateFormat("MMMM 'de' y", 'pt_BR').format(month),
-    );
+    final title = monthYearLabel(month);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

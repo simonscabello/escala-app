@@ -72,6 +72,21 @@ void main() {
     expect(find.textContaining('rascunho'), findsNothing);
     expect(find.textContaining('escala com você'), findsOneWidget);
   });
+
+  // A fonte do sistema aumentada é o segundo eixo do problema, e o mais fácil
+  // de esquecer: quem usa o app está com o instrumento na mão, e "texto
+  // grande" ligado no Android é comum nessa faixa. O que aperta aqui é a
+  // manchete — data em 32px, horários e a pílula "VOCÊ" na mesma linha.
+  for (final scale in [1.3, 1.6, 2.0]) {
+    testWidgets('não estoura com a fonte do sistema em ${scale}x',
+        (tester) async {
+      await _pumpAgenda(tester, const Size(360, 900), textScale: scale);
+      expect(tester.takeException(), isNull);
+
+      await _pumpAgenda(tester, const Size(1280, 900), textScale: scale);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Map<String, dynamic> _eventJson({
@@ -99,6 +114,7 @@ Future<void> _pumpAgenda(
   WidgetTester tester,
   Size size, {
   bool canManage = true,
+  double textScale = 1.0,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -200,6 +216,12 @@ Future<void> _pumpAgenda(
       child: MaterialApp.router(
         theme: AppTheme.light,
         routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: child!,
+        ),
       ),
     ),
   );

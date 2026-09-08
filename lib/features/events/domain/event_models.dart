@@ -460,6 +460,29 @@ class Event {
     }.length;
   }
 
+  /// Quem esta escalado, uma vez cada, na ordem das funcoes.
+  ///
+  /// Serve a pilha de rostos da manchete. **Sem foto**: a listagem da agenda
+  /// devolve o nome de quem esta escalado e nada mais, e o campo existe aqui
+  /// para o dia em que ela devolver a URL -- ate la a inicial do `AppAvatar`
+  /// e o que aparece, que e o caminho que ele ja prevê para foto ausente.
+  ///
+  /// Quem acumula duas funcoes conta uma vez, pela mesma razao de
+  /// [scheduledMemberCount]: a pergunta e "quem esta nesta escala", nao
+  /// "quantas linhas ela tem".
+  List<({String name, String? imageUrl})> get scheduledPeople {
+    final vistos = <String>{};
+    final pessoas = <({String name, String? imageUrl})>[];
+    for (final group in assignments) {
+      for (final member in group.members) {
+        if (vistos.add(member.membershipId)) {
+          pessoas.add((name: member.displayName, imageUrl: null));
+        }
+      }
+    }
+    return pessoas;
+  }
+
   List<String> positionsForMembership(String? membershipId) {
     if (membershipId == null || membershipId.isEmpty) {
       return const [];

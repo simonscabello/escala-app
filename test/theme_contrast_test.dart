@@ -150,6 +150,55 @@ void main() {
           reason: 'o cartão precisa ficar um passo acima da página',
         );
       });
+
+      test('a manchete é legível nos dois extremos do gradiente', () {
+        // Gradiente é o caso em que medir "a cor de fundo" não basta: o texto
+        // atravessa a rampa inteira, e o que passa numa ponta pode reprovar na
+        // outra. Por isso os dois extremos entram separados — e por isso a
+        // rampa é curta, para que os dois caibam no mesmo orçamento.
+        for (final fundo in AppColors.heroRamp(s.brightness)) {
+          expectContrast('branco sobre a manchete', AppColors.onHero, fundo, 4.5);
+          expectContrast(
+            'texto de apoio sobre a manchete',
+            AppColors.onHeroVariant,
+            fundo,
+            4.5,
+          );
+          // A manchete não tem borda: quem a separa da página é só a cor.
+          // O piso não é um número escolhido a dedo — é a separação que um
+          // cartão comum já entrega. A manchete está **acima** do cartão na
+          // hierarquia, então não pode se destacar menos que ele.
+          final separacao = ratio(fundo, s.surface);
+          final cartao = ratio(s.surfaceContainerLowest, s.surface);
+          expect(
+            separacao,
+            greaterThanOrEqualTo(cartao),
+            reason: 'manchete/página: ${separacao.toStringAsFixed(3)}:1, '
+                'cartão/página: ${cartao.toStringAsFixed(3)}:1',
+          );
+        }
+      });
+
+      test('o botão da manchete é legível sobre ela', () {
+        // "Ver detalhes" é lavanda com tinta violeta profunda, e é o mesmo par
+        // nos dois temas -- a manchete é escura nos dois.
+        expectContrast(
+          'texto do botão sobre a lavanda',
+          AppColors.brandDeepViolet,
+          AppColors.brandLavender,
+          4.5,
+        );
+        for (final fundo in AppColors.heroRamp(s.brightness)) {
+          // O botão é um controle sobre a manchete: 3:1 de contraste não
+          // textual, para a forma dele existir sem depender de borda.
+          expectContrast(
+            'a lavanda do botão contra a manchete',
+            AppColors.brandLavender,
+            fundo,
+            3,
+          );
+        }
+      });
     });
   }
 }

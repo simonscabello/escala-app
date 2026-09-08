@@ -158,8 +158,12 @@ class AppTheme {
         hoverElevation: 5,
         highlightElevation: 1,
         extendedTextStyle: textTheme.labelLarge,
+        // `radiusXl` e não o raio de controle: com 56px de altura, este é o
+        // único botão do app em que o canto de 28 vira pílula — e é o que a
+        // identidade pede para a peça que flutua sobre a lista. Continua na
+        // escala de raios; não é um número solto.
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(

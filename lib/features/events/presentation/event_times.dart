@@ -33,10 +33,19 @@ class EventTimesList extends StatelessWidget {
     super.key,
     required this.event,
     required this.timezone,
+    this.color,
+    this.hourColor,
   });
 
   final Event event;
   final String timezone;
+
+  /// A tinta da frase, quando ela não está sobre um cartão comum.
+  ///
+  /// A manchete — na agenda e no topo da escala — é violeta escuro, e ali o
+  /// cinza de apoio do tema claro fica ilegível. Nulo mantém o par padrão.
+  final Color? color;
+  final Color? hourColor;
 
   @override
   Widget build(BuildContext context) {
@@ -44,11 +53,11 @@ class EventTimesList extends StatelessWidget {
     final scheme = theme.colorScheme;
 
     final base = (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
-      color: scheme.onSurfaceVariant,
+      color: color ?? scheme.onSurfaceVariant,
       height: 1.55,
     );
     final hour = base.copyWith(
-      color: scheme.onSurface,
+      color: hourColor ?? scheme.onSurface,
       fontWeight: FontWeight.w700,
       fontFeatures: AppTypography.tabular,
     );

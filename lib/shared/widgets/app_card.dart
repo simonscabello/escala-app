@@ -39,6 +39,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.padding,
     this.color,
+    this.gradient,
     this.margin,
     this.surface = CardSurface.plain,
     this.borderRadius,
@@ -48,6 +49,14 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry? padding;
   final Color? color;
+
+  /// Rampa no lugar da cor chapada. **Só a manchete da agenda usa isto**, e o
+  /// parâmetro existe para que ela continue sendo um [AppCard] — mesmo raio,
+  /// mesmo recorte, mesma resposta ao toque — em vez de um `Container` paralelo
+  /// que iria envelhecer sozinho. Com rampa não há borda: quem separa o bloco
+  /// da página é a própria diferença de tinta.
+  final Gradient? gradient;
+
   final EdgeInsetsGeometry? margin;
   final CardSurface surface;
   final double? borderRadius;
@@ -57,12 +66,14 @@ class AppCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(borderRadius ?? AppSpacing.radiusLg);
 
-    final background = color ??
-        switch (surface) {
-          CardSurface.plain => scheme.surfaceContainerLowest,
-          CardSurface.sunken => scheme.surfaceContainerLow,
-          CardSurface.floating => scheme.surfaceContainerLowest,
-        };
+    final background = gradient != null
+        ? null
+        : color ??
+            switch (surface) {
+              CardSurface.plain => scheme.surfaceContainerLowest,
+              CardSurface.sunken => scheme.surfaceContainerLow,
+              CardSurface.floating => scheme.surfaceContainerLowest,
+            };
 
     final content =
         padding == null ? child : Padding(padding: padding!, child: child);
@@ -71,12 +82,15 @@ class AppCard extends StatelessWidget {
       margin: margin ?? EdgeInsets.zero,
       decoration: BoxDecoration(
         color: background,
+        gradient: gradient,
         borderRadius: radius,
-        border: switch (surface) {
-          CardSurface.plain => Border.all(color: scheme.outlineVariant),
-          CardSurface.sunken => null,
-          CardSurface.floating => null,
-        },
+        border: gradient != null
+            ? null
+            : switch (surface) {
+                CardSurface.plain => Border.all(color: scheme.outlineVariant),
+                CardSurface.sunken => null,
+                CardSurface.floating => null,
+              },
         boxShadow: surface == CardSurface.floating
             ? AppElevation.floating(scheme)
             : AppElevation.none,
