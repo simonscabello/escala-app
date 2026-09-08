@@ -42,6 +42,20 @@ dependencies:
   # A 10.x nao compila neste SDK: ela estende `IconData`, que virou
   # `final class` no Flutter novo. So a 11.x corrigiu.
   font_awesome_flutter: ^11.0.0
+  # Notificacoes push. So Android neste projeto: nao ha pasta ios/, e o push
+  # na Web (VAPID + service worker) ficou de fora do v1 -- a versao Web se usa
+  # sentado na mesa, onde a agenda ja esta aberta.
+  #
+  # As tres andam juntas e nenhuma e dispensavel:
+  # - firebase_core: inicializa o SDK a partir do google-services.json;
+  # - firebase_messaging: token do aparelho e as mensagens que chegam;
+  # - flutter_local_notifications: **com o app aberto o FCM nao desenha nada**.
+  #   Sem esta, o aviso simplesmente nao aparece para quem esta com o app na
+  #   mao -- que e o caso mais facil de testar e o mais facil de dar como
+  #   quebrado.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
+  flutter_local_notifications: ^22.3.0
 
 dev_dependencies:
   flutter_test:

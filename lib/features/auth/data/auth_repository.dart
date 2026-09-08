@@ -60,6 +60,7 @@ class AuthRepository {
     String? email,
     Patch<DateTime?>? birthDate,
     Patch<Gender?>? gender,
+    bool? pushEnabled,
   }) async {
     return _patchUser({
       if (name != null) 'name': name,
@@ -68,7 +69,28 @@ class AuthRepository {
         'birthDate':
             birthDate.value == null ? null : dateKey(birthDate.value!),
       if (gender != null) 'gender': gender.value?.apiValue,
+      if (pushEnabled != null) 'pushEnabled': pushEnabled,
     });
+  }
+
+  /// Registra este aparelho para receber aviso.
+  ///
+  /// **O token e do aparelho, nao da conta**: o servidor MOVE um token ja
+  /// conhecido para o novo dono, em vez de duplicar. E por isso que sair da
+  /// conta precisa chamar o [forgetDevice] -- senao o proximo a entrar neste
+  /// celular recebe a escala de quem saiu.
+  Future<void> registerDevice({
+    required String token,
+    required String platform,
+  }) async {
+    await _dio.post<void>(
+      '/users/me/devices',
+      data: {'token': token, 'platform': platform},
+    );
+  }
+
+  Future<void> forgetDevice(String token) async {
+    await _dio.delete<void>('/users/me/devices', data: {'token': token});
   }
 
   /// Envia a foto como **bytes**, e não como caminho de arquivo.

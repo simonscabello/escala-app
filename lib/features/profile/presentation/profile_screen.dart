@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
+import '../../../core/push/push_coordinator.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/theme_mode_controller.dart';
@@ -107,6 +110,7 @@ class ProfileScreen extends ConsumerWidget {
                     subtitle: 'Você precisa da senha atual',
                     onTap: () => context.push('/perfil/senha'),
                   ),
+                  const _PushNotificationsRow(),
                 ],
               ),
 
@@ -175,6 +179,83 @@ class ProfileScreen extends ConsumerWidget {
 /// "Sistema" e o padrao e vem primeiro: quem ja deixou o Android no escuro nao
 /// precisa configurar nada aqui. As outras duas existem para quem quer o app
 /// diferente do resto do aparelho.
+/// O interruptor dos avisos no celular.
+///
+/// **Diz quando o Android esta bloqueando.** Sem isso o interruptor fica ligado,
+/// nada chega, e a culpa parece ser do app -- que e o pior desfecho possivel
+/// para uma tela de configuracao.
+class _PushNotificationsRow extends ConsumerStatefulWidget {
+  const _PushNotificationsRow();
+
+  @override
+  ConsumerState<_PushNotificationsRow> createState() =>
+      _PushNotificationsRowState();
+}
+
+class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
+  bool _saving = false;
+  bool _blockedBySystem = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSystemPermission();
+  }
+
+  Future<void> _refreshSystemPermission() async {
+    if (!PushService.isSupported) return;
+    final permitido = await ref.read(pushServiceProvider).hasPermission();
+    if (mounted) setState(() => _blockedBySystem = !permitido);
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .updateProfile(pushEnabled: value);
+
+      if (value) {
+        // Religar tem duas metades: a conta volta a aceitar aviso, e o
+        // aparelho precisa estar registrado e com permissao. Pedir aqui e o
+        // segundo momento legitimo -- a pessoa acabou de dizer que quer.
+        final permitido = await ref.read(pushServiceProvider).requestPermission();
+        if (mounted) setState(() => _blockedBySystem = !permitido);
+        await ref.read(pushCoordinatorProvider).registerDevice();
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ligado =
+        ref.watch(authControllerProvider).user?.pushEnabled ?? true;
+
+    // Sem push na plataforma (Web e desktop hoje), a linha nao aparece: um
+    // interruptor que nao liga nada e pior do que interruptor nenhum.
+    if (!PushService.isSupported) return const SizedBox.shrink();
+
+    return AppGroupRow(
+      icon: Icons.notifications_active_outlined,
+      title: 'Avisos no celular',
+      subtitle: ligado && _blockedBySystem
+          ? 'Bloqueado nos ajustes do Android'
+          : 'Escala publicada, trocas e repertório',
+      showChevron: false,
+      trailing: Switch(
+        value: ligado,
+        onChanged: _saving ? null : _toggle,
+      ),
+    );
+  }
+}
+
 class _ThemeModeCard extends ConsumerWidget {
   const _ThemeModeCard();
 

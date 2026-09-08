@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.0.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // Le o android/app/google-services.json e gera os recursos que o
+    // firebase_core precisa no boot. Sem ele o app compila e quebra ao subir,
+    // reclamando de "FirebaseApp not initialized".
+    id("com.google.gms.google-services") version "4.4.4" apply false
 }
 
 include(":app")

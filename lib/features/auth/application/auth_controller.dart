@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../shared/domain/person_fields.dart';
 import '../data/auth_repository.dart';
@@ -121,12 +122,14 @@ class AuthController extends StateNotifier<AuthState> {
     String? email,
     Patch<DateTime?>? birthDate,
     Patch<Gender?>? gender,
+    bool? pushEnabled,
   }) async {
     final user = await _repository.updateProfile(
       name: name,
       email: email,
       birthDate: birthDate,
       gender: gender,
+      pushEnabled: pushEnabled,
     );
     _replaceUser(user);
     if (name != null) {
@@ -154,11 +157,33 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // **Antes de descartar o token de acesso.** O aparelho e do aparelho, nao
+    // da conta: sem esta chamada o proximo a entrar neste celular receberia a
+    // escala de quem saiu. Depois do `_signOutLocally` a requisicao sairia sem
+    // autenticacao e o aparelho ficaria registrado.
+    await _forgetDevice();
+
     final refreshToken = await _storage.readRefreshToken();
     if (refreshToken != null) {
       await _repository.logout(refreshToken);
     }
     await _signOutLocally();
+  }
+
+  /// Esquece este aparelho no servidor. Falhar aqui nao pode segurar a saida:
+  /// quem tocou em "sair" precisa sair.
+  ///
+  /// A sessao que expira sozinha (`_signOutLocally`) **nao** passa por aqui --
+  /// o token de acesso ja nao vale, e a chamada voltaria 401. A linha orfa se
+  /// resolve na proxima entrada: registrar um token conhecido MOVE o aparelho
+  /// para o novo dono.
+  Future<void> _forgetDevice() async {
+    try {
+      final token = await _ref.read(pushServiceProvider).currentToken();
+      if (token != null) await _repository.forgetDevice(token);
+    } catch (_) {
+      // Silencio proposital: ver o comentario acima.
+    }
   }
 
   Future<void> _applySession(Session session) async {

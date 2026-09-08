@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "926357997565",
+    "project_id": "pauta-app-1f31b",
+    "storage_bucket": "pauta-app-1f31b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926357997565:android:d1a2e38b3ba350fdfbfb94",
+        "android_client_info": {
+          "package_name": "br.com.escalas.louvor_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAhV_1eaTEyjy18ydADgQM9XziboKSvug"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

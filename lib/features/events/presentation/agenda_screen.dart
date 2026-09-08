@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
@@ -91,6 +94,25 @@ class AgendaScreen extends ConsumerStatefulWidget {
 
 class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   String _scope = 'upcoming';
+  bool _askedForNotifications = false;
+
+  /// Pede a permissao de notificacao **depois de a agenda ter conteudo**.
+  ///
+  /// Nao no primeiro boot: quem ainda nao viu uma escala nao tem como decidir
+  /// se quer ser avisado sobre escalas, e um "nao" dado ali e caro -- o Android
+  /// so volta a perguntar mais uma vez. Com a agenda na tela, a pergunta tem
+  /// contexto.
+  ///
+  /// O proprio sistema lembra a resposta: chamar de novo em outra sessao nao
+  /// mostra dialogo nenhum, entao a guarda aqui e so para nao repetir a
+  /// chamada a cada reconstrucao.
+  void _maybeAskForNotifications() {
+    if (_askedForNotifications || !PushService.isSupported) return;
+    _askedForNotifications = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(ref.read(pushServiceProvider).requestPermission());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +131,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final team = auth.teams.where((t) => t.teamId == teamId).firstOrNull ??
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, _scope)));
+    if (events.hasValue) _maybeAskForNotifications();
     // A grade de cultos e o fuso da equipe só interessam a quem monta escala, e
     // só na aba das próximas — é ali que faz sentido mostrar as datas que ainda
     // não viraram escala. Para o resto, estes dois providers nem são

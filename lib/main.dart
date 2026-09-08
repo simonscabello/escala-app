@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
+import 'core/push/push_coordinator.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/shared_preferences_provider.dart';
 import 'core/theme/app_theme.dart';
@@ -32,6 +33,11 @@ class LouvorApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Observado, e nao lido: e o que faz o coordenador existir durante a vida
+    // do app. Ele mesmo escuta o estado de autenticacao -- registra o aparelho
+    // ao entrar na conta e leva o toque no aviso ate a tela.
+    ref.watch(pushCoordinatorProvider);
+
     return MaterialApp.router(
       title: 'Pauta',
       debugShowCheckedModeBanner: false,

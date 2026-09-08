@@ -2,6 +2,12 @@
     <!-- A API e acessada pela rede; sem isto o app nao conecta. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- Android 13+ (API 33) exige permissao em runtime para notificar. Os
+         plugins tambem a declaram, mas ela fica explicita aqui porque e uma
+         decisao do produto e nao um detalhe de dependencia. Quem pede e o
+         PushService, no momento certo (lib/core/push/push_service.dart). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="Pauta"
         android:name="${applicationName}"

@@ -5,6 +5,8 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Depois do plugin do Flutter, como manda a documentacao do FlutterFire.
+    id("com.google.gms.google-services")
 }
 
 // Assinatura de release lida de android/key.properties, que NÃO é versionado
@@ -23,6 +25,12 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Exigido pelo flutter_local_notifications: ele usa java.time, que so
+        // existe a partir do Android 8, e o desugaring reescreve essas chamadas
+        // para funcionar no minSdk do projeto. Sem isto o build falha em
+        // `checkReleaseAarMetadata`, e nao na compilacao -- a mensagem nao diz
+        // qual dependencia pediu.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -67,6 +75,10 @@ android {
             }
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 kotlin {

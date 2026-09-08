@@ -10,6 +10,7 @@ class AuthUser {
     this.birthDate,
     this.gender,
     this.avatarUrl,
+    this.pushEnabled = true,
   });
 
   final String id;
@@ -29,6 +30,11 @@ class AuthUser {
   /// null. Quem monta o endereco completo e o AppAvatar.
   final String? avatarUrl;
 
+  /// Avisos no celular. Explicito e ligado a mao: desligar a notificacao nos
+  /// ajustes do Android some com o aviso mas nao conta nada ao servidor, que
+  /// continuaria mandando para o vazio.
+  final bool pushEnabled;
+
   /// Primeiro nome, usado nas saudacoes da interface.
   String get firstName => name.split(' ').first;
 
@@ -41,6 +47,7 @@ class AuthUser {
       birthDate: parseDateKey(json['birthDate'] as String?),
       gender: Gender.fromApi(json['gender'] as String?),
       avatarUrl: json['avatarUrl'] as String?,
+      pushEnabled: json['pushEnabled'] as bool? ?? true,
     );
   }
 }
