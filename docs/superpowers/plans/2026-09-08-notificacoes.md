@@ -777,9 +777,26 @@ SCHEDULE_CANCELLED  -> A escala de dom, 4 de outubro foi cancelada | rota /agend
 Confirmado no mesmo roteiro: quem publicou **não** recebe; mudar só a observação
 não avisa; e a escala de teste foi apagada do banco de trabalho ao final.
 
-### O que continua faltando
+### Verificação em dois aparelhos — feita
 
-O teste em **dois aparelhos de verdade** (Task 11, Step 3) — o único que
-verifica a entrega pelo FCM, a permissão do Android 13+, o toque abrindo a rota
-e o "sair da conta para de receber". Ele depende de `FCM_SERVICE_ACCOUNT` no
-Railway e de um APK instalado.
+Publicado como **v0.5.0** (`8a3d928`) pelo workflow do CI, e testado em duas
+instâncias do BlueStacks (Android 9, x86_64, Google Play Services 26.28.33),
+uma por conta, contra o backend de produção — onde o log do deploy confirma
+`Notificacoes push ligadas.`
+
+Os dez passos do roteiro passaram: rascunho não avisa, a publicação chega só
+para quem não publicou, o toque abre a escala recarregada, trocar de função é um
+aviso só, mudar a observação não avisa e mudar o local avisa, o repertório
+distingue "saiu" de "mudou", a sugestão chega para quem lidera e a recusa volta
+com o motivo e sem o nome, a indisponibilidade abre a escalação daquele dia --
+e, o que mais importava, **sair da conta faz o aparelho parar de receber**.
+
+Duas coisas que esse ambiente não cobre, e continuam sem verificação:
+
+- **O pedido de permissão do Android 13+.** `POST_NOTIFICATIONS` só existe a
+  partir da API 33; no Android 9 do BlueStacks o aviso aparece sem diálogo
+  nenhum, então o caminho "pede depois que a agenda carrega" nunca roda.
+- **Doze e otimização de bateria de aparelho real.** O emulador não dorme como
+  um celular no bolso.
+
+Ambas só se verificam num Android 13+ físico, com o app horas em segundo plano.
