@@ -119,7 +119,34 @@ void main() {
     expect(find.text('Próximas escalas'), findsNothing);
   });
 
-  testWidgets('as próximas da equipe não repetem a escala da manchete',
+  testWidgets('a Home não repete a lista da agenda, e diz só "e depois"',
+      (tester) async {
+    await _pumpHome(
+      tester,
+      events: [
+        _event(
+          id: 'e1',
+          startsAt: '2026-09-13T12:00:00.000Z',
+          assignments: _group('Vocal', ['Simon']),
+        ),
+        // A equipe toca no dia 20 sem o Simon: essa data não é assunto da
+        // Home, e mostrá-la aqui era a agenda em miniatura.
+        _event(id: 'e2', startsAt: '2026-09-20T12:00:00.000Z'),
+        _event(
+          id: 'e3',
+          startsAt: '2026-09-27T12:00:00.000Z',
+          assignments: _group('Baixo', ['Simon']),
+        ),
+      ],
+    );
+
+    expect(find.text('Próximas escalas'), findsNothing);
+    expect(find.text('Domingo, 20 de setembro'), findsNothing);
+    // A seguinte EM QUE ELE ENTRA, numa linha dentro da manchete.
+    expect(find.text('E depois: Domingo, 27 de setembro'), findsOneWidget);
+  });
+
+  testWidgets('sem segunda escala minha, a manchete não ganha linha nenhuma',
       (tester) async {
     await _pumpHome(
       tester,
@@ -130,15 +157,10 @@ void main() {
           assignments: _group('Vocal', ['Simon']),
         ),
         _event(id: 'e2', startsAt: '2026-09-20T12:00:00.000Z'),
-        _event(id: 'e3', startsAt: '2026-09-27T12:00:00.000Z'),
       ],
     );
 
-    expect(find.text('Próximas escalas'), findsOneWidget);
-    // A data da manchete aparece uma vez só: na manchete.
-    expect(find.text('Domingo, 13 de setembro'), findsNothing);
-    expect(find.text('Domingo, 20 de setembro'), findsOneWidget);
-    expect(find.text('Ver agenda'), findsOneWidget);
+    expect(find.textContaining('E depois:'), findsNothing);
   });
 
   testWidgets('os acessos rápidos levam ao que já existe', (tester) async {
@@ -155,9 +177,23 @@ void main() {
     // O selo é o mesmo da aba Equipe, com o mesmo provider por trás.
     expect(find.text('3'), findsOneWidget);
 
+    // O terceiro atalho: no celular era o mais escondido dos três -- só se
+    // chegava nele pelo Perfil -- e é o que tem prazo.
+    expect(find.text('Minha disponibilidade'), findsOneWidget);
+    expect(find.text('Avise quando não puder'), findsOneWidget);
+
     await tester.tap(find.text('Repertório'));
     await tester.pumpAndSettle();
     expect(find.text('tela do repertório'), findsOneWidget);
+  });
+
+  testWidgets('o atalho de disponibilidade abre a tela que já existe',
+      (tester) async {
+    await _pumpHome(tester, events: const [], role: 'MEMBER');
+
+    await tester.tap(find.text('Minha disponibilidade'));
+    await tester.pumpAndSettle();
+    expect(find.text('minha disponibilidade'), findsOneWidget);
   });
 
   testWidgets('quem não gerencia não vê "Nova escala"', (tester) async {
@@ -230,6 +266,7 @@ Future<void> _pumpHome(
         '/agenda/novo': 'nova escala',
         '/equipe/musicas': 'tela do repertório',
         '/equipe/sugestoes': 'tela das sugestões',
+        '/disponibilidade': 'minha disponibilidade',
       }.entries)
         GoRoute(
           path: route.key,

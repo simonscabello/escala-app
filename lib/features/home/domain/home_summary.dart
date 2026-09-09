@@ -105,7 +105,7 @@ class HomeSummary {
   const HomeSummary({
     required this.myNext,
     required this.myPositions,
-    required this.upcoming,
+    required this.myFollowing,
     required this.notices,
     required this.hasSchedules,
   });
@@ -117,11 +117,13 @@ class HomeSummary {
   /// As funções dela em [myNext]. Vazio quando não há [myNext].
   final List<String> myPositions;
 
-  /// As próximas escalas da equipe, **sem repetir** [myNext].
+  /// A escala seguinte a [myNext] -- **também sua**.
   ///
-  /// Repetir seria o erro que a agenda já evita: a mesma escala em dois blocos
-  /// da mesma tela faz a pessoa achar que tem escala em dobro.
-  final List<Event> upcoming;
+  /// Responde "e depois?" no fio que a manchete abriu. A pergunta é "quando eu
+  /// toco de novo?", e não "o que a equipe faz depois": a segunda é a agenda
+  /// que responde, e responder as duas aqui era ter a agenda em miniatura
+  /// dentro da Home -- três linhas repetindo a aba do lado.
+  final Event? myFollowing;
 
   final List<HomeNotice> notices;
 
@@ -135,10 +137,6 @@ class HomeSummary {
   /// terceiro aviso não é lido, e o que ele faz é tirar peso dos dois primeiros.
   static const int maxNotices = 2;
 
-  /// Quantas escalas a lista compacta mostra. Três é o que responde "como está
-  /// o mês" sem virar a agenda.
-  static const int upcomingLimit = 3;
-
   static HomeSummary of(
     List<Event> events, {
     required String membershipId,
@@ -148,19 +146,18 @@ class HomeSummary {
     // A lista já vem ordenada do servidor (a mais próxima primeiro) e é essa
     // ordem que faz "a primeira em que eu entro" ser "a próxima em que eu
     // entro". Reordenar aqui só criaria uma segunda verdade.
-    final myNext = events
-        .where((e) => e.positionsForMembership(membershipId).isNotEmpty)
-        .firstOrNull;
-
-    final upcoming = events
-        .where((e) => e.id != myNext?.id)
-        .take(upcomingLimit)
-        .toList();
+    final minhas = [
+      for (final event in events)
+        if (event.positionsForMembership(membershipId).isNotEmpty) event,
+    ];
+    final myNext = minhas.firstOrNull;
 
     return HomeSummary(
       myNext: myNext,
       myPositions: myNext?.positionsForMembership(membershipId) ?? const [],
-      upcoming: upcoming,
+      // A segunda em que eu entro, e não a segunda da equipe: a manchete abriu
+      // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
+      myFollowing: minhas.length > 1 ? minhas[1] : null,
       hasSchedules: events.isNotEmpty,
       notices: _notices(
         events,

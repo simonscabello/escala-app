@@ -31,6 +31,7 @@ class MyNextScheduleCard extends StatelessWidget {
     super.key,
     required this.event,
     required this.positions,
+    this.following,
   });
 
   final Event event;
@@ -38,6 +39,15 @@ class MyNextScheduleCard extends StatelessWidget {
   /// As funções em que a pessoa está escalada nesta escala. Nunca vazio: sem
   /// função não haveria escala minha para mostrar.
   final List<String> positions;
+
+  /// A escala seguinte **em que você entra**, quando existe.
+  ///
+  /// **Uma linha, e não um bloco.** A Home teve por um tempo um grupo
+  /// "Próximas escalas" com três linhas da equipe — que é exatamente o que a
+  /// aba Agenda mostra, e ocupando um terço da tela para isso. A pergunta que
+  /// sobrava depois da manchete era só "e depois, quando eu toco de novo?", e
+  /// ela cabe numa linha. O resto continua sendo trabalho da agenda.
+  final Event? following;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +117,10 @@ class MyNextScheduleCard extends StatelessWidget {
                 _Fact(icon: Icons.music_note_rounded, label: songs),
             ],
           ),
+          if (following != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _AfterThis(event: following!),
+          ],
           const SizedBox(height: AppSpacing.xl),
           Align(
             alignment: Alignment.centerRight,
@@ -146,6 +160,51 @@ class MyNextScheduleCard extends StatelessWidget {
       return 'Ensaio às $time';
     }
     return 'Ensaio ${formatEventWeekdayName(rehearsalAt, timezone)} · $time';
+  }
+}
+
+/// "E depois: Domingo, 20 de setembro" — a sua escala seguinte, numa linha.
+///
+/// Fica **dentro** da manchete, e não num bloco abaixo dela: é a continuação
+/// da mesma frase ("você toca dia 13… e depois dia 20"), e um cartão próprio
+/// daria a duas datas o mesmo peso, quando só a primeira é a que a pessoa veio
+/// buscar. Sem escala seguinte, a linha não existe — nada é inventado para
+/// preencher a manchete.
+class _AfterThis extends StatelessWidget {
+  const _AfterThis({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final timezone =
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.event_repeat_rounded,
+            size: 16,
+            color: AppColors.onHeroVariant,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            'E depois: ${formatEventWeekdayDate(event.startsAt, timezone)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.onHeroVariant,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }
 

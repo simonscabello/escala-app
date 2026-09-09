@@ -197,12 +197,24 @@ emprestado.
   então é a mesma resposta e o mesmo cache — e o `openSuggestionCountProvider`
   que já alimenta o selo da aba Equipe (só para quem gerencia).
 - **A leitura mora fora do widget**, em `features/home/domain/home_summary.dart`:
-  qual é a minha próxima escala, quais são as próximas da equipe sem repetir
-  aquela, quantas músicas a escala tem (`scheduleSongCount` cala quando não
-  sabe) e quais avisos nascem. `test/home_summary_test.dart` trava isso sem
-  widget nenhum.
-- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximas
-  escalas, avisos. Um bloco pode não existir; nenhum troca de lugar.
+  qual é a minha próxima escala, qual é a **minha** seguinte, quantas músicas a
+  escala tem (`scheduleSongCount` cala quando não sabe) e quais avisos nascem.
+  `test/home_summary_test.dart` trava isso sem widget nenhum.
+- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, avisos. Um
+  bloco pode não existir; nenhum troca de lugar.
+- **A Home não lista escalas.** Ela teve um grupo "Próximas escalas" com três
+  linhas da equipe, e ele saiu: era a aba Agenda em miniatura ocupando um terço
+  da tela, com menos recurso do que a original. Do que ele respondia sobrou uma
+  pergunta — "e depois, quando eu toco de novo?" —, e ela cabe numa linha dentro
+  da manchete (`HomeSummary.myFollowing`). **É a minha seguinte, não a da
+  equipe**: a manchete abriu o fio de "quando eu toco", e continuar esse fio com
+  a escala de outra pessoa é o mesmo erro que deu origem à Home.
+- **Três acessos rápidos**, e a arrumação muda com a largura: três ladrilhos
+  lado a lado só cabem acima de 520px; abaixo disso os dois primeiros dividem a
+  linha e **Minha disponibilidade** vira uma faixa deitada — o mesmo cartão,
+  virado, e não um segundo componente. Ela entrou porque era o destino mais
+  escondido do app no celular (só pelo Perfil) e é o que tem prazo: avisar que
+  não pode depois da escala montada já é tarde.
 - A manchete usa `AppHeroCard` (`shared/widgets/app_hero_card.dart`), a casca
   violeta. `GreetingHeader` e `TeamOnboarding` saíram de dentro de
   `agenda_screen.dart` quando a Home nasceu, e hoje só a Home usa as três — a

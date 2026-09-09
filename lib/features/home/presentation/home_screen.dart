@@ -8,7 +8,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_skeleton.dart';
@@ -18,8 +17,6 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
-import '../../events/domain/event_models.dart';
-import '../../events/presentation/agenda_event_tile.dart';
 import '../../events/presentation/event_schedule_facts.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
@@ -146,7 +143,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       canManage: team.canManage,
                       now: DateTime.now(),
                     ),
-                    membershipId: team.membershipId,
                     fromCache: cached.fromCache,
                     cachedAt: cached.cachedAt,
                     onRefresh: () {
@@ -173,16 +169,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 /// O corpo da Home, na hierarquia que a tela promete.
 ///
-/// Manchete, atalhos, próximas escalas, avisos — nesta ordem, e sempre nesta.
-/// Um bloco pode não existir (não há avisos, a equipe não tem outras escalas),
-/// mas nenhum troca de lugar com outro: a Home é consultada de relance, e uma
-/// tela cujo conteúdo muda de posição obriga a lê-la inteira toda vez.
+/// Manchete, atalhos, avisos — nesta ordem, e sempre nesta. Um bloco pode não
+/// existir (não há avisos), mas nenhum troca de lugar com outro: a Home é
+/// consultada de relance, e uma tela cujo conteúdo muda de posição obriga a
+/// lê-la inteira toda vez.
+///
+/// **A lista de próximas escalas saiu daqui.** Ela mostrava três escalas da
+/// equipe — que é o que a aba Agenda mostra, com mais recurso e mais espaço —
+/// e gastava um terço da tela para isso. O que ela respondia de útil ("e
+/// depois, quando eu toco de novo?") virou uma linha dentro da manchete.
 class _HomeBody extends StatelessWidget {
   const _HomeBody({
     required this.teamId,
     required this.canManage,
     required this.summary,
-    required this.membershipId,
     required this.fromCache,
     required this.cachedAt,
     required this.onRefresh,
@@ -191,7 +191,6 @@ class _HomeBody extends StatelessWidget {
   final String teamId;
   final bool canManage;
   final HomeSummary summary;
-  final String membershipId;
   final bool fromCache;
   final DateTime? cachedAt;
   final Future<void> Function() onRefresh;
@@ -205,7 +204,11 @@ class _HomeBody extends StatelessWidget {
             hasSchedules: summary.hasSchedules,
             canManage: canManage,
           )
-        : MyNextScheduleCard(event: myNext, positions: summary.myPositions);
+        : MyNextScheduleCard(
+            event: myNext,
+            positions: summary.myPositions,
+            following: summary.myFollowing,
+          );
 
     return Column(
       children: [
@@ -248,13 +251,6 @@ class _HomeBody extends StatelessWidget {
                       const SizedBox(height: AppSpacing.xl),
                       quickAccess,
                     ],
-                    if (summary.upcoming.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      _UpcomingSchedules(
-                        events: summary.upcoming,
-                        membershipId: membershipId,
-                      ),
-                    ],
                     if (summary.notices.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.xl),
                       _HomeNotices(notices: summary.notices),
@@ -264,46 +260,6 @@ class _HomeBody extends StatelessWidget {
               );
             },
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// As próximas da equipe, em linha.
-///
-/// **É a linha da agenda, sem uma vírgula de diferença** ([CompactScheduleTile]):
-/// mesmo bloco de data, mesmo título, mesmo destaque de "você" — porque é a
-/// mesma coisa, e desenhá-la de novo aqui garantiria que as duas listas
-/// divergissem no primeiro ajuste. O que muda é o recorte: três escalas, e sem
-/// o menu de "duplicar" — administrar a escala é trabalho da agenda.
-///
-/// A escala da manchete não entra aqui (ver [HomeSummary.upcoming]): a mesma
-/// data em dois blocos da mesma tela faz a pessoa achar que tem escala em
-/// dobro.
-class _UpcomingSchedules extends StatelessWidget {
-  const _UpcomingSchedules({required this.events, required this.membershipId});
-
-  final List<Event> events;
-  final String membershipId;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppGroup(
-      title: 'Próximas escalas',
-      dividerIndent: AppGroup.textIndent,
-      children: [
-        for (final event in events)
-          CompactScheduleTile(
-            event: event,
-            canManage: false,
-            membershipId: membershipId,
-          ),
-        AppGroupRow(
-          title: 'Ver agenda',
-          // `go`, e não `push`: a agenda é uma aba. Empilhá-la sobre a Home
-          // deixaria a barra inferior acesa na Home com a agenda na tela.
-          onTap: () => context.go('/agenda'),
         ),
       ],
     );
@@ -387,9 +343,9 @@ class _HomeNotices extends StatelessWidget {
 
 /// A Home carregando, na forma que ela vai ter.
 ///
-/// A manchete é um bloco alto; abaixo, os dois atalhos lado a lado e as linhas
-/// das próximas escalas. Um esqueleto genérico prometeria outra tela — e a
-/// promessa quebrada é o que faz o conteúdo "pular" quando chega.
+/// A manchete é um bloco alto; abaixo, os dois atalhos lado a lado e a faixa
+/// do terceiro. Um esqueleto genérico prometeria outra tela — e a promessa
+/// quebrada é o que faz o conteúdo "pular" quando chega.
 class _HomeSkeleton extends StatelessWidget {
   const _HomeSkeleton();
 
@@ -424,54 +380,8 @@ class _HomeSkeleton extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: AppSpacing.xl),
-          AppCard(
-            child: Column(
-              children: [
-                for (var i = 0; i < 3; i++) ...[
-                  if (i > 0)
-                    Divider(
-                      height: 1,
-                      thickness: 1,
-                      indent: AppGroup.textIndent,
-                      color: scheme.outlineVariant,
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Row(
-                      children: [
-                        const AppSkeleton(
-                          width: 54,
-                          height: 52,
-                          radius: AppSpacing.radiusSm,
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Larguras diferentes por linha: barras idênticas
-                              // leem-se como tabela travada, não como texto
-                              // chegando.
-                              AppSkeleton(
-                                width: i.isEven ? 180 : 150,
-                                height: 15,
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              AppSkeleton(
-                                width: i.isEven ? 210 : 240,
-                                height: 11,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          const SizedBox(height: AppSpacing.md),
+          const AppSkeleton(height: 88, radius: AppSpacing.radiusLg),
         ],
       ),
     );

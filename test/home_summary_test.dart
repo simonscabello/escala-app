@@ -81,12 +81,12 @@ void main() {
 
       expect(resumo.myNext, isNull);
       expect(resumo.hasSchedules, isFalse);
-      expect(resumo.upcoming, isEmpty);
+      expect(resumo.myFollowing, isNull);
     });
   });
 
-  group('as próximas da equipe', () {
-    test('não repetem a escala que já está na manchete', () {
+  group('a minha escala seguinte', () {
+    test('é a segunda EM QUE EU ENTRO, e não a segunda da equipe', () {
       final resumo = HomeSummary.of(
         [
           _event(
@@ -94,8 +94,14 @@ void main() {
             startsAt: '2026-09-13T12:00:00.000Z',
             assignments: _group('Vocal', ['Simon']),
           ),
+          // A equipe toca no dia 20, e Simon não. Responder "e depois: dia
+          // 20" seria continuar a manchete com a escala de outra pessoa.
           _event(id: 'e2', startsAt: '2026-09-20T12:00:00.000Z'),
-          _event(id: 'e3', startsAt: '2026-09-27T12:00:00.000Z'),
+          _event(
+            id: 'e3',
+            startsAt: '2026-09-27T12:00:00.000Z',
+            assignments: _group('Baixo', ['Simon']),
+          ),
         ],
         membershipId: 'm-Simon',
         canManage: false,
@@ -103,21 +109,27 @@ void main() {
       );
 
       expect(resumo.myNext?.id, 'e1');
-      expect(resumo.upcoming.map((e) => e.id), ['e2', 'e3']);
+      expect(resumo.myFollowing?.id, 'e3');
     });
 
-    test('param em três, mesmo com a agenda cheia', () {
+    test('entrando em uma só, não há linha de depois', () {
       final resumo = HomeSummary.of(
         [
-          for (var i = 1; i <= 8; i++)
-            _event(id: 'e$i', startsAt: '2026-09-0${i}T12:00:00.000Z'),
+          _event(
+            id: 'e1',
+            startsAt: '2026-09-13T12:00:00.000Z',
+            assignments: _group('Vocal', ['Simon']),
+          ),
+          for (var i = 2; i <= 8; i++)
+            _event(id: 'e$i', startsAt: '2026-09-2${i}T12:00:00.000Z'),
         ],
         membershipId: 'm-Simon',
         canManage: false,
-        now: DateTime.utc(2026, 9, 1, 12),
+        now: DateTime.utc(2026, 9, 9, 12),
       );
 
-      expect(resumo.upcoming, hasLength(HomeSummary.upcomingLimit));
+      expect(resumo.myNext?.id, 'e1');
+      expect(resumo.myFollowing, isNull);
     });
   });
 
