@@ -13,6 +13,7 @@ import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/data/agenda_provider.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
+import 'package:louvor_app/features/events/presentation/agenda_event_tile.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
 import 'package:louvor_app/features/team/data/team_repository.dart';
 import 'package:louvor_app/features/team/domain/service_template.dart';
@@ -38,23 +39,68 @@ void main() {
     expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
-  testWidgets('seleção mostra horário e função sem repetir o compromisso',
-      (tester) async {
+  testWidgets('a escala é escrita pela mesma linha da Home', (tester) async {
     await _pumpAgenda(tester, const Size(400, 1400));
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('selected-e1/e1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('upcoming-e1/e1')), findsNothing);
+
+    // O widget, e não uma cópia parecida: é o que impede as duas telas de
+    // divergirem no primeiro ajuste.
+    expect(find.byKey(const ValueKey('selected-e1')), findsOneWidget);
+    expect(
+      tester.widget(find.byKey(const ValueKey('selected-e1'))),
+      isA<CompactScheduleTile>(),
+    );
+    // A escala do dia não se repete nas próximas.
+    expect(find.byKey(const ValueKey('upcoming-e1')), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('selected-e1/e1')),
-        matching: find.text('19:30'),
+        of: find.byKey(const ValueKey('selected-e1')),
+        matching: find.textContaining('19:30'),
       ),
       findsOneWidget,
     );
-    expect(find.text('Você: Vocal · Baixo'), findsOneWidget);
-    expect(find.text('4 pessoas'), findsOneWidget);
+    // A pílula da Home, com o mesmo texto.
+    expect(find.text('VOCÊ: Vocal, Baixo'), findsOneWidget);
     expect(find.text('Nada marcado para este dia.'), findsNothing);
+  });
+
+  testWidgets('"Minhas escalas" recorta o mês, o dia e a lista',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400));
+
+    // Um domingo da equipe em que Simon não entra.
+    await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-13')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('selected-e2')), findsOneWidget);
+
+    await tester.tap(find.text('Minhas escalas'));
+    await tester.pumpAndSettle();
+
+    // O dia sai da lista, mas a frase não diz que a equipe está livre --
+    // esconder uma escala que existe seria o pior defeito do filtro.
+    expect(find.byKey(const ValueKey('selected-e2')), findsNothing);
+    expect(find.text('Você não está escalado neste dia.'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsNothing);
+
+    // Nas próximas sobra a única escala dele.
+    expect(find.byKey(const ValueKey('upcoming-e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('upcoming-e3')), findsNothing);
+
+    // E o ponto do calendário passa a significar outra coisa.
+    expect(find.text('Você está escalado'), findsOneWidget);
+    expect(find.text('Com escala'), findsNothing);
+  });
+
+  testWidgets('sem nenhuma escala sua, o recorte diz isso e não some a tela',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400), semEquipe: true);
+    await tester.tap(find.text('Minhas escalas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Setembro 2026'), findsOneWidget);
+    expect(find.text('Você não tem escala neste mês.'), findsOneWidget);
+    expect(find.text('Nenhuma escala sua por perto.'), findsOneWidget);
   });
 
   testWidgets('anterior, seguinte e Hoje mantêm seleção no mês visível',
@@ -63,7 +109,7 @@ void main() {
     await tester.tap(find.byTooltip('Mês anterior'));
     await tester.pumpAndSettle();
     expect(find.text('Agosto 2026'), findsOneWidget);
-    expect(find.text('Nenhum compromisso neste mês.'), findsOneWidget);
+    expect(find.text('Nenhuma escala neste mês.'), findsOneWidget);
     await tester.tap(find.byTooltip('Próximo mês'));
     await tester.pumpAndSettle();
     expect(find.text('Setembro 2026'), findsOneWidget);
@@ -77,13 +123,15 @@ void main() {
     await _pumpAgenda(tester, const Size(400, 1400));
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('selected-e1/e1')));
+    await tester.tap(find.byKey(const ValueKey('selected-e1')));
     await tester.pumpAndSettle();
     expect(find.text('detalhe e1'), findsOneWidget);
     final context = tester.element(find.text('detalhe e1'));
     GoRouter.of(context).pop();
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Nova escala'));
+    // O botão flutuante leva o dia selecionado junto -- é o que a agenda tem
+    // a mais do que a Home, que só sabe criar "uma escala nova".
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Nova escala'));
     await tester.pumpAndSettle();
     expect(find.text('novo 2026-09-10'), findsOneWidget);
   });
@@ -93,15 +141,20 @@ void main() {
     await _pumpAgenda(tester, const Size(400, 1400), take: 0);
     expect(find.text('Setembro 2026'), findsOneWidget);
     expect(find.text('Nada marcado para este dia.'), findsOneWidget);
-    expect(find.text('Nenhum outro compromisso próximo.'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.text('Nenhuma outra escala próxima.'), findsOneWidget);
+    // A agenda vazia continua oferecendo o caminho de criar.
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('Criar escala'), findsOneWidget);
   });
 
-  testWidgets('não inventa contagem de integrantes ausente', (tester) async {
+  testWidgets('sem escalação, a linha não inventa o que a listagem não traz',
+      (tester) async {
     await _pumpAgenda(tester, const Size(400, 1400), semEquipe: true);
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
     await tester.pumpAndSettle();
-    expect(find.text('0 pessoas'), findsNothing);
+    expect(find.byKey(const ValueKey('selected-e1')), findsOneWidget);
+    expect(find.textContaining('VOCÊ'), findsNothing);
+    expect(find.textContaining('pessoa'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -128,8 +181,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-08-31')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('selected-old/old')), findsOneWidget);
-    expect(find.text('19:30'), findsOneWidget);
+    expect(find.byKey(const ValueKey('selected-old')), findsOneWidget);
+    expect(find.textContaining('19:30'), findsOneWidget);
   });
 
   testWidgets('loading preserva calendário e erro oferece nova tentativa',
@@ -183,7 +236,7 @@ void main() {
     expect(find.text('Nada marcado para este dia.'), findsNothing);
     expect(find.text('Nenhum compromisso neste mês.'), findsNothing);
     expect(
-      find.text('Sem compromissos nos dados disponíveis.'),
+      find.text('Sem escalas nos dados disponíveis.'),
       findsOneWidget,
     );
     expect(find.textContaining('Sem conexão.'), findsOneWidget);

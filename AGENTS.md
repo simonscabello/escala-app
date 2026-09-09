@@ -185,8 +185,8 @@ A barra lateral acende a rota **mais específica** que prefixa o caminho atual
 ## A Home (`/inicio`)
 
 É a porta de entrada depois do login (o redirect de `app_router.dart` manda para
-`/inicio`, e `/home` é um apelido antigo que aponta para lá). A Agenda continua
-exatamente como estava, uma aba adiante.
+`/inicio`, e `/home` é um apelido antigo que aponta para lá). A Agenda é a aba
+seguinte, e responde outra pergunta — ver **A Agenda** logo abaixo.
 
 **A Home existe por uma diferença só:** a manchete da agenda é a próxima escala
 **da equipe**, e quem abre o app quer saber da **própria**. Tudo o mais ela pega
@@ -204,9 +204,9 @@ emprestado.
 - **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximas
   escalas, avisos. Um bloco pode não existir; nenhum troca de lugar.
 - A manchete usa `AppHeroCard` (`shared/widgets/app_hero_card.dart`), a casca
-  violeta que a agenda também passou a usar. `GreetingHeader` e `TeamOnboarding`
-  saíram de dentro de `agenda_screen.dart` pelo mesmo motivo: agora há duas
-  portas de entrada.
+  violeta. `GreetingHeader` e `TeamOnboarding` saíram de dentro de
+  `agenda_screen.dart` quando a Home nasceu, e hoje só a Home usa as três — a
+  agenda trocou a manchete pelo calendário.
 - **O pedido de permissão de notificação mudou de tela.** Era da agenda; foi
   para a Home, que é onde o app abre. Um integrante que nunca toca na aba
   Agenda jamais veria a pergunta.
@@ -215,6 +215,54 @@ emprestado.
   o acervo inteiro (centenas de músicas) — caro demais para um número. Se um dia
   a Home precisar de mais dados agregados, o caminho é um `songCount` em
   `GET /teams/:id` ou um `GET /home`; **não** somar requisições na tela.
+
+## A Agenda (`/agenda`)
+
+**O mês da equipe.** A Home responde "quando eu toco?"; a agenda responde "como
+está o mês?" — e é por isso que ela virou um calendário: um ponto por dia com
+escala, o dia selecionado embaixo, e as próximas em seguida.
+
+- **A linha da lista é a mesma da Home**: `CompactScheduleTile`
+  (`features/events/presentation/agenda_event_tile.dart`), dentro de um
+  `AppGroup` chamado **"Próximas escalas"** — o mesmo widget, o mesmo título, o
+  mesmo bloco de data, a mesma pílula "VOCÊ". A agenda já teve um cartão próprio
+  por horário (`AgendaEntryCard`, removido): duas telas do mesmo app pareciam de
+  apps diferentes, e as duas listas divergiriam no primeiro ajuste. **O que a
+  agenda tem de seu é o calendário**; escala escrita se escreve de um jeito só.
+- **Ponto conta horário; linha conta escala.** `AgendaEntry`
+  (`features/events/domain/agenda_entry.dart`) projeta um horário por dia civil
+  — é assim que a vigília que atravessa a meia-noite marca os dois dias. A lista
+  usa `groupAgendaEvents`, que junta os horários da mesma escala numa linha só:
+  um domingo com manhã e noite é **uma** escala, e mostrá-la duas vezes faria a
+  equipe achar que toca em dobro. A linha já escreve "Manhã 08:30 · Noite 19:00".
+- **Duas listas, nunca a mesma escala nas duas.** O que está no dia selecionado
+  sai de "Próximas escalas".
+- **O botão de criar é o da Home, no mesmo lugar:** flutuante no celular (onde
+  o polegar chega), no cabeçalho no monitor. A agenda chegou a ter só o ícone
+  do cabeçalho nas duas larguras — alvo menor para a ação principal, e o botão
+  mudando de forma ao trocar de aba é o que faz duas telas parecerem de dois
+  apps. A diferença legítima é o que ele leva junto: o dia selecionado
+  (`/agenda/novo?data=`).
+- **O recorte** (`AgendaFilter`): "Todas" × "Minhas escalas". Governa também os
+  **pontos do calendário** — "em que domingos eu toco?" se responde no mês, não
+  numa lista. Responsabilidade é estar em `assignments`; o ministrante entra
+  junto sem segunda conferência, porque o servidor recusa ministrante fora da
+  escalação (`assertMinisterIsAssigned`). Se isso mudar, a segunda fonte entra
+  em `filterAgendaEntries` — e não em cada tela que pergunta "é minha?".
+- **O dia vazio diz qual vazio é.** Em "Minhas escalas", um domingo cheio de
+  escala da equipe não é um dia livre: a frase é "Você não está escalado neste
+  dia", e não "Nada marcado". Trocar uma pela outra esconderia uma escala que
+  existe, que é o pior defeito que um filtro pode ter. Por isso a tela calcula
+  as entradas **duas vezes** — a agenda inteira e o recorte.
+- **As datas em aberto somem no recorte pessoal.** Nenhuma data sem escala é
+  "sua": não há ninguém escalado nela.
+- **A consulta** (`features/events/data/agenda_provider.dart`): a agenda observa
+  `upcoming` **e** `past`, porque o calendário navega para trás. Cada escopo
+  reusa o `eventsProvider` da Home (20 itens) e só amplia para 100 quando a
+  primeira página vem cheia — com chave de cache própria (`upcoming.100`), para
+  não substituir o cache de 20 que a Home lê.
+- **Vocabulário:** "escala". A tela chegou a dizer "compromisso" em seis lugares
+  — ver **Vocabulário: "escala", não "culto"**.
 
 ### O que a Web exigiu do código
 
@@ -1523,6 +1571,12 @@ Relate o que **não** foi verificado. Não afirme que algo funciona sem ter
 executado.
 
 ## Dívidas conhecidas
+
+- **A agenda custa duas consultas, e pode custar quatro.** Ela precisa de
+  `upcoming` e `past` para o calendário navegar para trás, e cada escopo amplia
+  para 100 itens quando a página de 20 vem cheia. A saída não é cortar o
+  passado, é a API ganhar recorte por mês (`GET /teams/:id/events?from=&to=`) —
+  aí o calendário pede o mês que está mostrando, e só ele.
 
 - **Sem build WebAssembly.** `flutter build web --wasm` não passa: o
   `flutter_secure_storage_web` ainda usa `dart:html`/`package:js`. O build JS

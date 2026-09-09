@@ -46,12 +46,85 @@ void main() {
     expect(entry.title, 'Culto');
     expect(entry.day, DateTime(2026, 9, 10));
   });
+
+  test('a lista do dia conta escalas, e não horários', () {
+    final entries = agendaEntries([
+      event(
+        'sunday',
+        '2026-09-13T11:30:00Z',
+        services: [
+          {'id': 'morning', 'label': 'Manhã', 'startsAt': '2026-09-13T11:30:00Z'},
+          {'id': 'night', 'label': 'Noite', 'startsAt': '2026-09-13T22:00:00Z'},
+        ],
+      ),
+    ]);
+
+    // Dois pontos no calendário seria certo; duas linhas na lista faria a
+    // equipe achar que tem escala em dobro.
+    expect(groupAgendaEntries(entries)['2026-09-13'], hasLength(2));
+    final escalas = groupAgendaEvents(entries)['2026-09-13']!;
+    expect(escalas.map((e) => e.id), ['sunday']);
+  });
+
+  test('o recorte pessoal sai de estar escalado em alguma função', () {
+    final entries = agendaEntries([
+      event(
+        'minha',
+        '2026-09-10T22:30:00Z',
+        assignments: [
+          {
+            'positionId': 'p1',
+            'positionName': 'Bateria',
+            'sortOrder': 0,
+            'members': [
+              {
+                'id': 'a1',
+                'membershipId': 'm-eu',
+                'displayName': 'Simon',
+                'note': null,
+                'isRegisteredForPosition': true,
+              },
+            ],
+          },
+        ],
+      ),
+      event('da-equipe', '2026-09-13T11:30:00Z'),
+    ]);
+
+    expect(
+      filterAgendaEntries(
+        entries,
+        filter: AgendaFilter.all,
+        membershipId: 'm-eu',
+      ),
+      hasLength(2),
+    );
+    expect(
+      filterAgendaEntries(
+        entries,
+        filter: AgendaFilter.mine,
+        membershipId: 'm-eu',
+      ).map((e) => e.event.id),
+      ['minha'],
+    );
+    // Sem membership não há recorte pessoal possível: some tudo, em vez de
+    // devolver a agenda inteira como se fosse sua.
+    expect(
+      filterAgendaEntries(
+        entries,
+        filter: AgendaFilter.mine,
+        membershipId: '',
+      ),
+      isEmpty,
+    );
+  });
 }
 
 Event event(
   String id,
   String startsAt, {
   List<Map<String, dynamic>> services = const [],
+  List<Map<String, dynamic>> assignments = const [],
 }) =>
     Event.fromJson({
       'id': id,
@@ -61,4 +134,5 @@ Event event(
       'status': 'PUBLISHED',
       'timezone': 'America/Sao_Paulo',
       'services': services,
+      'assignments': assignments,
     });

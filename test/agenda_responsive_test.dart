@@ -17,13 +17,13 @@ import 'package:louvor_app/features/team/domain/team_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
-/// A agenda é a tela que a pessoa abre o app para ver, e agora ela tem duas
-/// arrumações: coluna no celular, colunas alinhadas no monitor.
+/// A agenda tem duas arrumações: no celular o calendário e o dia empilhados;
+/// no monitor, lado a lado, com a lista de escalas em colunas.
 ///
 /// O que estes testes protegem não é a aparência — é que **nenhuma** das
 /// larguras da lista de verificação estoure, e que o conteúdo continue o mesmo
-/// nas duas. Um `RenderFlex overflow` aqui é a primeira coisa que se vê ao
-/// abrir o sistema.
+/// nas duas. Um `RenderFlex overflow` aqui aparece na aba que a equipe mais
+/// abre depois da Home.
 void main() {
   setUpAll(() async {
     tzdata.initializeTimeZones();
@@ -43,16 +43,24 @@ void main() {
     testWidgets('não estoura em ${width.toInt()}px', (tester) async {
       await _pumpAgenda(tester, Size(width, 900));
       expect(tester.takeException(), isNull);
-      // A próxima escala continua sendo a manchete em qualquer largura.
       expect(find.text('Agenda'), findsOneWidget);
+
+      // O recorte pessoal tem outra lista e outra legenda; o que ele não pode
+      // ter é outra largura.
+      await tester.tap(find.text('Minhas escalas'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Você está escalado'), findsOneWidget);
     });
   }
 
-  testWidgets('no celular a criação fica no cabeçalho', (tester) async {
+  testWidgets('no celular a criação fica no polegar, como na Home',
+      (tester) async {
     await _pumpAgenda(tester, const Size(375, 812));
 
-    expect(find.byType(FloatingActionButton), findsNothing);
-    expect(find.byTooltip('Nova escala'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    // E não nos dois lugares ao mesmo tempo.
+    expect(find.byTooltip('Nova escala'), findsNothing);
   });
 
   testWidgets('no monitor a ação principal sobe para o cabeçalho',
@@ -78,14 +86,16 @@ void main() {
 
     expect(find.textContaining('rascunho'), findsNothing);
     expect(find.byTooltip('Nova escala'), findsNothing);
+    expect(find.byType(FloatingActionButton), findsNothing);
     expect(find.text('Criar escala'), findsNothing);
     expect(find.textContaining('escala com você'), findsNothing);
   });
 
   // A fonte do sistema aumentada é o segundo eixo do problema, e o mais fácil
   // de esquecer: quem usa o app está com o instrumento na mão, e "texto
-  // grande" ligado no Android é comum nessa faixa. O que aperta aqui é a
-  // manchete — data em 32px, horários e a pílula "VOCÊ" na mesma linha.
+  // grande" ligado no Android é comum nessa faixa. O que aperta aqui são as
+  // 48 células do calendário e a linha da escala, com horários e a pílula
+  // "VOCÊ" no mesmo bloco.
   for (final scale in [1.3, 1.6, 2.0]) {
     testWidgets('não estoura com a fonte do sistema em ${scale}x',
         (tester) async {

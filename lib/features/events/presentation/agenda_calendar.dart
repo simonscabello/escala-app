@@ -10,7 +10,12 @@ import '../domain/event_datetime.dart';
 
 /// Calendário de consulta, independente dos modelos de escala e de Riverpod.
 /// Segue a semana e as cores do seletor de indisponibilidade; aqui o passado
-/// também é selecionável e os pontos representam compromissos existentes.
+/// também é selecionável e os pontos representam as escalas que existem.
+///
+/// **O que o ponto significa é de quem chama** ([legend]): a agenda inteira
+/// pinta os dias com escala; o recorte pessoal pinta os dias em que você toca.
+/// É o mesmo desenho dizendo duas coisas, e o rótulo embaixo é o que separa as
+/// duas — inclusive para quem ouve a tela.
 class AgendaCalendar extends StatelessWidget {
   const AgendaCalendar({
     super.key,
@@ -21,6 +26,7 @@ class AgendaCalendar extends StatelessWidget {
     required this.onSelected,
     required this.onMonthChanged,
     required this.onToday,
+    this.legend = 'Com escala',
   });
 
   final DateTime month;
@@ -30,6 +36,9 @@ class AgendaCalendar extends StatelessWidget {
   final ValueChanged<DateTime> onSelected;
   final ValueChanged<DateTime> onMonthChanged;
   final VoidCallback onToday;
+
+  /// O que um dia marcado quer dizer. Vai na legenda e na leitura de tela.
+  final String legend;
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +148,7 @@ class AgendaCalendar extends StatelessWidget {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Com compromisso',
+                    legend,
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
@@ -166,7 +175,8 @@ class AgendaCalendar extends StatelessWidget {
       selected: selected,
       label:
           '${capitalizeWeekday(DateFormat("EEEE, d 'de' MMMM 'de' y", 'pt_BR').format(day))}'
-          '${isToday ? ', hoje' : ''}${marked ? ', com compromisso' : ''}',
+          '${isToday ? ', hoje' : ''}'
+          '${marked ? ', ${legend.toLowerCase()}' : ''}',
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.all(1),
