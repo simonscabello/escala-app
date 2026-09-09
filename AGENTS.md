@@ -103,6 +103,13 @@ Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
   a escala vê as daquela data na tela do repertório (seção Sugestões da
   equipe).
 
+- **Modo de repertório da escala** — planejado ou definido na hora (seção
+  própria abaixo). O culto em que as músicas saem no momento deixou de aparecer
+  como escala pela metade.
+- **Criar escala mais curta**: o dia já vem preenchido com a próxima data que a
+  grade prevê, e título, local e observações — os três campos raros — saíram da
+  frente para uma seção "Informações adicionais" recolhida. A paleta continua na
+  tela principal, agora chamada **paleta de roupas**, que é o que ela é.
 - **Notificações push** (seção própria abaixo): a escala publicada avisa quem
   está nela, e quem lidera fica sabendo da sugestão nova e de quem avisou que
   não pode num domingo em que já está escalado.
@@ -1387,6 +1394,60 @@ avisando — em rascunho e publicada:
 - o histórico grava `Publicada sem o repertório definido` (ou os cultos sem
   música, quando só parte deles está em aberto). Depois, nenhuma consulta
   distingue "publicaram sem música" de "a música veio depois".
+
+## Modo de repertório: planejado ou definido na hora
+
+`Event.repertoireMode` responde uma pergunta que o app fazia errado em seis
+telas: **culto sem música aqui é pendência, ou é o combinado?**
+
+No culto de quinta da igreja as músicas não são escolhidas antes — quem
+ministra decide na hora. Sem esse fato gravado, toda escala assim aparecia pela
+metade: "Músicas a definir" na agenda e na Home, "Ainda não escolhidas." na
+mensagem do WhatsApp, `Publicada sem o repertório definido` no histórico e um
+lembrete semanal cobrando a liderança por uma lista que nunca ia existir.
+
+- **Enum, não booleano.** `PLANNED | ON_THE_FLY`. `semRepertorio: true` não
+  distingue "a lista ainda não saiu" de "não vai existir lista", que é
+  exatamente a distinção necessária;
+- **é da escala inteira, não de cada culto.** No domingo de manhã e noite quem
+  ministra é a mesma pessoa e o jeito de trabalhar é um só; por culto seriam
+  quatro combinações para as telas tratarem e nenhuma delas real;
+- **ausente vale `PLANNED`**, no backend (default da coluna) e no app
+  (`RepertoireMode.fromJson`). Isso cobre duas compatibilidades de uma vez: o
+  cache gravado antes do campo e um servidor que ainda não o devolva. Valor
+  desconhecido cai no mesmo lugar — um modo novo no futuro não pode derrubar a
+  tela da escala.
+
+### O que `ON_THE_FLY` desliga
+
+Uma linha faz quase todo o trabalho: `Event.servicesWithoutSongs` devolve vazio
+neste modo, e com ela silenciam a agenda, a manchete da Home, a barra de
+publicação e `ScheduleFacts`. `hasNoSongs` fica falso por herança — quem
+pergunta isso está sempre prestes a dizer que falta algo.
+
+O resto é redação, e em nenhum lugar ela some: a ausência de lista é **dita**,
+com outra frase.
+
+| Onde | Planejado | Na hora |
+| --- | --- | --- |
+| Linha da agenda | "Músicas a definir" | "Repertório definido na hora" |
+| Manchete da Home | "Músicas a definir" | "Repertório na hora" |
+| Detalhe, seção Músicas | "Nenhuma música escolhida ainda…" + "Montar" | "As músicas desta escala são definidas na hora, no culto." + "Anotar" |
+| Texto do WhatsApp | "Ainda não escolhidas." | "Definidas na hora, no culto." |
+| Histórico ao publicar | `Publicada sem o repertório definido` | nada |
+| `SETLIST_EMPTY_NUDGE` | 4 dias antes | não envia |
+
+Anotar música continua permitido: o modo é sobre não **cobrar** repertório, não
+sobre proibi-lo. Havendo alguma escolhida, o texto compartilhado a lista sob
+"Definidas na hora. Por enquanto:" para ninguém a receber como definitiva.
+
+### O terceiro passo da criação deixa de existir
+
+Criar escala emenda em escalar a equipe (`?novo=1`) e, dali, no repertório.
+Com `ON_THE_FLY` não há repertório a montar: `nextStepAfterAssignments` — pura e
+exportada para teste — manda a escalação terminar no detalhe da escala. A rota
+continua carregando só `?novo=1` ("esta escala acabou de nascer"); **quem decide
+o passo seguinte é a escala gravada**, não a URL.
 
 ## Histórico da escala e edição simultânea
 

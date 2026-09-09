@@ -58,7 +58,9 @@ class CompactScheduleTile extends ConsumerWidget {
     final facts = ScheduleFacts.of(event, timezone);
     // Rascunho fala do que falta para publicar; escala publicada sem
     // repertório fala do repertório. Uma das duas, ou nenhuma.
-    final temEstado = event.isDraft || event.servicesWithoutSongs.isNotEmpty;
+    final temEstado = event.isDraft ||
+        event.servicesWithoutSongs.isNotEmpty ||
+        event.isRepertoireOnTheFly;
 
     final dateBadge = AppDateBadge(
       weekday: formatEventBadgeWeekday(event.startsAt, timezone),
@@ -334,6 +336,10 @@ class ScheduleStatusLines extends StatelessWidget {
     final cores = AppStatusColors.of(context);
     final semRepertorio = event.servicesWithoutSongs;
     final blockers = event.publicationBlockers;
+    // Ocupa o **mesmo lugar** da linha de repertório pendente, e não uma linha
+    // a mais: as duas respondem à pergunta "e as músicas?", e nunca as duas ao
+    // mesmo tempo -- `servicesWithoutSongs` já vem vazio neste modo.
+    final naHora = event.isRepertoireOnTheFly;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -349,7 +355,14 @@ class ScheduleStatusLines extends StatelessWidget {
                 : 'Falta ${blockers.join(' e ')}',
             palette: cores.warning,
           ),
-        if (semRepertorio.isNotEmpty) ...[
+        if (naHora) ...[
+          if (event.isDraft) const SizedBox(height: AppSpacing.xs),
+          _StatusLine(
+            icon: Icons.bolt_rounded,
+            text: 'Repertório definido na hora',
+            palette: cores.info,
+          ),
+        ] else if (semRepertorio.isNotEmpty) ...[
           if (event.isDraft) const SizedBox(height: AppSpacing.xs),
           _StatusLine(
             icon: Icons.music_note_outlined,

@@ -74,6 +74,11 @@ class ScheduleFacts {
   }
 
   static String? _songs(Event event) {
+    // Dito, e não calado: a escala sem lista de músicas precisa distinguir "as
+    // músicas ainda não saíram" de "não vai ter lista" -- e é essa distinção
+    // que o modo de repertório existe para carregar.
+    if (event.isRepertoireOnTheFly) return 'Repertório definido na hora';
+
     final semRepertorio = event.servicesWithoutSongs;
     if (semRepertorio.isNotEmpty) {
       // Sem nenhuma música, nomear os cultos só repetiria a linha de horários.

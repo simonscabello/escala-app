@@ -78,6 +78,29 @@ String rotationSummary(
 /// para uma tarefa que o líder repete toda semana. Aqui cada função é um
 /// cartão compacto que mostra quem já está escalado, e a escolha acontece numa
 /// folha focada em uma função de cada vez.
+/// Para onde a escalação leva depois de salvar.
+///
+/// Nulo é "volta de onde veio" — a edição de uma escala que já existe. Nos
+/// outros dois casos esta tela é o segundo passo de uma escala recém-criada, e
+/// o terceiro depende do que a escala é: com repertório planejado, montar as
+/// músicas; com repertório definido na hora, **não há terceiro passo**, e
+/// insistir em levar até a tela de repertório é justamente o desvio que esse
+/// modo existe para apagar.
+///
+/// Pura e exportada para poder ser testada sem montar a tela inteira: a
+/// decisão é pequena, e é a que faz a diferença entre criar uma escala em dois
+/// passos ou em três.
+String? nextStepAfterAssignments({
+  required String eventId,
+  required bool isNewSchedule,
+  required bool repertoireOnTheFly,
+}) {
+  if (!isNewSchedule) return null;
+  return repertoireOnTheFly
+      ? '/agenda/$eventId'
+      : '/agenda/$eventId/repertorio?novo=1';
+}
+
 class AssignmentFormScreen extends ConsumerStatefulWidget {
   const AssignmentFormScreen({
     super.key,
@@ -87,13 +110,18 @@ class AssignmentFormScreen extends ConsumerStatefulWidget {
 
   final String eventId;
 
-  /// Esta tela é o segundo passo de uma escala recém-criada, e o repertório é
-  /// o terceiro.
+  /// Esta tela é o segundo passo de uma escala recém-criada.
   ///
-  /// Muda duas coisas: o botão diz para onde leva, e salvar emenda no
-  /// repertório em vez de voltar. Montar a escala é escalar a equipe **e**
+  /// Muda duas coisas: o botão diz para onde leva, e salvar emenda no passo
+  /// seguinte em vez de voltar. Montar a escala é escalar a equipe **e**
   /// escolher as músicas — parar no meio é o que fazia o líder ter de procurar
   /// a escala de novo na agenda para terminar.
+  ///
+  /// **Qual é o passo seguinte depende da escala, não desta bandeira.** Com
+  /// repertório definido na hora não há lista para montar, e o caminho termina
+  /// no detalhe: quem escolheu não planejar as músicas não pode ser levado à
+  /// tela de planejá-las. O nome ficou por compatibilidade com a rota
+  /// (`?novo=1`), que continua dizendo só "esta escala acabou de nascer".
   final bool nextIsSetlist;
 
   @override
@@ -240,24 +268,38 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
         warnings.add('$names também está em outra escala no mesmo dia.');
       }
 
+      final proximoPasso = nextStepAfterAssignments(
+        eventId: widget.eventId,
+        isNewSchedule: widget.nextIsSetlist,
+        repertoireOnTheFly: updated.isRepertoireOnTheFly,
+      );
+      // A escala nova acaba aqui quando o repertório é definido na hora: não
+      // há lista para montar, e mandar a pessoa para uma tela de repertório
+      // que ela decidiu não usar é justamente o passo que este modo existe
+      // para tirar do caminho.
+      final terminaAqui = widget.nextIsSetlist && updated.isRepertoireOnTheFly;
+
       // Salvar sem avisos também precisa responder. Antes, a tela simplesmente
       // fechava: dava para não ter certeza se o toque tinha pegado, e o líder
       // reabria a escala para conferir.
       showAppSnackBar(
         context,
-        warnings.isEmpty
-            ? 'Escala salva.'
-            : 'Escala salva. ${warnings.join(' ')}',
+        switch ((warnings.isEmpty, terminaAqui)) {
+          (false, _) => 'Escala salva. ${warnings.join(' ')}',
+          // Mesma frase do fim do caminho com repertório planejado: o que
+          // muda é onde ele termina, não o que a pessoa conquistou.
+          (true, true) =>
+            'Escala pronta. Compartilhe com a equipe pelo ícone no topo.',
+          (true, false) => 'Escala salva.',
+        },
         tone: warnings.isEmpty ? AppTone.success : AppTone.warning,
       );
 
       // `pushReplacement` e não `push`: a escalação já foi salva, e voltar para
       // ela do repertório só ofereceria salvá-la de novo. O que fica embaixo é
       // o detalhe da escala, que é onde o repertório desemboca ao terminar.
-      if (widget.nextIsSetlist) {
-        context.pushReplacement(
-          '/agenda/${widget.eventId}/repertorio?novo=1',
-        );
+      if (proximoPasso != null) {
+        context.pushReplacement(proximoPasso);
         return;
       }
       context.pop();
@@ -500,7 +542,13 @@ class _AssignmentFormScreenState extends ConsumerState<AssignmentFormScreen> {
     );
 
     final saveButton = AppSubmitButton(
-      label: widget.nextIsSetlist ? 'Salvar e escolher músicas' : 'Salvar escala',
+      // Sem repertório a montar, o botão não pode prometer músicas: aqui ele é
+      // o último passo da criação, e é isso que precisa dizer.
+      label: switch ((widget.nextIsSetlist, event.isRepertoireOnTheFly)) {
+        (true, false) => 'Salvar e escolher músicas',
+        (true, true) => 'Salvar e ver a escala',
+        (false, _) => 'Salvar escala',
+      },
       loading: _saving,
       onPressed: _save,
     );

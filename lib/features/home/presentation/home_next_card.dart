@@ -136,6 +136,11 @@ class MyNextScheduleCard extends StatelessWidget {
 
   /// "5 músicas", "Músicas a definir", ou nada quando o app não sabe.
   static String? _songsLabel(Event event) {
+    // A escala em que as músicas saem no culto não tem nada a definir: dizer
+    // que tem transformaria o combinado da equipe em cobrança na primeira tela
+    // que a pessoa abre.
+    if (event.isRepertoireOnTheFly) return 'Repertório na hora';
+
     final count = scheduleSongCount(event);
     return switch (count) {
       null => null,

@@ -78,6 +78,7 @@ class EventRepository {
     String? location,
     String? notes,
     String? colorPalette,
+    RepertoireMode repertoireMode = RepertoireMode.planned,
   }) async {
     return _guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
@@ -90,6 +91,10 @@ class EventRepository {
           if (notes != null && notes.isNotEmpty) 'notes': notes,
           if (colorPalette != null && colorPalette.isNotEmpty)
             'colorPalette': colorPalette,
+          // Sempre presente, inclusive no valor padrão: o campo é curto e
+          // mandá-lo sempre poupa de descobrir, meses depois, que a escala
+          // nasceu com o default de um servidor mais antigo.
+          'repertoireMode': repertoireMode.wire,
         },
       );
       return Event.fromJson(response.data!);
@@ -118,6 +123,7 @@ class EventRepository {
     String? location,
     String? notes,
     String? colorPalette,
+    RepertoireMode? repertoireMode,
     DateTime? expectedUpdatedAt,
   }) async {
     return _guard(() async {
@@ -133,6 +139,7 @@ class EventRepository {
           if (location != null) 'location': location,
           if (notes != null) 'notes': notes,
           if (colorPalette != null) 'colorPalette': colorPalette,
+          if (repertoireMode != null) 'repertoireMode': repertoireMode.wire,
           if (expectedUpdatedAt != null)
             'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
         },

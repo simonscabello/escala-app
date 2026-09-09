@@ -71,7 +71,9 @@ String buildScheduleShareText(Event event) {
 
   if (event.colorPalette?.isNotEmpty ?? false) {
     buffer.writeln();
-    buffer.writeln('Paleta: ${event.colorPalette}');
+    // "Roupas", e não "Paleta": quem lê a mensagem no grupo precisa entender
+    // sem tradução que aquilo é o combinado de como se vestir no domingo.
+    buffer.writeln('Roupas: ${event.colorPalette}');
   }
 
   if (event.notes?.isNotEmpty ?? false) {
@@ -96,6 +98,11 @@ String buildScheduleShareText(Event event) {
 /// escolheram" com a mesma cara. Antes isso não aparecia porque a escala só
 /// era publicada com todos os cultos montados; agora ela vai para a equipe com
 /// as músicas em aberto de propósito, e este virou o caso normal.
+///
+/// **"Falta" e "é assim que fazemos" são coisas diferentes**, e é o modo de
+/// repertório da escala que as separa: no culto em que as músicas saem na hora
+/// a lista vazia é o combinado, e anunciá-la como pendência manda a equipe
+/// esperar uma mensagem que nunca vem.
 void _writeSongs(StringBuffer buffer, Event event, String timezone) {
   final grupos = [
     for (final grupo in event.songsByService)
@@ -106,12 +113,28 @@ void _writeSongs(StringBuffer buffer, Event event, String timezone) {
   buffer.writeln();
   buffer.writeln('🎶 Músicas');
 
+  // Repertório definido na hora: a lista vazia é o combinado, e "ainda não
+  // escolhidas" diria que falta alguma coisa. A frase é a mesma que a equipe
+  // usa ("as músicas a gente define na hora"), e é o que quem recebe precisa
+  // ler para não ficar esperando uma segunda mensagem.
+  final naHora = event.isRepertoireOnTheFly;
+  final semNenhuma = grupos.every((grupo) => grupo.linhas.isEmpty);
+
   // Nada escolhido em culto nenhum: uma linha só. Repetir "Manhã" e "Noite"
   // aqui para dizer o mesmo dos dois lados devolveria os horários que já
   // estão no topo da mensagem.
-  if (grupos.every((grupo) => grupo.linhas.isEmpty)) {
-    buffer.writeln('Ainda não escolhidas.');
+  if (semNenhuma) {
+    buffer.writeln(
+      naHora ? 'Definidas na hora, no culto.' : 'Ainda não escolhidas.',
+    );
     return;
+  }
+
+  // Escala de repertório na hora com alguma música já escolhida acontece: o
+  // ministrante deixa uma ou duas encaminhadas e resolve o resto no culto. A
+  // linha diz isso antes da lista, para ninguém a receber como definitiva.
+  if (naHora) {
+    buffer.writeln('Definidas na hora. Por enquanto:');
   }
 
   // Daqui para baixo pelo menos um culto tem repertório, e aí o culto vazio
@@ -127,7 +150,9 @@ void _writeSongs(StringBuffer buffer, Event event, String timezone) {
       );
     }
     if (grupo.linhas.isEmpty) {
-      buffer.writeln('Ainda não escolhidas.');
+      buffer.writeln(
+        naHora ? 'Definidas na hora, no culto.' : 'Ainda não escolhidas.',
+      );
       continue;
     }
     // A numeração recomeça em cada culto: "a 3ª da noite" é como a equipe

@@ -50,7 +50,7 @@ void main() {
     expect(text, contains('Ensaio:'));
     expect(text, contains('Guitarra:'));
     expect(text, contains('• Samuel'));
-    expect(text, contains('Paleta: Preto e dourado'));
+    expect(text, contains('Roupas: Preto e dourado'));
     expect(text, contains('Observações'));
     expect(text, contains('Chegar cedo'));
     // A seção entra mesmo vazia: escala publicada sem repertório é caso

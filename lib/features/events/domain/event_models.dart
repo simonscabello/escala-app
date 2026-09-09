@@ -246,6 +246,41 @@ class EventWarnings {
   final List<UnavailableMember> unavailableAssigned;
 }
 
+/// Como o repertório desta escala é decidido.
+///
+/// **É da escala inteira, e não de cada culto.** No domingo de manhã e noite
+/// quem ministra é a mesma pessoa e o jeito de trabalhar é um só; guardar isso
+/// por culto criaria um estado que ninguém pediu e quatro combinações para as
+/// telas tratarem.
+///
+/// Um booleano não serviria: `semRepertorio: true` não distingue "a lista
+/// ainda não saiu" de "não vai existir lista", e é exatamente essa a pergunta
+/// que a agenda, o detalhe, a publicação e o texto compartilhado fazem.
+enum RepertoireMode {
+  /// Escolhido antes. Culto sem música é pendência, e o app diz o que falta.
+  planned('PLANNED'),
+
+  /// Definido na hora, no culto. Repertório vazio é o estado final: nada aqui
+  /// é chamado de pendência, e a criação da escala não passa pela montagem.
+  onTheFly('ON_THE_FLY');
+
+  const RepertoireMode(this.wire);
+
+  /// O valor que vai e vem no JSON.
+  final String wire;
+
+  /// **Ausente vale [planned]**, e é o que sustenta duas compatibilidades ao
+  /// mesmo tempo: o cache gravado antes deste campo existir e o backend que
+  /// ainda não o devolve. Valor desconhecido cai no mesmo lugar -- uma versão
+  /// futura inventando um terceiro modo não pode derrubar a tela da escala.
+  static RepertoireMode fromJson(Object? value) {
+    return RepertoireMode.values.firstWhere(
+      (mode) => mode.wire == value,
+      orElse: () => RepertoireMode.planned,
+    );
+  }
+}
+
 class Event {
   const Event({
     required this.id,
@@ -257,6 +292,7 @@ class Event {
     required this.notes,
     required this.colorPalette,
     required this.status,
+    this.repertoireMode = RepertoireMode.planned,
     required this.timezone,
     required this.assignments,
     required this.songs,
@@ -278,6 +314,7 @@ class Event {
       notes: json['notes'] as String?,
       colorPalette: json['colorPalette'] as String?,
       status: json['status'] as String,
+      repertoireMode: RepertoireMode.fromJson(json['repertoireMode']),
       timezone: json['timezone'] as String? ?? 'America/Sao_Paulo',
       assignments: (json['assignments'] as List<dynamic>? ?? const [])
           .map((e) {
@@ -325,8 +362,17 @@ class Event {
   final DateTime? rehearsalAt;
   final String? location;
   final String? notes;
+  /// A combinação de roupa combinada para o dia ("Preto e dourado"). O app a
+  /// chama de **paleta de roupas**: "paleta de cores" fazia parecer tema visual
+  /// da escala, e o que a equipe precisa saber é como se vestir.
   final String? colorPalette;
   final String status;
+
+  /// Ver [RepertoireMode].
+  final RepertoireMode repertoireMode;
+
+  /// O repertório desta escala sai no culto, e não antes.
+  bool get isRepertoireOnTheFly => repertoireMode == RepertoireMode.onTheFly;
   final String timezone;
   final List<AssignmentGroup> assignments;
 
@@ -425,6 +471,12 @@ class Event {
   /// do palpite marcaria como pendente toda escala montada que o app ainda não
   /// recarregou.
   List<String> get servicesWithoutSongs {
+    // Repertório definido na hora não tem culto "sem repertório": a lista
+    // vazia é o combinado. Esta única linha é o que apaga a cobrança das seis
+    // telas que derivam daqui -- agenda, manchete da Home, detalhe, barra de
+    // publicação, texto compartilhado e a linha de estado da escala.
+    if (isRepertoireOnTheFly) return const [];
+
     final semRepertorio = <String>[];
     for (final service in displayServices) {
       if (service.songCount == null && songs.isEmpty) continue;
@@ -441,11 +493,15 @@ class Event {
     return semRepertorio;
   }
 
-  /// Nenhum culto desta escala tem música.
+  /// Nenhum culto desta escala tem música **e isso é uma pendência**.
   ///
   /// Separado de [servicesWithoutSongs] porque a frase muda: com um culto
   /// montado e outro não, o que falta tem nome; sem nenhum, nomear os cultos
   /// só repete a escala inteira.
+  ///
+  /// Falso no repertório definido na hora, por herança de
+  /// [servicesWithoutSongs]: ali a lista vazia não falta, e quem pergunta isto
+  /// está sempre prestes a dizer que falta.
   bool get hasNoSongs =>
       servicesWithoutSongs.length == displayServices.length;
 

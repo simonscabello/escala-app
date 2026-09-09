@@ -238,7 +238,10 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
         showAppSnackBar(
           context,
           // Publicar sem repertório é caminho normal, e não descuido: a
-          // confirmação diz o que a equipe recebeu e o que ainda vem.
+          // confirmação diz o que a equipe recebeu e o que ainda vem. No modo
+          // "na hora" `hasNoSongs` é falso de propósito -- não vem nada
+          // depois, e prometer músicas seria desdizer o que a própria pessoa
+          // acabou de escolher.
           widget.event.hasNoSongs
               ? 'Escala publicada. A equipe já sabe quem está escalado; '
                   'as músicas você escolhe depois.'
@@ -264,6 +267,9 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
   String _resumo(List<String> blockers) {
     if (blockers.isNotEmpty) return 'Falta ${blockers.join(' e ')}';
 
+    // `servicesWithoutSongs` já vem vazio no modo "na hora": a barra diz
+    // "pronta" porque a escala **está** pronta -- não falta nada que alguém
+    // ainda vá fazer.
     final semRepertorio = widget.event.servicesWithoutSongs;
     if (semRepertorio.isEmpty) return 'Pronta para a equipe';
     if (widget.event.hasNoSongs) {
@@ -513,10 +519,14 @@ class _EventHeader extends StatelessWidget {
   }
 }
 
-/// Paleta de cores e observações do líder.
+/// Paleta de roupas e observações do líder.
 ///
 /// Saíram do cartão de identidade e viraram um bloco próprio: são recados sobre
 /// a escala, não o que a escala **é**. Só aparecem quando existem.
+///
+/// A paleta vem rotulada ("Roupas: preto e dourado"). Só o ícone de paleta ao
+/// lado do texto deixava a linha ambígua -- podia ser tema visual da escala,
+/// e o que ela diz é como a equipe combinou de se vestir.
 class _EventNotes extends StatelessWidget {
   const _EventNotes({required this.event});
 
@@ -539,7 +549,7 @@ class _EventNotes extends StatelessWidget {
             if (hasPalette)
               _MetaLine(
                 icon: Icons.palette_outlined,
-                text: event.colorPalette!,
+                text: 'Roupas: ${event.colorPalette}',
                 maxLines: 2,
               ),
             if (hasPalette && hasNotes) const SizedBox(height: AppSpacing.sm),
@@ -1029,6 +1039,11 @@ class _SongsSection extends StatelessWidget {
           title: event.songs.isEmpty
               ? 'Músicas'
               : 'Músicas (${event.songs.length})',
+          // No modo "na hora" a linha de apoio é o recado principal da seção:
+          // é ela que impede a lista vazia de ser lida como escala pela metade.
+          subtitle: event.isRepertoireOnTheFly
+              ? 'Repertório definido na hora, no culto.'
+              : null,
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           trailing: canManage
               ? TextButton.icon(
@@ -1042,7 +1057,16 @@ class _SongsSection extends StatelessWidget {
                         : Icons.edit_outlined,
                     size: 18,
                   ),
-                  label: Text(event.songs.isEmpty ? 'Montar' : 'Editar'),
+                  // Continua sendo possível anotar uma música: o modo é sobre
+                  // não **cobrar** repertório, não sobre proibi-lo. Mas o botão
+                  // deixa de convidar ("Montar") e passa a ser o que é.
+                  label: Text(
+                    switch ((event.songs.isEmpty, event.isRepertoireOnTheFly)) {
+                      (true, true) => 'Anotar',
+                      (true, false) => 'Montar',
+                      (false, _) => 'Editar',
+                    },
+                  ),
                 )
               : null,
         ),
@@ -1056,10 +1080,16 @@ class _SongsSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  canManage
-                      ? 'Nenhuma música escolhida ainda. Toque em "Montar" para '
-                          'escolher o repertório.'
-                      : 'O repertório ainda não foi definido.',
+                  switch ((event.isRepertoireOnTheFly, canManage)) {
+                    // Nada de "ainda": o "ainda" promete uma lista que não vem.
+                    (true, _) =>
+                      'As músicas desta escala são definidas na hora, no '
+                          'culto.',
+                    (false, true) =>
+                      'Nenhuma música escolhida ainda. Toque em "Montar" para '
+                          'escolher o repertório.',
+                    (false, false) => 'O repertório ainda não foi definido.',
+                  },
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -1114,6 +1144,7 @@ class _SongsSection extends StatelessWidget {
                     service: grupos[i].service,
                     songs: grupos[i].songs,
                     timezone: timezone,
+                    onTheFly: event.isRepertoireOnTheFly,
                   ),
                 ],
               ],
@@ -1144,12 +1175,17 @@ class _ServiceSongsSection extends StatelessWidget {
     required this.service,
     required this.songs,
     required this.timezone,
+    required this.onTheFly,
   });
 
   final String teamId;
   final EventService service;
   final List<EventSong> songs;
   final String timezone;
+
+  /// O repertório desta escala sai no culto. Muda o que o culto sem música
+  /// diz: "falta montar" vira "é assim que vai ser".
+  final bool onTheFly;
 
   @override
   Widget build(BuildContext context) {
@@ -1188,7 +1224,9 @@ class _ServiceSongsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs, left: 23),
             child: Text(
-              'Repertório ainda não montado.',
+              onTheFly
+                  ? 'Definido na hora.'
+                  : 'Repertório ainda não montado.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

@@ -60,4 +60,42 @@ void main() {
       {'membershipId': 'joao', 'positionId': 'guitarra'},
     ]);
   });
+
+  /// O terceiro passo da criação depende da escala, e não de uma bandeira na
+  /// rota: quem escolheu definir o repertório na hora não pode ser levado à
+  /// tela de planejá-lo.
+  group('para onde a escalação leva', () {
+    test('escala nova e planejada emenda no repertório', () {
+      expect(
+        nextStepAfterAssignments(
+          eventId: 'e1',
+          isNewSchedule: true,
+          repertoireOnTheFly: false,
+        ),
+        '/agenda/e1/repertorio?novo=1',
+      );
+    });
+
+    test('escala nova com repertório na hora termina no detalhe', () {
+      expect(
+        nextStepAfterAssignments(
+          eventId: 'e1',
+          isNewSchedule: true,
+          repertoireOnTheFly: true,
+        ),
+        '/agenda/e1',
+      );
+    });
+
+    test('editar uma escala que já existe continua voltando', () {
+      expect(
+        nextStepAfterAssignments(
+          eventId: 'e1',
+          isNewSchedule: false,
+          repertoireOnTheFly: true,
+        ),
+        isNull,
+      );
+    });
+  });
 }
