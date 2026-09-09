@@ -30,21 +30,29 @@ void main() {
     await initializeDateFormatting('pt_BR');
   });
 
-  for (final width in [375.0, 600.0, 768.0, 1024.0, 1280.0, 1440.0, 1920.0]) {
+  for (final width in [
+    320.0,
+    375.0,
+    600.0,
+    768.0,
+    1024.0,
+    1280.0,
+    1440.0,
+    1920.0,
+  ]) {
     testWidgets('não estoura em ${width.toInt()}px', (tester) async {
       await _pumpAgenda(tester, Size(width, 900));
       expect(tester.takeException(), isNull);
       // A próxima escala continua sendo a manchete em qualquer largura.
-      expect(find.text('PRÓXIMA ESCALA'), findsOneWidget);
+      expect(find.text('Agenda'), findsOneWidget);
     });
   }
 
-  testWidgets('no celular a ação principal é o botão flutuante',
-      (tester) async {
+  testWidgets('no celular a criação fica no cabeçalho', (tester) async {
     await _pumpAgenda(tester, const Size(375, 812));
 
-    expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.text('Nova escala'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.byTooltip('Nova escala'), findsOneWidget);
   });
 
   testWidgets('no monitor a ação principal sobe para o cabeçalho',
@@ -53,16 +61,15 @@ void main() {
 
     expect(find.byType(FloatingActionButton), findsNothing);
     // Continua existindo — mudou de lugar, não sumiu.
-    expect(find.text('Nova escala'), findsOneWidget);
+    expect(find.byTooltip('Nova escala'), findsOneWidget);
   });
 
-  testWidgets('o painel de resumo só aparece onde há largura para ele',
-      (tester) async {
+  testWidgets('não repete painel da Home em nenhuma largura', (tester) async {
     await _pumpAgenda(tester, const Size(375, 812));
     expect(find.textContaining('escalas com você'), findsNothing);
 
     await _pumpAgenda(tester, const Size(1440, 900));
-    expect(find.textContaining('escala com você'), findsOneWidget);
+    expect(find.textContaining('escala com você'), findsNothing);
   });
 
   testWidgets('quem não gerencia não vê a contagem de rascunhos',
@@ -70,7 +77,9 @@ void main() {
     await _pumpAgenda(tester, const Size(1440, 900), canManage: false);
 
     expect(find.textContaining('rascunho'), findsNothing);
-    expect(find.textContaining('escala com você'), findsOneWidget);
+    expect(find.byTooltip('Nova escala'), findsNothing);
+    expect(find.text('Criar escala'), findsNothing);
+    expect(find.textContaining('escala com você'), findsNothing);
   });
 
   // A fonte do sistema aumentada é o segundo eixo do problema, e o mais fácil
@@ -172,8 +181,7 @@ Future<void> _pumpAgenda(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         eventsProvider.overrideWith(
-          (ref, query) async =>
-              CachedValue(data: events, fromCache: false),
+          (ref, query) async => CachedValue(data: events, fromCache: false),
         ),
         // A agenda também consulta a grade de cultos, para propor as datas que
         // ainda não viraram escala. Aqui ela vai vazia de propósito: estes

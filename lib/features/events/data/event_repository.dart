@@ -23,6 +23,8 @@ class EventRepository {
     String scope = 'upcoming',
     int limit = 20,
   }) async {
+    // Consultas maiores da Agenda não substituem o cache de 20 itens da Home.
+    final cacheScope = limit == 20 ? scope : '$scope.$limit';
     try {
       final response = await _dio.get<List<dynamic>>(
         '/teams/$teamId/events',
@@ -31,13 +33,13 @@ class EventRepository {
       final maps = response.data!
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      await _cache.saveAgenda(teamId, scope, maps);
+      await _cache.saveAgenda(teamId, cacheScope, maps);
       return CachedValue(
         data: maps.map(Event.fromJson).toList(),
         fromCache: false,
       );
     } on DioException catch (e) {
-      final cached = _cache.readAgenda(teamId, scope);
+      final cached = _cache.readAgenda(teamId, cacheScope);
       if (cached != null) {
         return CachedValue(
           data: cached.data.map(Event.fromJson).toList(),

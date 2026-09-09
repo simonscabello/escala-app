@@ -37,6 +37,11 @@ void main() {
       (tester) async {
     await _pump(tester);
 
+    await tester.scrollUntilVisible(
+      find.text('Datas sem escala'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Datas sem escala'), findsOneWidget);
     expect(find.text('Criar os rascunhos destas 8 datas'), findsOneWidget);
     // E some o beco sem saída que estava ali antes.
@@ -52,6 +57,11 @@ void main() {
       // lista por um caminho: a agenda vazia e a agenda com escala.
       await _pump(tester, size: Size(width, 900));
       expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Datas sem escala'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Datas sem escala'), findsOneWidget);
 
       final futura = DateTime.now().toUtc().add(const Duration(days: 200));
@@ -61,6 +71,11 @@ void main() {
         events: [_evento(futura)],
       );
       expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Datas sem escala'),
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Datas sem escala'), findsOneWidget);
     });
   }
@@ -69,7 +84,7 @@ void main() {
     await _pump(tester, canManage: false);
 
     expect(find.text('Datas sem escala'), findsNothing);
-    expect(find.text('Nenhuma escala marcada'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
   testWidgets('sem grade cadastrada a agenda volta ao estado vazio de sempre',
@@ -77,7 +92,7 @@ void main() {
     await _pump(tester, templates: const []);
 
     expect(find.text('Datas sem escala'), findsNothing);
-    expect(find.text('Nenhuma escala marcada'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
   testWidgets('as datas convivem com as escalas que já existem',
@@ -87,7 +102,12 @@ void main() {
     final futura = DateTime.now().toUtc().add(const Duration(days: 200));
     final harness = await _pump(tester, events: [_evento(futura)]);
 
-    expect(find.text('PRÓXIMA ESCALA'), findsOneWidget);
+    expect(find.text('Agenda'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Datas sem escala'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Datas sem escala'), findsOneWidget);
     expect(find.text('Criar os rascunhos destas 8 datas'), findsOneWidget);
     expect(harness.dataPedida, isNull);
@@ -97,6 +117,14 @@ void main() {
       (tester) async {
     final harness = await _pump(tester);
 
+    await tester.scrollUntilVisible(
+      find.text('Datas sem escala'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester
+        .ensureVisible(find.byIcon(Icons.add_circle_outline_rounded).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add_circle_outline_rounded).first);
     await tester.pumpAndSettle();
 
@@ -152,6 +180,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(harness.repository.semanasPedidas, isNull);
+    await tester.scrollUntilVisible(
+      find.text('Datas sem escala'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Datas sem escala'), findsOneWidget);
   });
 }
@@ -160,6 +193,11 @@ void main() {
 /// nasce fora da tela, e tocar sem rolar até lá erraria o alvo.
 Future<void> _tocarEmCriar(WidgetTester tester) async {
   final botao = find.text('Criar os rascunhos destas 8 datas');
+  await tester.scrollUntilVisible(
+    find.text('Datas sem escala'),
+    250,
+    scrollable: find.byType(Scrollable).first,
+  );
   await tester.ensureVisible(botao);
   await tester.pumpAndSettle();
   await tester.tap(botao);

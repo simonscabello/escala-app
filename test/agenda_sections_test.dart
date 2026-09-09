@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,7 @@ import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
+import 'package:louvor_app/features/events/data/agenda_provider.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/agenda_screen.dart';
 import 'package:louvor_app/features/team/data/team_repository.dart';
@@ -17,131 +20,173 @@ import 'package:louvor_app/features/team/domain/team_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
-/// A agenda mostra as escalas em três degraus — a próxima, a seguinte, e o
-/// resto agrupado por mês —, e a regra que sustenta isso é uma só: **nenhuma
-/// escala aparece duas vezes**.
-///
-/// É o tipo de erro que passa despercebido numa revisão visual (duas linhas
-/// iguais em pontos distantes da rolagem) e que faz a pessoa achar que tem
-/// escala em dobro. Daí os testes contarem ocorrências, e não só presença.
 void main() {
   setUpAll(() async {
     tzdata.initializeTimeZones();
     await initializeDateFormatting('pt_BR');
   });
 
-  group('agrupamento por mês', () {
-    test('separa os meses e preserva a ordem em que as escalas vieram', () {
-      final grupos = groupEventsByMonth([
-        _event(id: 'a', startsAt: '2026-09-13T12:00:00.000Z'),
-        _event(id: 'b', startsAt: '2026-09-20T12:00:00.000Z'),
-        _event(id: 'c', startsAt: '2026-10-04T12:00:00.000Z'),
-      ]);
-
-      expect(grupos.map((g) => g.label), ['Setembro 2026', 'Outubro 2026']);
-      expect(grupos.first.events.map((e) => e.id), ['a', 'b']);
-      expect(grupos.last.events.map((e) => e.id), ['c']);
-    });
-
-    test('setembro de dois anos diferentes não vira um grupo só', () {
-      // O rótulo é o mesmo nos dois; a chave é que os separa.
-      final grupos = groupEventsByMonth([
-        _event(id: 'a', startsAt: '2026-09-13T12:00:00.000Z'),
-        _event(id: 'b', startsAt: '2027-09-12T12:00:00.000Z'),
-      ]);
-
-      expect(grupos, hasLength(2));
-      expect(grupos.map((g) => g.key), ['2026-09', '2027-09']);
-    });
-
-    test('agrupa pelo dia civil da equipe, não pelo UTC', () {
-      // 1º de setembro às 00:30 em São Paulo é 03:30 UTC do mesmo dia; mas
-      // 31 de agosto às 22:00 local é 1º de setembro em UTC. Agrupar pelo UTC
-      // jogaria a escala de agosto para dentro de setembro.
-      final grupos = groupEventsByMonth([
-        _event(id: 'agosto', startsAt: '2026-09-01T01:00:00.000Z'),
-      ]);
-
-      expect(grupos.single.label, 'Agosto 2026');
-    });
-  });
-
-  testWidgets('a próxima é manchete, a seguinte tem bloco, o resto vai por mês',
+  testWidgets('abre no mês atual sem saudação, hero ou abas antigas',
       (tester) async {
     await _pumpAgenda(tester, const Size(400, 1400));
-
-    expect(find.text('PRÓXIMA ESCALA'), findsOneWidget);
-    expect(find.text('Depois dessa'), findsOneWidget);
+    expect(find.text('Agenda'), findsOneWidget);
     expect(find.text('Setembro 2026'), findsOneWidget);
-
-    // A manchete e o bloco "Depois dessa" saem do agrupamento: das cinco
-    // escalas, três sobram para o mês.
-    expect(find.text('3 escalas'), findsOneWidget);
-  });
-
-  testWidgets('nenhuma escala aparece duas vezes', (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400));
-
-    // A data da manchete (dia 10) e a da seguinte (dia 13) não podem
-    // reaparecer na lista dos meses.
-    expect(find.text('Quinta-feira, 10 de setembro'), findsNothing);
-    expect(
-      find.text('Quinta-feira,\n10 de setembro'),
-      findsOneWidget,
-      reason: 'a manchete quebra a data depois da vírgula',
-    );
-    expect(find.text('Domingo, 13 de setembro'), findsOneWidget);
-    expect(find.text('Quinta-feira, 17 de setembro'), findsOneWidget);
-  });
-
-  testWidgets('com uma escala só, a agenda é só a manchete', (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400), take: 1);
-
-    expect(find.text('PRÓXIMA ESCALA'), findsOneWidget);
+    expect(find.text('PRÓXIMA ESCALA'), findsNothing);
+    expect(find.text('Passadas'), findsNothing);
     expect(find.text('Depois dessa'), findsNothing);
-    expect(find.text('Setembro 2026'), findsNothing);
+    expect(find.textContaining(', Simon'), findsNothing);
+    expect(find.text('Nada marcado para este dia.'), findsOneWidget);
+  });
+
+  testWidgets('seleção mostra horário e função sem repetir o compromisso',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400));
+    await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('selected-e1/e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('upcoming-e1/e1')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('selected-e1/e1')),
+        matching: find.text('19:30'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Você: Vocal · Baixo'), findsOneWidget);
+    expect(find.text('4 pessoas'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsNothing);
+  });
+
+  testWidgets('anterior, seguinte e Hoje mantêm seleção no mês visível',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400));
+    await tester.tap(find.byTooltip('Mês anterior'));
+    await tester.pumpAndSettle();
+    expect(find.text('Agosto 2026'), findsOneWidget);
+    expect(find.text('Nenhum compromisso neste mês.'), findsOneWidget);
+    await tester.tap(find.byTooltip('Próximo mês'));
+    await tester.pumpAndSettle();
+    expect(find.text('Setembro 2026'), findsOneWidget);
+    await tester.tap(find.text('Hoje'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quarta-feira, 9 de setembro'), findsOneWidget);
+  });
+
+  testWidgets('navega para detalhe e criação leva o dia selecionado',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400));
+    await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('selected-e1/e1')));
+    await tester.pumpAndSettle();
+    expect(find.text('detalhe e1'), findsOneWidget);
+    final context = tester.element(find.text('detalhe e1'));
+    GoRouter.of(context).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Nova escala'));
+    await tester.pumpAndSettle();
+    expect(find.text('novo 2026-09-10'), findsOneWidget);
+  });
+
+  testWidgets('lista vazia mantém o calendário e oferece criação discreta',
+      (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400), take: 0);
+    expect(find.text('Setembro 2026'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsOneWidget);
+    expect(find.text('Nenhum outro compromisso próximo.'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('não inventa contagem de integrantes ausente', (tester) async {
+    await _pumpAgenda(tester, const Size(400, 1400), semEquipe: true);
+    await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
+    await tester.pumpAndSettle();
+    expect(find.text('0 pessoas'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('com duas escalas, "Ver todas" não aparece — não há para onde ir',
+  testWidgets('histórico aparece ao selecionar uma data passada',
       (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400), take: 2);
-
-    expect(find.text('Depois dessa'), findsOneWidget);
-    expect(find.text('Ver todas'), findsNothing);
-  });
-
-  testWidgets('"Ver todas" aparece quando há lista abaixo', (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400));
-
-    expect(find.text('Ver todas'), findsOneWidget);
-  });
-
-  testWidgets('nas passadas não há manchete: tudo vai por mês',
-      (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400));
-    await tester.tap(find.text('Passadas'));
+    await _pumpAgenda(
+      tester,
+      const Size(400, 1400),
+      load: (scope) async => CachedValue(
+        data: scope == 'past'
+            ? [
+                Event.fromJson(
+                  _eventJson(
+                    id: 'old',
+                    startsAt: '2026-08-31T22:30:00Z',
+                  ),
+                ),
+              ]
+            : <Event>[],
+        fromCache: false,
+      ),
+    );
+    await tester.tap(find.byTooltip('Mês anterior'));
     await tester.pumpAndSettle();
-
-    expect(find.text('PRÓXIMA ESCALA'), findsNothing);
-    expect(find.text('Depois dessa'), findsNothing);
-    // As cinco entram no agrupamento, nenhuma é promovida.
-    expect(find.text('5 escalas'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('agenda-day-2026-08-31')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('selected-old/old')), findsOneWidget);
+    expect(find.text('19:30'), findsOneWidget);
   });
 
-  testWidgets('a contagem de pessoas sai da escalação, sem chamada nova',
+  testWidgets('loading preserva calendário e erro oferece nova tentativa',
       (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400));
-
-    // Três funções, quatro pessoas — Simon aparece em duas e conta uma vez.
-    expect(find.text('4 pessoas na escala'), findsOneWidget);
+    final pending = Completer<CachedValue<List<Event>>>();
+    var failed = true;
+    await _pumpAgenda(
+      tester,
+      const Size(400, 1400),
+      settle: false,
+      load: (_) => failed
+          ? pending.future
+          : Future.value(
+              const CachedValue(data: <Event>[], fromCache: false),
+            ),
+    );
+    expect(find.text('Setembro 2026'), findsOneWidget);
+    expect(find.text('Nada marcado para este dia.'), findsNothing);
+    pending.completeError(Exception('offline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tentar novamente'), findsWidgets);
+    failed = false;
+    await tester.tap(find.text('Tentar novamente').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
-  testWidgets('escala sem ninguém escalado diz isso na manchete',
+  testWidgets('fora do alcance do cache não afirma que dia ou mês estão vazios',
       (tester) async {
-    await _pumpAgenda(tester, const Size(400, 1400), semEquipe: true);
-
-    expect(find.text('Ninguém escalado ainda'), findsOneWidget);
+    await _pumpAgenda(
+      tester,
+      const Size(400, 1400),
+      load: (scope) async => CachedValue(
+        data: scope == 'past'
+            ? List.generate(
+                20,
+                (i) => Event.fromJson(
+                  _eventJson(
+                    id: 'p$i',
+                    startsAt: '2026-09-08T22:30:00Z',
+                  ),
+                ),
+              )
+            : <Event>[],
+        fromCache: true,
+        cachedAt: DateTime.utc(2026, 9, 9, 12),
+      ),
+    );
+    await tester.tap(find.byTooltip('Mês anterior'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nada marcado para este dia.'), findsNothing);
+    expect(find.text('Nenhum compromisso neste mês.'), findsNothing);
+    expect(
+      find.text('Sem compromissos nos dados disponíveis.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Sem conexão.'), findsOneWidget);
   });
 }
 
@@ -166,9 +211,6 @@ Map<String, dynamic> _eventJson({
       'songs': const [],
     };
 
-Event _event({required String id, required String startsAt}) =>
-    Event.fromJson(_eventJson(id: id, startsAt: startsAt));
-
 List<Map<String, dynamic>> _group(String name, List<String> people) => [
       {
         'positionId': 'p-$name',
@@ -192,6 +234,8 @@ Future<void> _pumpAgenda(
   Size size, {
   int take = 5,
   bool semEquipe = false,
+  bool settle = true,
+  Future<CachedValue<List<Event>>> Function(String scope)? load,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -226,7 +270,14 @@ Future<void> _pumpAgenda(
       GoRoute(path: '/agenda', builder: (_, __) => const AgendaScreen()),
       GoRoute(
         path: '/agenda/novo',
-        builder: (_, __) => const Scaffold(body: Text('novo')),
+        builder: (_, state) => Scaffold(
+          body: Text('novo ${state.uri.queryParameters['data'] ?? ''}'),
+        ),
+      ),
+      GoRoute(
+        path: '/agenda/:id',
+        builder: (_, state) =>
+            Scaffold(body: Text('detalhe ${state.pathParameters['id']!}')),
       ),
     ],
   );
@@ -235,9 +286,15 @@ Future<void> _pumpAgenda(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (load != null)
+          agendaEventsProvider.overrideWith((ref, query) => load(query.$2)),
         sharedPreferencesProvider.overrideWithValue(prefs),
+        agendaNowProvider.overrideWithValue(DateTime.utc(2026, 9, 9, 16)),
         eventsProvider.overrideWith(
-          (ref, query) async => CachedValue(data: events, fromCache: false),
+          (ref, query) async => CachedValue(
+            data: query.$2 == 'upcoming' ? events : <Event>[],
+            fromCache: false,
+          ),
         ),
         // Grade vazia: estes testes são sobre a arrumação da lista, e as datas
         // em aberto mudam conforme o dia em que o teste roda.
@@ -280,7 +337,12 @@ Future<void> _pumpAgenda(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump();
+  }
 }
 
 class _FakeAuthController extends AuthController {
