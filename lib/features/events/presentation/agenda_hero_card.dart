@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_avatar_stack.dart';
-import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_hero_card.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
@@ -62,71 +62,49 @@ class ScheduleHeroCard extends ConsumerWidget {
     final facts = ScheduleFacts.of(event, timezone);
     final people = event.scheduledPeople;
 
-    return AppCard(
+    return AppHeroCard(
       onTap: () => context.push('/agenda/${event.id}'),
-      gradient: AppColors.heroGradient(theme.colorScheme),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Duas manchas de luz, e nada mais. O recorte do cartão corta o que
-          // passa da borda, então elas leem como um brilho vindo de fora e não
-          // como dois círculos desenhados dentro do bloco. 5% e 4%: abaixo
-          // disso não se percebe, acima vira textura de papel de parede.
-          const Positioned(
-            right: -70,
-            top: -90,
-            child: _Glow(size: 210, alpha: 0.05),
+          _HeroTopRow(
+            event: event,
+            canManage: canManage,
+            youPositions: youPositions,
           ),
-          const Positioned(
-            right: 20,
-            bottom: -120,
-            child: _Glow(size: 190, alpha: 0.04),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroTopRow(
-                  event: event,
-                  canManage: canManage,
-                  youPositions: youPositions,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  heroDateText(
-                    context,
-                    formatEventWeekdayDate(event.startsAt, timezone),
-                  ),
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    color: AppColors.onHero,
-                  ),
-                  // Quatro linhas: "Quinta-feira, 10 de setembro de 2027" com
-                  // a fonte do sistema no dobro do tamanho precisa de todas
-                  // elas, e cortar a data é cortar a identidade da escala.
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                // A data é a identidade da escala e fica sempre na mesma
-                // posição; o título só existe em culto especial e entra abaixo,
-                // para se ler como exceção.
-                if (event.hasTitle) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    event.title!,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: AppColors.onHeroVariant,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.lg),
-                _HeroFacts(facts: facts),
-                const SizedBox(height: AppSpacing.xl),
-                _HeroFooter(event: event, people: people),
-              ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            heroDateText(
+              context,
+              formatEventWeekdayDate(event.startsAt, timezone),
             ),
+            style: theme.textTheme.displaySmall?.copyWith(
+              color: AppColors.onHero,
+            ),
+            // Quatro linhas: "Quinta-feira, 10 de setembro de 2027" com a
+            // fonte do sistema no dobro do tamanho precisa de todas elas, e
+            // cortar a data é cortar a identidade da escala.
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
           ),
+          // A data é a identidade da escala e fica sempre na mesma posição; o
+          // título só existe em culto especial e entra abaixo, para se ler
+          // como exceção.
+          if (event.hasTitle) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              event.title!,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: AppColors.onHeroVariant,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          _HeroFacts(facts: facts),
+          const SizedBox(height: AppSpacing.xl),
+          _HeroFooter(event: event, people: people),
         ],
       ),
     );
@@ -359,7 +337,10 @@ class _HeroFooter extends StatelessWidget {
       ],
     );
 
-    final button = _HeroDetailButton(eventId: event.id);
+    final button = HeroActionButton(
+      label: 'Ver detalhes',
+      onPressed: () => context.push('/agenda/${event.id}'),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -388,70 +369,6 @@ class _HeroFooter extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// "Ver detalhes →".
-///
-/// Contido e à direita, e não largo na base do cartão: um botão que atravessa a
-/// manchete inteira compete com a data pelo primeiro olhar, e a data é que
-/// identifica a escala. À direita ele fica no fim natural da leitura e no
-/// alcance do polegar.
-class _HeroDetailButton extends StatelessWidget {
-  const _HeroDetailButton({required this.eventId});
-
-  final String eventId;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return FilledButton.icon(
-      onPressed: () => context.push('/agenda/$eventId'),
-      style: FilledButton.styleFrom(
-        // A tinta clara da marca sobre o violeta escuro: o mesmo par do botão
-        // primário do tema escuro, que é o contexto em que este botão vive
-        // mesmo quando o app está no tema claro.
-        backgroundColor: AppColors.brandLavender,
-        foregroundColor: AppColors.brandDeepViolet,
-        // Menor que o botão principal de um formulário (52): aqui ele é a ação
-        // de um cartão, não a ação da tela.
-        minimumSize: const Size(0, 44),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        textStyle: Theme.of(context).textTheme.labelLarge,
-        // A seta segue o texto; `iconAlignment` é o que evita montar uma `Row`
-        // à mão só para inverter a ordem.
-      ).copyWith(
-        overlayColor: WidgetStatePropertyAll(
-          scheme.shadow.withValues(alpha: 0.08),
-        ),
-      ),
-      iconAlignment: IconAlignment.end,
-      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-      label: const Text('Ver detalhes'),
-    );
-  }
-}
-
-/// Uma mancha de luz atrás do conteúdo da manchete.
-class _Glow extends StatelessWidget {
-  const _Glow({required this.size, required this.alpha});
-
-  final double size;
-  final double alpha;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.onHero.withValues(alpha: alpha),
-        ),
-      ),
     );
   }
 }

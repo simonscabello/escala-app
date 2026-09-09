@@ -173,14 +173,48 @@ As ferramentas:
 
 `MainShell` (`features/events/presentation/main_shell.dart`) escolhe entre a
 barra inferior e a lateral. A regra do celular não mudou: a barra inferior só
-aparece em `/agenda`, `/equipe` e `/perfil`.
+aparece nas abas — hoje `/inicio`, `/agenda`, `/equipe` e `/perfil`.
 
 Para a barra lateral não sumir ao abrir "Repertório" ou "Convites", as telas de
 configuração passaram para **dentro** do `ShellRoute`. No celular isso não muda
-nada — elas não são uma das três abas, então continuam sem barra inferior.
+nada — elas não são uma das abas, então continuam sem barra inferior.
 
 A barra lateral acende a rota **mais específica** que prefixa o caminho atual
 (`AppSideNav.selectedRouteFor`). Sem isso `/equipe/musicas` acenderia "Equipe".
+
+## A Home (`/inicio`)
+
+É a porta de entrada depois do login (o redirect de `app_router.dart` manda para
+`/inicio`, e `/home` é um apelido antigo que aponta para lá). A Agenda continua
+exatamente como estava, uma aba adiante.
+
+**A Home existe por uma diferença só:** a manchete da agenda é a próxima escala
+**da equipe**, e quem abre o app quer saber da **própria**. Tudo o mais ela pega
+emprestado.
+
+- **Nenhum endpoint novo, nenhuma requisição a mais.** Observa o mesmo
+  `eventsProvider((teamId, 'upcoming'))` da agenda — mesma chave de família,
+  então é a mesma resposta e o mesmo cache — e o `openSuggestionCountProvider`
+  que já alimenta o selo da aba Equipe (só para quem gerencia).
+- **A leitura mora fora do widget**, em `features/home/domain/home_summary.dart`:
+  qual é a minha próxima escala, quais são as próximas da equipe sem repetir
+  aquela, quantas músicas a escala tem (`scheduleSongCount` cala quando não
+  sabe) e quais avisos nascem. `test/home_summary_test.dart` trava isso sem
+  widget nenhum.
+- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximas
+  escalas, avisos. Um bloco pode não existir; nenhum troca de lugar.
+- A manchete usa `AppHeroCard` (`shared/widgets/app_hero_card.dart`), a casca
+  violeta que a agenda também passou a usar. `GreetingHeader` e `TeamOnboarding`
+  saíram de dentro de `agenda_screen.dart` pelo mesmo motivo: agora há duas
+  portas de entrada.
+- **O pedido de permissão de notificação mudou de tela.** Era da agenda; foi
+  para a Home, que é onde o app abre. Um integrante que nunca toca na aba
+  Agenda jamais veria a pergunta.
+- **O que ainda não dá para mostrar:** a contagem de músicas do repertório no
+  atalho "Repertório". A única fonte hoje é `GET /teams/:id/songs`, que devolve
+  o acervo inteiro (centenas de músicas) — caro demais para um número. Se um dia
+  a Home precisar de mais dados agregados, o caminho é um `songCount` em
+  `GET /teams/:id` ou um `GET /home`; **não** somar requisições na tela.
 
 ### O que a Web exigiu do código
 

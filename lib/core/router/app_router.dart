@@ -16,6 +16,7 @@ import '../../features/events/presentation/main_shell.dart';
 import '../../features/events/presentation/setlist_form_screen.dart';
 import '../../features/events/domain/event_models.dart';
 import '../../features/health/presentation/health_screen.dart';
+import '../../features/home/presentation/home_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
 import '../../features/unavailability/presentation/my_unavailability_screen.dart';
@@ -141,9 +142,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               _publicRoutes.contains(location) ||
               location == '/trocar-senha';
           if (isEntryRoute && location != '/diagnostico') {
-            // O destino guardado tem prioridade sobre a agenda: é o link que a
+            // O destino guardado tem prioridade sobre a Home: é o link que a
             // pessoa abriu ou a página que ela recarregou.
-            return pending.take() ?? '/agenda';
+            return pending.take() ?? '/inicio';
           }
           pending.value = null;
           return null;
@@ -157,7 +158,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/trocar-senha',
         builder: (_, __) => const ChangePasswordScreen(),
       ),
-      GoRoute(path: '/home', redirect: (_, __) => '/agenda'),
+      // Apelido antigo, mantido porque `join_team_screen` navega para ele e
+      // porque links `/home` já circularam. Agora aponta para a Home de
+      // verdade, em português como o resto das rotas.
+      GoRoute(path: '/home', redirect: (_, __) => '/inicio'),
       GoRoute(path: '/diagnostico', builder: (_, __) => const HealthScreen()),
       // Fora da casca: as duas telas de quem ainda não tem equipe. Uma barra
       // lateral que lista "Repertório" e "Convites" para quem não faz parte de
@@ -170,6 +174,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
+          // A porta de entrada do app, e a primeira aba da barra. Fica no topo
+          // da lista porque é a rota mais rasa da casca — nenhuma outra a
+          // prefixa, então a ordem aqui é só a da leitura.
+          GoRoute(path: '/inicio', builder: (_, __) => const HomeScreen()),
           // As telas de configuração vêm **antes** de `/equipe` para preservar
           // a ordem de correspondência que o roteador já tinha.
           //

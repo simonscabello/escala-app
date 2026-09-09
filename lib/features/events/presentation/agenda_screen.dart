@@ -19,9 +19,11 @@ import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/greeting_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/domain/service_template.dart';
+import '../../team/presentation/team_onboarding.dart';
 import '../../update/presentation/app_update_banner.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
@@ -29,14 +31,6 @@ import '../domain/event_models.dart';
 import '../domain/open_date.dart';
 import 'agenda_event_tile.dart';
 import 'agenda_hero_card.dart';
-
-/// Saudação por horário. Detalhe pequeno, mas é o que separa uma tela de
-/// listagem de um app que parece ter sido feito para aquela pessoa.
-String greetingForHour(int hour) {
-  if (hour < 12) return 'Bom dia';
-  if (hour < 18) return 'Boa tarde';
-  return 'Boa noite';
-}
 
 /// O fuso da equipe, pelas fontes na ordem em que valem.
 ///
@@ -120,7 +114,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final teamId = ref.watch(activeTeamIdProvider);
 
     if (auth.teams.isEmpty || teamId == null) {
-      return const _AgendaOnboarding();
+      return const TeamOnboarding();
     }
 
     // A equipe ATIVA, não `teams.first`. As duas coincidem em quem só tem uma
@@ -165,7 +159,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         child: AppContentWidth.wide(
           child: Column(
             children: [
-              _GreetingHeader(
+              GreetingHeader(
                 name: auth.user?.firstName ?? '',
                 teamName: team.name,
                 activeTeamId: teamId,
@@ -254,129 +248,6 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   }
 }
 
-/// Quem está usando e de que equipe.
-///
-/// Duas linhas, e não três: "Bom dia," e "Samuel" ocupavam uma linha cada por
-/// pura estética, empurrando para baixo a única coisa que a pessoa abriu o app
-/// para ver. O cumprimento continua ali, no lugar que ele merece — o de uma
-/// linha só.
-///
-/// **A saudação subiu de corpo e o cabeçalho ganhou folga.** Ele é a abertura
-/// da tela principal do app, e estava com o mesmo tamanho de um título de
-/// bloco; a diferença entre "esta é a sua agenda" e "esta é mais uma lista"
-/// está quase toda aqui.
-///
-/// No monitor o cabeçalho recebe a ação principal à direita, e o seletor de
-/// equipe sai daqui: ele passou para a barra lateral, onde vale para o app
-/// inteiro em vez de só para esta tela.
-class _GreetingHeader extends StatelessWidget {
-  const _GreetingHeader({
-    required this.name,
-    required this.teamName,
-    required this.activeTeamId,
-    required this.teams,
-    required this.onTeamChanged,
-    required this.showTeamSwitcher,
-    this.onCreate,
-  });
-
-  final String name;
-  final String teamName;
-  final String activeTeamId;
-  final List<({String id, String name})> teams;
-  final ValueChanged<String> onTeamChanged;
-  final bool showTeamSwitcher;
-  final VoidCallback? onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final greeting = greetingForHour(DateTime.now().hour);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.xl,
-        AppSpacing.xl,
-        AppSpacing.lg,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name.isEmpty ? greeting : '$greeting, $name',
-                  style: theme.textTheme.headlineMedium,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Icon(Icons.groups_rounded, size: 16, color: scheme.primary),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        teamName,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (showTeamSwitcher && teams.length > 1)
-                      PopupMenuButton<String>(
-                        tooltip: 'Trocar equipe',
-                        initialValue: activeTeamId,
-                        onSelected: onTeamChanged,
-                        icon: const Icon(Icons.unfold_more_rounded, size: 18),
-                        itemBuilder: (context) => [
-                          for (final team in teams)
-                            PopupMenuItem(
-                              value: team.id,
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    child: team.id == activeTeamId
-                                        ? Icon(
-                                            Icons.check_rounded,
-                                            size: 18,
-                                            color: scheme.primary,
-                                          )
-                                        : null,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Flexible(child: Text(team.name)),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          if (onCreate != null) ...[
-            const SizedBox(width: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Nova escala'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// A agenda carregando, na forma que ela vai ter.
 ///
 /// A manchete é um bloco alto; as escalas seguintes são linhas com o bloco de
@@ -456,176 +327,6 @@ class _AgendaSkeleton extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AgendaOnboarding extends ConsumerWidget {
-  const _AgendaOnboarding();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authControllerProvider);
-    final user = auth.user;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: AppContentWidth.reading(
-          child: RefreshIndicator(
-            onRefresh: () =>
-                ref.read(authControllerProvider.notifier).reloadTeams(),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xxl,
-              ),
-              children: [
-                Text(
-                  '${greetingForHour(DateTime.now().hour)}, '
-                  '${user?.firstName ?? ''}',
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Você ainda não faz parte de uma equipe. Escolha por onde '
-                  'começar.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                // Lado a lado onde cabe: são duas escolhas do mesmo peso, e
-                // empilhadas num monitor a segunda cai abaixo da dobra.
-                _OnboardingChoices(
-                  cards: [
-                    _OnboardingCard(
-                      icon: Icons.groups_rounded,
-                      title: 'Sou o líder da equipe',
-                      message: 'Crie a equipe e cadastre os integrantes. '
-                          'Ninguém precisa ter conta ainda.',
-                      actionLabel: 'Criar equipe',
-                      filled: true,
-                      onAction: () => context.push('/equipe/nova'),
-                    ),
-                    _OnboardingCard(
-                      icon: Icons.link_rounded,
-                      title: 'Recebi um convite',
-                      message: 'Cole o código que o líder da equipe enviou.',
-                      actionLabel: 'Entrar com código',
-                      filled: false,
-                      onAction: () => context.push('/convite'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Empilhadas no celular, lado a lado onde couber.
-class _OnboardingChoices extends StatelessWidget {
-  const _OnboardingChoices({required this.cards});
-
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < AppBreakpoints.tablet) {
-          return Column(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(height: AppSpacing.lg),
-                cards[i],
-              ],
-            ],
-          );
-        }
-
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: AppSpacing.lg),
-                Expanded(child: cards[i]),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _OnboardingCard extends StatelessWidget {
-  const _OnboardingCard({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.actionLabel,
-    required this.filled,
-    required this.onAction,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final String actionLabel;
-  final bool filled;
-  final VoidCallback onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color:
-                  filled ? scheme.primaryContainer : scheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: Icon(
-              icon,
-              color: filled
-                  ? scheme.onPrimaryContainer
-                  : scheme.onSecondaryContainer,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(title, style: theme.textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            message,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          if (filled)
-            FilledButton(onPressed: onAction, child: Text(actionLabel))
-          else
-            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel)),
         ],
       ),
     );

@@ -11,11 +11,16 @@ import '../../team/data/team_repository.dart';
 
 /// Casca com a navegação principal.
 ///
-/// **Duas navegações, uma casca.** No celular são três abas na barra inferior
-/// (Agenda, Equipe, Perfil): é onde o polegar chega, e o app foi desenhado para
-/// isso. A partir de 600px de largura a barra inferior sai e entra uma barra
-/// lateral — recolhida (só ícones) em tablet e em janela estreita, aberta no
-/// monitor.
+/// **Duas navegações, uma casca.** No celular são quatro abas na barra
+/// inferior (Início, Agenda, Equipe, Perfil): é onde o polegar chega, e o app
+/// foi desenhado para isso. A partir de 600px de largura a barra inferior sai e
+/// entra uma barra lateral — recolhida (só ícones) em tablet e em janela
+/// estreita, aberta no monitor.
+///
+/// **Início abre a lista porque é a porta de entrada**: é a aba em que o app
+/// abre depois do login, e a única que responde "quando *eu* toco?" antes de
+/// qualquer outra coisa. A Agenda continua exatamente onde estava, uma aba
+/// adiante.
 ///
 /// A troca é por **largura da janela**, não por plataforma: não há `kIsWeb`
 /// aqui. Um Android em tablet ganha a barra lateral pelo mesmo motivo que o
@@ -29,7 +34,7 @@ class MainShell extends ConsumerWidget {
 
   final Widget child;
 
-  static const _tabs = ['/agenda', '/equipe', '/perfil'];
+  static const _tabs = ['/inicio', '/agenda', '/equipe', '/perfil'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -70,6 +75,11 @@ class MainShell extends ConsumerWidget {
                 // tem intimidade com aplicativo não decifra sozinho.
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 destinations: [
+                  const NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home_rounded),
+                    label: 'Início',
+                  ),
                   const NavigationDestination(
                     icon: Icon(Icons.calendar_today_outlined),
                     selectedIcon: Icon(Icons.calendar_today_rounded),
@@ -155,6 +165,12 @@ class _WideShell extends ConsumerWidget {
     return [
       const AppNavSection(
         destinations: [
+          AppNavDestination(
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home_rounded,
+            label: 'Início',
+            route: '/inicio',
+          ),
           AppNavDestination(
             icon: Icons.calendar_today_outlined,
             selectedIcon: Icons.calendar_today_rounded,

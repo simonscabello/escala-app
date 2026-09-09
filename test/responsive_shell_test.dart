@@ -15,8 +15,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// largura da janela. Estes testes travam essa regra nos dois sentidos.
 ///
 /// O sentido que mais importa é o de baixo: a versão Android existia antes da
-/// Web e não pode ter mudado. Em 375px a barra inferior de três abas precisa
-/// continuar exatamente onde estava, e a barra lateral não pode existir.
+/// Web e não pode ter mudado. Em 375px a barra inferior precisa continuar
+/// exatamente onde estava, e a barra lateral não pode existir.
+///
+/// A Home acrescentou uma quarta aba **na frente** das três, e é a única coisa
+/// que mudou ali: Agenda, Equipe e Perfil continuam sendo abas, na mesma ordem
+/// relativa. Os testes abaixo travam isso pelo rótulo e pelo índice, que é o
+/// que o `context.go` da barra usa para escolher a rota.
 void main() {
   group('AppSideNav.selectedRouteFor', () {
     const sections = [
@@ -70,6 +75,25 @@ void main() {
       expect(AppSideNav.selectedRouteFor(sections, '/perfil/dados'), '/perfil');
     });
 
+    test('a Home acende sozinha, sem prefixar nenhuma outra', () {
+      final withHome = [
+        const AppNavSection(
+          destinations: [
+            AppNavDestination(
+              icon: Icons.home_outlined,
+              selectedIcon: Icons.home_rounded,
+              label: 'Início',
+              route: '/inicio',
+            ),
+          ],
+        ),
+        ...sections,
+      ];
+
+      expect(AppSideNav.selectedRouteFor(withHome, '/inicio'), '/inicio');
+      expect(AppSideNav.selectedRouteFor(withHome, '/agenda'), '/agenda');
+    });
+
     test('rota que não está na barra não acende nada', () {
       expect(AppSideNav.selectedRouteFor(sections, '/diagnostico'), isNull);
     });
@@ -100,6 +124,26 @@ void main() {
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.byType(AppSideNav), findsNothing);
       expect(find.text('Agenda'), findsOneWidget);
+    });
+
+    testWidgets('a barra abre em Início, com as três abas antigas atrás',
+        (tester) async {
+      await _pumpShell(tester, const Size(375, 812), '/inicio');
+
+      final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+      expect(bar.selectedIndex, 0);
+      expect(
+        bar.destinations.cast<NavigationDestination>().map((d) => d.label),
+        ['Início', 'Agenda', 'Equipe', 'Perfil'],
+      );
+    });
+
+    testWidgets('a agenda continua acesa como aba, agora a segunda',
+        (tester) async {
+      await _pumpShell(tester, const Size(375, 812), '/agenda');
+
+      final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+      expect(bar.selectedIndex, 1);
     });
 
     testWidgets('fora das três abas a barra inferior some, como sempre',
@@ -186,6 +230,7 @@ Future<void> _pumpShell(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
           for (final path in const [
+            '/inicio',
             '/agenda',
             '/equipe',
             '/perfil',
