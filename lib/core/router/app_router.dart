@@ -19,6 +19,8 @@ import '../../features/health/presentation/health_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
+import '../../features/team_events/presentation/team_event_detail_screen.dart';
+import '../../features/team_events/presentation/team_event_form_screen.dart';
 import '../../features/unavailability/presentation/my_unavailability_screen.dart';
 import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
@@ -191,6 +193,30 @@ final routerProvider = Provider<GoRouter>((ref) {
               ref,
               (id) => MyUnavailabilityScreen(teamId: id),
             ),
+          ),
+          // Os eventos da equipe (reuniao, churrasco) sao irmaos da agenda, e
+          // nao filhos de /agenda: a agenda mostra os dois, mas a rota de um
+          // evento nao pertence a escala. `/eventos/:id` tambem e o destino do
+          // aviso de evento novo -- ver `route` no backend.
+          GoRoute(
+            path: '/eventos/novo',
+            builder: (_, state) => TeamEventFormScreen(
+              initialDate: state.uri.queryParameters['data'],
+            ),
+          ),
+          GoRoute(
+            path: '/eventos/:eventoId',
+            builder: (_, state) => TeamEventDetailScreen(
+              eventId: state.pathParameters['eventoId']!,
+            ),
+            routes: [
+              GoRoute(
+                path: 'editar',
+                builder: (_, state) => TeamEventFormScreen(
+                  eventId: state.pathParameters['eventoId']!,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: '/equipe/convites',

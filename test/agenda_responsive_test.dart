@@ -50,7 +50,7 @@ void main() {
       await tester.tap(find.text('Minhas escalas'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('Você está escalado'), findsOneWidget);
+      expect(find.text('Seus compromissos'), findsOneWidget);
     });
   }
 

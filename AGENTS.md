@@ -192,10 +192,17 @@ seguinte, e responde outra pergunta — ver **A Agenda** logo abaixo.
 **da equipe**, e quem abre o app quer saber da **própria**. Tudo o mais ela pega
 emprestado.
 
-- **Nenhum endpoint novo, nenhuma requisição a mais.** Observa o mesmo
+- **Quase nada aqui é dado novo.** Observa o mesmo
   `eventsProvider((teamId, 'upcoming'))` da agenda — mesma chave de família,
   então é a mesma resposta e o mesmo cache — e o `openSuggestionCountProvider`
   que já alimenta o selo da aba Equipe (só para quem gerencia).
+- **A exceção é o "Próximo evento"**, que custa uma requisição própria
+  (`teamEventsProvider`). Ela se paga porque a reunião de quinta não está em
+  nada do que já vem: não é escala, e "o que vem por aí" sem ela responde pela
+  metade. **Um evento, e não uma lista** — a Home acabou de deixar de repetir a
+  agenda, e repetir de novo com eventos seria o mesmo erro com outra roupa.
+  Fora isso a regra continua de pé: precisando de mais agregado, quem agrega é
+  a API.
 - **A leitura mora fora do widget**, em `features/home/domain/home_summary.dart`:
   qual é a minha próxima escala, qual é a **minha** seguinte, quantas músicas a
   escala tem (`scheduleSongCount` cala quando não sabe) e quais avisos nascem.
@@ -247,8 +254,11 @@ escala, o dia selecionado embaixo, e as próximas em seguida.
   usa `groupAgendaEvents`, que junta os horários da mesma escala numa linha só:
   um domingo com manhã e noite é **uma** escala, e mostrá-la duas vezes faria a
   equipe achar que toca em dobro. A linha já escreve "Manhã 08:30 · Noite 19:00".
-- **Duas listas, nunca a mesma escala nas duas.** O que está no dia selecionado
-  sai de "Próximas escalas".
+- **Duas listas, nunca o mesmo compromisso nas duas.** O que está no dia
+  selecionado sai de "Próximos compromissos".
+- **A lista tem escalas e eventos**, misturados pelo relógio — é assim que o mês
+  acontece. Por isso ela se chama "Próximos compromissos": prometer só escala
+  faria a reunião de quinta parecer uma delas. Ver **Eventos da equipe**.
 - **O botão de criar é o da Home, no mesmo lugar:** flutuante no celular (onde
   o polegar chega), no cabeçalho no monitor. A agenda chegou a ter só o ícone
   do cabeçalho nas duas larguras — alvo menor para a ação principal, e o botão
@@ -1072,13 +1082,68 @@ categoria, central de notificações dentro do app e confirmação de leitura.
 Plano e registro de execução:
 `docs/superpowers/plans/2026-09-08-notificacoes.md`.
 
-## Vocabulário: "escala", não "culto"
+## Vocabulário: "escala", "culto", "evento", "compromisso"
 
-Na interface, a entidade que o líder cria chama-se **escala**. No código e no
-banco ela continua sendo `Event` / `events` — renomear a tabela e o modelo não
-traria benefício nenhum ao usuário e quebraria migrations. Ao escrever textos
-novos, use "escala"; "culto" só sobrevive como rótulo do **horário** dentro da
-escala (`Culto 09:00` × `Ensaio 19:00`), que é o sentido correto ali.
+Quatro palavras, e a segunda coluna **não** bate com a primeira:
+
+| Na tela     | No código      | O que é                                          |
+| ----------- | -------------- | ------------------------------------------------ |
+| escala      | `Event`        | quem toca o quê num domingo                       |
+| culto       | `EventService` | um horário dentro da escala (`Culto 09:00`)       |
+| evento      | `TeamEvent`    | reunião, ensaio geral, churrasco, treinamento     |
+| compromisso | `AgendaEntry`  | o guarda-chuva: escala **ou** evento              |
+
+`Event` continua sendo a escala porque renomear a tabela quebraria migrations e
+todo app instalado. O preço apareceu quando os eventos de verdade chegaram: **ao
+ler `Event`, pense "escala"**.
+
+**"Compromisso" só aparece onde a lista mistura os dois** — o título "Próximos
+compromissos" da agenda e a legenda do calendário. Numa lista que só tem escala,
+escreva "escala": foi para tirar "compromisso" de seis lugares onde ele
+significava escala que a palavra saiu da tela uma vez.
+
+## Eventos da equipe (`/eventos`)
+
+Reunião, ensaio geral, churrasco, treinamento — o que a equipe marca e **não é
+escala**. `features/team_events/`, com o backend em `modules/team-events`.
+
+- **Entidade própria** (`TeamEvent`), e não um tipo dentro de `Event`: a escala
+  tem cultos, escalação, repertório, ministrante e publicação, e um churrasco
+  não tem nada disso. Ver a seção correspondente no AGENTS.md do backend.
+- **Rotas do app:** `/eventos/novo?data=AAAA-MM-DD`, `/eventos/:id` e
+  `/eventos/:id/editar`. São irmãs de `/agenda`, e não filhas: a agenda mostra
+  os dois, mas a rota de um evento não pertence à escala. `/eventos/:id` é
+  também o destino do push de evento novo.
+- **Quem marca é OWNER/LEADER.** O caminho fica no cabeçalho da lista do dia
+  ("＋ Evento"), e não num segundo botão flutuante: escala é a ação frequente e
+  fica com o botão grande; o evento é ocasional e cabe ao lado da data a que
+  vai pertencer. Ele leva o dia selecionado junto.
+- **A hora de término é opcional**, e o formulário sabe **apagá-la**
+  (`removeEndsAt`): no servidor, omitir preserva, e sem esse pedido explícito
+  ela ficaria presa. `test/team_events_agenda_test.dart` trava isso.
+- **Cancelar não avisa ninguém** — o diálogo de confirmação diz isso em vez de
+  prometer o contrário. Só a criação notifica (ver Dívidas no backend).
+
+### Como o evento convive com a escala na agenda
+
+`AgendaEntry` (`features/events/domain/agenda_entry.dart`) virou **`sealed`**,
+com `ScheduleEntry` e `TeamEventEntry`. Para o calendário as duas são a mesma
+pergunta — "o que tem neste dia?" —, e o `switch` exaustivo é o que garante que
+a terceira natureza de compromisso não vá aparecer como linha em branco.
+
+- **`id` conta horário; `rowId` conta linha.** O calendário marca por `id` (um
+  domingo com manhã e noite pinta dois pontos, e a vigília de ano novo pinta os
+  dois dias); a lista agrupa por `rowId` (`groupAgendaRows`), porque um domingo
+  com dois cultos é **uma** escala.
+- **O recorte pessoal nunca esconde um evento.** "Minhas escalas" tira o
+  domingo em que você não toca; o churrasco fica, porque ele não tem escalados
+  — é de todo mundo, inclusive de quem está olhando. Esconder um compromisso
+  que também é seu seria o pior defeito que o filtro pode ter.
+- A linha do evento (`TeamEventTile`) usa a mesma arrumação da linha da escala,
+  mas **inverte o que vem primeiro**: numa escala a data é o nome ("domingo,
+  13" basta), num evento o nome é o nome. O selo "Evento" existe por causa
+  dessa inversão — sem ele, uma linha que começa com texto grande se leria como
+  escala de culto especial ("Ceia", "Batismo").
 
 ## Identidade visual e acessibilidade
 

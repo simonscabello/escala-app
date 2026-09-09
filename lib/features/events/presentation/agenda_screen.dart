@@ -17,6 +17,9 @@ import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/presentation/team_onboarding.dart';
+import '../../team_events/data/team_event_repository.dart';
+import '../../team_events/domain/team_event.dart';
+import '../../team_events/presentation/team_event_tile.dart';
 import '../../update/presentation/app_update_banner.dart';
 import '../data/agenda_provider.dart';
 import '../data/event_repository.dart';
@@ -43,6 +46,12 @@ final agendaNowProvider = Provider<DateTime>((ref) => DateTime.now());
 /// agenda de quem está olhando. O segundo governa também os pontos do
 /// calendário — "em que domingos eu toco?" é uma pergunta que se responde no
 /// mês, não numa lista.
+///
+/// **Escalas e eventos convivem na mesma lista.** O evento da equipe (reunião,
+/// churrasco) não é escala e tem entidade própria, mas para quem consulta o
+/// mês é a mesma pergunta: "o que tem neste dia?". Por isso a lista se chama
+/// "Próximos compromissos" e não "Próximas escalas" — prometer só escala
+/// faria a reunião de quinta parecer uma delas.
 class AgendaScreen extends ConsumerStatefulWidget {
   const AgendaScreen({super.key});
 
@@ -76,6 +85,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     for (final scope in ['upcoming', 'past']) {
       ref.invalidate(eventsProvider((teamId, scope)));
       ref.invalidate(agendaEventsProvider((teamId, scope)));
+      ref.invalidate(teamEventsProvider((teamId, scope)));
     }
     // Os erros são exibidos pela tela, inclusive durante atualização manual.
     await Future.wait([
@@ -100,6 +110,19 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       ...upcoming.valueOrNull?.data ?? <Event>[],
       ...past.valueOrNull?.data ?? <Event>[],
     ];
+    // Os eventos da equipe entram na mesma agenda, e não numa aba própria:
+    // quem abre esta tela quer o mês inteiro, e "reunião de quinta" some se
+    // estiver atrás de outro toque. Falham em silêncio de propósito — um
+    // churrasco que não carregou não pode esconder o domingo.
+    final teamEvents = [
+      ...ref
+              .watch(teamEventsProvider((teamId, 'upcoming')))
+              .valueOrNull
+              ?.data ??
+          <TeamEvent>[],
+      ...ref.watch(teamEventsProvider((teamId, 'past'))).valueOrNull?.data ??
+          <TeamEvent>[],
+    ];
     final teamTimezone = ref.watch(teamProvider(teamId)).valueOrNull?.timezone;
     final timezone = teamTimezone ??
         events.where((e) => e.timezone.isNotEmpty).firstOrNull?.timezone ??
@@ -120,29 +143,30 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     // toca" e "a equipe toca, e você não" — dizer a primeira no lugar da
     // segunda esconderia uma escala que existe, que é o pior defeito que um
     // filtro pode ter.
-    final allEntries = agendaEntries(events);
+    final allEntries = agendaEntries(events, teamEvents: teamEvents);
     final entries = filterAgendaEntries(
       allEntries,
       filter: _filter,
       membershipId: team.membershipId,
     );
     final markedDays = groupAgendaEntries(entries).keys.toSet();
-    final groups = groupAgendaEvents(entries);
-    final selectedEvents = groups[dateKey(selected)] ?? const <Event>[];
+    final groups = groupAgendaRows(entries);
+    final selectedRows = groups[dateKey(selected)] ?? const <AgendaEntry>[];
     final dayHasAny =
-        (groupAgendaEvents(allEntries)[dateKey(selected)] ?? const <Event>[])
+        (groupAgendaRows(allEntries)[dateKey(selected)] ?? const <AgendaEntry>[])
             .isNotEmpty;
-    final selectedIds = {for (final event in selectedEvents) event.id};
+    final selectedIds = {for (final row in selectedRows) row.rowId};
 
     // As próximas, sem repetir o que já está na lista do dia. A ordem é a das
-    // entradas, que vêm ordenadas pelo horário.
-    final nextEvents = <Event>[];
+    // entradas, que vêm ordenadas pelo horário — escalas e eventos misturados,
+    // porque é assim que o mês acontece.
+    final nextRows = <AgendaEntry>[];
     for (final entry in entries) {
-      if (entry.day.isBefore(today) || selectedIds.contains(entry.event.id)) {
+      if (entry.day.isBefore(today) || selectedIds.contains(entry.rowId)) {
         continue;
       }
-      if (!nextEvents.any((event) => event.id == entry.event.id)) {
-        nextEvents.add(entry.event);
+      if (!nextRows.any((row) => row.rowId == entry.rowId)) {
+        nextRows.add(entry);
       }
     }
 
@@ -202,7 +226,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           onSelected: _select,
           onMonthChanged: _select,
           onToday: () => _select(today),
-          legend: _filter.isMine ? 'Você está escalado' : 'Com escala',
+          legend: _filter.isMine ? 'Seus compromissos' : 'Com compromisso',
         ),
         if (monthIncomplete)
           const Padding(
@@ -239,8 +263,20 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         subtitle: dayIncomplete
             ? 'A consulta disponível não cobre este dia por completo.'
             : null,
+        // O caminho para marcar o que **não** é escala, já no dia escolhido.
+        // Fica aqui, e não num segundo botão flutuante: escala é a ação
+        // frequente e fica com o botão grande; o evento é ocasional e cabe ao
+        // lado da data a que ele vai pertencer.
+        trailing: team.canManage
+            ? TextButton.icon(
+                onPressed: () =>
+                    context.push('/eventos/novo?data=${dateKey(selected)}'),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Evento'),
+              )
+            : null,
         dividerIndent: AppGroup.textIndent,
-        children: selectedEvents.isEmpty
+        children: selectedRows.isEmpty
             ? [
                 _emptyDayRow(
                   dayIncomplete: dayIncomplete,
@@ -250,10 +286,10 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 ),
               ]
             : [
-                for (final event in selectedEvents)
-                  CompactScheduleTile(
-                    key: ValueKey('selected-${event.id}'),
-                    event: event,
+                for (final row in selectedRows)
+                  _agendaRow(
+                    row,
+                    prefixo: 'selected',
                     canManage: team.canManage,
                     membershipId: team.membershipId,
                     wide: wide,
@@ -418,33 +454,34 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                         onRetry: () => _refresh(teamId),
                       )
                     else
-                      // O mesmo bloco da Home, com o mesmo nome: a lista de
-                      // escalas do app é uma só, e o que muda entre as telas é
-                      // o recorte, não a forma.
+                      // O mesmo bloco da Home, com a mesma linha de escala. O
+                      // título diz "compromissos" e não "escalas" porque aqui
+                      // a lista tem as duas coisas -- e prometer só escala
+                      // faria a reunião de quinta parecer uma delas.
                       AppGroup(
-                        title: 'Próximas escalas',
+                        title: 'Próximos compromissos',
                         dividerIndent: AppGroup.textIndent,
                         children: [
-                          if (nextEvents.isEmpty)
+                          if (nextRows.isEmpty)
                             AppGroupRow(
                               title: _filter.isMine
-                                  ? 'Nenhuma escala sua por perto.'
-                                  : 'Nenhuma outra escala próxima.',
+                                  ? 'Nada seu por perto.'
+                                  : 'Nada mais marcado por perto.',
                               showChevron: false,
                             )
                           else ...[
-                            for (final event in nextEvents.take(_upcomingCount))
-                              CompactScheduleTile(
-                                key: ValueKey('upcoming-${event.id}'),
-                                event: event,
+                            for (final row in nextRows.take(_upcomingCount))
+                              _agendaRow(
+                                row,
+                                prefixo: 'upcoming',
                                 canManage: team.canManage,
                                 membershipId: team.membershipId,
                                 wide: wide,
                               ),
-                            if (nextEvents.length > _upcomingCount)
+                            if (nextRows.length > _upcomingCount)
                               AppGroupRow(
                                 icon: Icons.expand_more_rounded,
-                                title: 'Ver mais escalas',
+                                title: 'Ver mais',
                                 showChevron: false,
                                 onTap: () =>
                                     setState(() => _upcomingCount += 6),
@@ -469,6 +506,35 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       ),
     );
   }
+}
+
+/// Uma linha da agenda, seja ela escala ou evento.
+///
+/// O `switch` é exaustivo por construção ([AgendaEntry] é `sealed`): quando
+/// aparecer uma terceira natureza de compromisso, é o compilador que cobra o
+/// desenho dela, e não uma tela mostrando uma linha em branco.
+Widget _agendaRow(
+  AgendaEntry row, {
+  required String prefixo,
+  required bool canManage,
+  required String membershipId,
+  required bool wide,
+}) {
+  final key = ValueKey('$prefixo-${row.rowId}');
+  return switch (row) {
+    ScheduleEntry(:final event) => CompactScheduleTile(
+        key: key,
+        event: event,
+        canManage: canManage,
+        membershipId: membershipId,
+        wide: wide,
+      ),
+    TeamEventEntry(:final event) => TeamEventTile(
+        key: key,
+        event: event,
+        wide: wide,
+      ),
+  };
 }
 
 /// O dia sem escala, dito pelo que de fato aconteceu.

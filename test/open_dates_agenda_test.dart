@@ -89,7 +89,7 @@ void main() {
     // Nenhuma data em aberto é "sua": não há ninguém escalado nela, e
     // deixá-las ali faria o recorte pessoal mentir.
     expect(find.text('Datas sem escala'), findsNothing);
-    expect(find.text('Nenhuma escala sua por perto.'), findsOneWidget);
+    expect(find.text('Nada seu por perto.'), findsOneWidget);
   });
 
   testWidgets('quem não gerencia não vê datas em aberto', (tester) async {

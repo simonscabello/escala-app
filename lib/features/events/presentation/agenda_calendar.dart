@@ -13,7 +13,8 @@ import '../domain/event_datetime.dart';
 /// também é selecionável e os pontos representam as escalas que existem.
 ///
 /// **O que o ponto significa é de quem chama** ([legend]): a agenda inteira
-/// pinta os dias com escala; o recorte pessoal pinta os dias em que você toca.
+/// pinta os dias com algo marcado -- escala ou evento --, e o recorte pessoal
+/// pinta os dias que são seus.
 /// É o mesmo desenho dizendo duas coisas, e o rótulo embaixo é o que separa as
 /// duas — inclusive para quem ouve a tela.
 class AgendaCalendar extends StatelessWidget {
@@ -26,7 +27,7 @@ class AgendaCalendar extends StatelessWidget {
     required this.onSelected,
     required this.onMonthChanged,
     required this.onToday,
-    this.legend = 'Com escala',
+    this.legend = 'Com compromisso',
   });
 
   final DateTime month;

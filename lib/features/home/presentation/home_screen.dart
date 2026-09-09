@@ -21,6 +21,9 @@ import '../../events/presentation/event_schedule_facts.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/presentation/team_onboarding.dart';
+import '../../team_events/data/team_event_repository.dart';
+import '../../team_events/domain/team_event.dart';
+import '../../team_events/presentation/team_event_tile.dart';
 import '../../update/presentation/app_update_banner.dart';
 import '../domain/home_summary.dart';
 import 'home_next_card.dart';
@@ -35,11 +38,18 @@ import 'home_quick_access.dart';
 /// da própria. É essa diferença que dá razão à Home; o resto ela pega
 /// emprestado.
 ///
-/// **Nenhum dado novo, nenhum endpoint novo.** A tela observa exatamente o
-/// mesmo `eventsProvider((teamId, 'upcoming'))` da agenda — mesma chave, mesma
-/// resposta em cache, zero requisição a mais — e a contagem de sugestões vem do
-/// provider que já alimenta o selo da aba Equipe. Toda a leitura dessa lista
-/// mora em [HomeSummary], fora do widget.
+/// **Quase nada aqui é dado novo.** A tela observa exatamente o mesmo
+/// `eventsProvider((teamId, 'upcoming'))` da agenda — mesma chave, mesma
+/// resposta em cache — e a contagem de sugestões vem do provider que já
+/// alimenta o selo da aba Equipe. Toda a leitura dessa lista mora em
+/// [HomeSummary], fora do widget.
+///
+/// **A única exceção é o próximo evento da equipe**, que custa uma requisição
+/// própria. Ela se paga porque a reunião de quinta não está em lugar nenhum do
+/// que já vem: não é escala, e "o que vem por aí" sem ela responde pela
+/// metade. Fora isso a regra continua de pé — se um bloco novo precisar de
+/// mais dados agregados, o caminho é a API devolver o agregado, e não a tela
+/// somar requisições.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -80,6 +90,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, 'upcoming')));
     if (events.hasValue) _maybeAskForNotifications();
+
+    // **A exceção à regra de não somar requisições.** A Home nasceu lendo só o
+    // que a agenda já lia, e isso continua valendo para tudo o mais. O próximo
+    // evento é a exceção porque ele não está em lugar nenhum do que já vem: a
+    // reunião de quinta não é escala, e "o que vem por aí" sem ela é uma
+    // resposta pela metade. Falha em silêncio — um churrasco que não carregou
+    // não pode esconder a manchete.
+    final proximoEvento = ref
+        .watch(teamEventsProvider((teamId, 'upcoming')))
+        .valueOrNull
+        ?.data
+        .firstOrNull;
 
     // Largura da **janela**: o botão de criar escala muda de lugar (canto
     // inferior no celular, cabeçalho no monitor), e essa decisão é sobre o
@@ -143,15 +165,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       canManage: team.canManage,
                       now: DateTime.now(),
                     ),
+                    nextTeamEvent: proximoEvento,
                     fromCache: cached.fromCache,
                     cachedAt: cached.cachedAt,
                     onRefresh: () {
-                      // O selo das sugestões cai junto: puxar a Home para
-                      // baixo é o gesto de "traga o que mudou", e trazer só
-                      // metade seria pior do que não trazer nada.
+                      // O selo das sugestões e o próximo evento caem junto:
+                      // puxar a Home para baixo é o gesto de "traga o que
+                      // mudou", e trazer só um terço seria pior do que não
+                      // trazer nada.
                       if (team.canManage) {
                         ref.invalidate(openSuggestionCountProvider(teamId));
                       }
+                      ref.invalidate(teamEventsProvider((teamId, 'upcoming')));
                       return ref.refresh(
                         eventsProvider((teamId, 'upcoming')).future,
                       );
@@ -183,6 +208,7 @@ class _HomeBody extends StatelessWidget {
     required this.teamId,
     required this.canManage,
     required this.summary,
+    required this.nextTeamEvent,
     required this.fromCache,
     required this.cachedAt,
     required this.onRefresh,
@@ -191,6 +217,11 @@ class _HomeBody extends StatelessWidget {
   final String teamId;
   final bool canManage;
   final HomeSummary summary;
+
+  /// O próximo compromisso da equipe que **não é escala**. Nulo quando não há
+  /// nenhum marcado — e aí o bloco não existe, como todo bloco desta tela.
+  final TeamEvent? nextTeamEvent;
+
   final bool fromCache;
   final DateTime? cachedAt;
   final Future<void> Function() onRefresh;
@@ -250,6 +281,19 @@ class _HomeBody extends StatelessWidget {
                       hero,
                       const SizedBox(height: AppSpacing.xl),
                       quickAccess,
+                    ],
+                    // **Um evento, e não uma lista.** A Home acabou de deixar
+                    // de repetir a agenda; repetir de novo, agora com os
+                    // eventos, seria o mesmo erro com outra roupa. O que ela
+                    // responde aqui é "tem alguma coisa da equipe chegando?",
+                    // e isso tem uma resposta só.
+                    if (nextTeamEvent case final evento?) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      AppGroup(
+                        title: 'Próximo evento',
+                        dividerIndent: AppGroup.textIndent,
+                        children: [TeamEventTile(event: evento)],
+                      ),
                     ],
                     if (summary.notices.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.xl),

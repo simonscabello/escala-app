@@ -46,16 +46,16 @@ void main() {
 
     // O widget, e não uma cópia parecida: é o que impede as duas telas de
     // divergirem no primeiro ajuste.
-    expect(find.byKey(const ValueKey('selected-e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('selected-escala/e1')), findsOneWidget);
     expect(
-      tester.widget(find.byKey(const ValueKey('selected-e1'))),
+      tester.widget(find.byKey(const ValueKey('selected-escala/e1'))),
       isA<CompactScheduleTile>(),
     );
     // A escala do dia não se repete nas próximas.
-    expect(find.byKey(const ValueKey('upcoming-e1')), findsNothing);
+    expect(find.byKey(const ValueKey('upcoming-escala/e1')), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('selected-e1')),
+        of: find.byKey(const ValueKey('selected-escala/e1')),
         matching: find.textContaining('19:30'),
       ),
       findsOneWidget,
@@ -72,24 +72,24 @@ void main() {
     // Um domingo da equipe em que Simon não entra.
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-13')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('selected-e2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('selected-escala/e2')), findsOneWidget);
 
     await tester.tap(find.text('Minhas escalas'));
     await tester.pumpAndSettle();
 
     // O dia sai da lista, mas a frase não diz que a equipe está livre --
     // esconder uma escala que existe seria o pior defeito do filtro.
-    expect(find.byKey(const ValueKey('selected-e2')), findsNothing);
+    expect(find.byKey(const ValueKey('selected-escala/e2')), findsNothing);
     expect(find.text('Você não está escalado neste dia.'), findsOneWidget);
     expect(find.text('Nada marcado para este dia.'), findsNothing);
 
     // Nas próximas sobra a única escala dele.
-    expect(find.byKey(const ValueKey('upcoming-e1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('upcoming-e3')), findsNothing);
+    expect(find.byKey(const ValueKey('upcoming-escala/e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('upcoming-escala/e3')), findsNothing);
 
     // E o ponto do calendário passa a significar outra coisa.
-    expect(find.text('Você está escalado'), findsOneWidget);
-    expect(find.text('Com escala'), findsNothing);
+    expect(find.text('Seus compromissos'), findsOneWidget);
+    expect(find.text('Com compromisso'), findsNothing);
   });
 
   testWidgets('sem nenhuma escala sua, o recorte diz isso e não some a tela',
@@ -100,7 +100,7 @@ void main() {
 
     expect(find.text('Setembro 2026'), findsOneWidget);
     expect(find.text('Você não tem escala neste mês.'), findsOneWidget);
-    expect(find.text('Nenhuma escala sua por perto.'), findsOneWidget);
+    expect(find.text('Nada seu por perto.'), findsOneWidget);
   });
 
   testWidgets('anterior, seguinte e Hoje mantêm seleção no mês visível',
@@ -123,7 +123,7 @@ void main() {
     await _pumpAgenda(tester, const Size(400, 1400));
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('selected-e1')));
+    await tester.tap(find.byKey(const ValueKey('selected-escala/e1')));
     await tester.pumpAndSettle();
     expect(find.text('detalhe e1'), findsOneWidget);
     final context = tester.element(find.text('detalhe e1'));
@@ -141,7 +141,7 @@ void main() {
     await _pumpAgenda(tester, const Size(400, 1400), take: 0);
     expect(find.text('Setembro 2026'), findsOneWidget);
     expect(find.text('Nada marcado para este dia.'), findsOneWidget);
-    expect(find.text('Nenhuma outra escala próxima.'), findsOneWidget);
+    expect(find.text('Nada mais marcado por perto.'), findsOneWidget);
     // A agenda vazia continua oferecendo o caminho de criar.
     expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.text('Criar escala'), findsOneWidget);
@@ -152,7 +152,7 @@ void main() {
     await _pumpAgenda(tester, const Size(400, 1400), semEquipe: true);
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-09-10')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('selected-e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('selected-escala/e1')), findsOneWidget);
     expect(find.textContaining('VOCÊ'), findsNothing);
     expect(find.textContaining('pessoa'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -181,7 +181,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('agenda-day-2026-08-31')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('selected-old')), findsOneWidget);
+    expect(find.byKey(const ValueKey('selected-escala/old')), findsOneWidget);
     expect(find.textContaining('19:30'), findsOneWidget);
   });
 

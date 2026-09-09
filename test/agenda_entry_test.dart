@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/features/events/domain/agenda_entry.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
+import 'package:louvor_app/features/team_events/domain/team_event.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
 void main() {
@@ -22,7 +23,11 @@ void main() {
     ]);
     expect(
       entries.map((e) => e.id),
-      ['thursday/thursday', 'sunday/morning', 'sunday/night'],
+      [
+        'escala/thursday/thursday',
+        'escala/sunday/morning',
+        'escala/sunday/night',
+      ],
     );
     expect(groupAgendaEntries(entries)['2026-09-13'], hasLength(2));
   });
@@ -42,7 +47,9 @@ void main() {
   });
 
   test('cache antigo sem services conserva o horário original', () {
-    final entry = agendaEntries([event('old', '2026-09-10T22:30:00Z')]).single;
+    final entry =
+        agendaEntries([event('old', '2026-09-10T22:30:00Z')]).single
+            as ScheduleEntry;
     expect(entry.title, 'Culto');
     expect(entry.day, DateTime(2026, 9, 10));
   });
@@ -53,17 +60,80 @@ void main() {
         'sunday',
         '2026-09-13T11:30:00Z',
         services: [
-          {'id': 'morning', 'label': 'Manhã', 'startsAt': '2026-09-13T11:30:00Z'},
+          {
+            'id': 'morning',
+            'label': 'Manhã',
+            'startsAt': '2026-09-13T11:30:00Z',
+          },
           {'id': 'night', 'label': 'Noite', 'startsAt': '2026-09-13T22:00:00Z'},
         ],
       ),
     ]);
 
-    // Dois pontos no calendário seria certo; duas linhas na lista faria a
-    // equipe achar que tem escala em dobro.
+    // Dois pontos no calendário é certo; duas linhas na lista faria a equipe
+    // achar que tem escala em dobro.
     expect(groupAgendaEntries(entries)['2026-09-13'], hasLength(2));
-    final escalas = groupAgendaEvents(entries)['2026-09-13']!;
-    expect(escalas.map((e) => e.id), ['sunday']);
+    final linhas = groupAgendaRows(entries)['2026-09-13']!;
+    expect(linhas, hasLength(1));
+    expect((linhas.single as ScheduleEntry).event.id, 'sunday');
+  });
+
+  group('o evento da equipe na agenda', () {
+    test('entra na mesma lista, ordenado pelo relógio', () {
+      final entries = agendaEntries(
+        [event('domingo', '2026-09-13T11:30:00Z')],
+        teamEvents: [
+          teamEvent('churrasco', '2026-09-12T15:00:00Z'),
+          teamEvent('reuniao', '2026-09-14T23:00:00Z'),
+        ],
+      );
+
+      // Misturados, e não a agenda de escalas seguida da de eventos: quem
+      // abre a tela quer o mês como ele acontece.
+      expect(
+        entries.map((e) => e.id),
+        ['evento/churrasco', 'escala/domingo/domingo', 'evento/reuniao'],
+      );
+    });
+
+    test('cada evento é uma linha, e marca o próprio dia', () {
+      final entries = agendaEntries(
+        const [],
+        teamEvents: [teamEvent('churrasco', '2026-09-12T15:00:00Z')],
+      );
+
+      expect(groupAgendaEntries(entries).keys, ['2026-09-12']);
+      final linha = groupAgendaRows(entries)['2026-09-12']!.single;
+      expect(linha, isA<TeamEventEntry>());
+      expect((linha as TeamEventEntry).event.title, 'churrasco');
+    });
+
+    test('o recorte pessoal não esconde o evento da equipe', () {
+      final entries = agendaEntries(
+        [
+          event(
+            'minha',
+            '2026-09-10T22:30:00Z',
+            assignments: [grupo('Bateria', 'm-eu')],
+          ),
+          event('da-equipe', '2026-09-13T11:30:00Z'),
+        ],
+        teamEvents: [teamEvent('churrasco', '2026-09-12T15:00:00Z')],
+      );
+
+      final minhas = filterAgendaEntries(
+        entries,
+        filter: AgendaFilter.mine,
+        membershipId: 'm-eu',
+      );
+
+      // O domingo em que ela não toca sai; o churrasco fica. Um evento não
+      // tem escalados -- é de todo mundo, inclusive dela.
+      expect(minhas.map((e) => e.id), [
+        'escala/minha/minha',
+        'evento/churrasco',
+      ]);
+    });
   });
 
   test('o recorte pessoal sai de estar escalado em alguma função', () {
@@ -71,22 +141,7 @@ void main() {
       event(
         'minha',
         '2026-09-10T22:30:00Z',
-        assignments: [
-          {
-            'positionId': 'p1',
-            'positionName': 'Bateria',
-            'sortOrder': 0,
-            'members': [
-              {
-                'id': 'a1',
-                'membershipId': 'm-eu',
-                'displayName': 'Simon',
-                'note': null,
-                'isRegisteredForPosition': true,
-              },
-            ],
-          },
-        ],
+        assignments: [grupo('Bateria', 'm-eu')],
       ),
       event('da-equipe', '2026-09-13T11:30:00Z'),
     ]);
@@ -104,7 +159,7 @@ void main() {
         entries,
         filter: AgendaFilter.mine,
         membershipId: 'm-eu',
-      ).map((e) => e.event.id),
+      ).map((e) => (e as ScheduleEntry).event.id),
       ['minha'],
     );
     // Sem membership não há recorte pessoal possível: some tudo, em vez de
@@ -119,6 +174,21 @@ void main() {
     );
   });
 }
+
+Map<String, dynamic> grupo(String funcao, String membershipId) => {
+      'positionId': 'p-$funcao',
+      'positionName': funcao,
+      'sortOrder': 0,
+      'members': [
+        {
+          'id': 'a-$funcao',
+          'membershipId': membershipId,
+          'displayName': 'Simon',
+          'note': null,
+          'isRegisteredForPosition': true,
+        },
+      ],
+    };
 
 Event event(
   String id,
@@ -135,4 +205,16 @@ Event event(
       'timezone': 'America/Sao_Paulo',
       'services': services,
       'assignments': assignments,
+    });
+
+TeamEvent teamEvent(String id, String startsAt, {String? endsAt}) =>
+    TeamEvent.fromJson({
+      'id': id,
+      'teamId': 't1',
+      'title': id,
+      'startsAt': startsAt,
+      'endsAt': endsAt,
+      'location': null,
+      'notes': null,
+      'timezone': 'America/Sao_Paulo',
     });
