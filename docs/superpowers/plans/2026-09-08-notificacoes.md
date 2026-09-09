@@ -179,11 +179,7 @@ Três observações que são regra e não detalhe:
 
 ## Fora do v1 — decidido, não esquecido
 
-- **Lembretes agendados** (ensaio hoje, culto amanhã, "domingo é daqui a três
-  dias e a escala ainda é rascunho"). É a segunda coisa mais valiosa do sistema,
-  mas exige `@nestjs/schedule` e um cron, que o backend não tem. Fase 2, e vale
-  a pena. Nota de operação: `numReplicas = 1` no `railway.toml` faz um cron em
-  processo ser seguro hoje; com duas réplicas ele dispararia duplicado.
+- ~~**Lembretes agendados**~~ — **feitos**, ver a seção abaixo.
 - **Push na Web.** Exige VAPID key, um `firebase-messaging-sw.js` em `app/web/`
   e HTTPS. A versão Web se usa sentado na mesa, onde a agenda já está aberta —
   o valor do push está no celular.
@@ -192,7 +188,10 @@ Três observações que são regra e não detalhe:
   é chutar; virar categorias depois é uma migration barata.
 - **Central de notificações dentro do app.** Uma segunda superfície para manter
   em sincronia com as telas que já existem (agenda, sugestões, histórico).
-- **`notification_log`.** Ver decisão 7.
+- **`notification_log`.** Ver decisão 7. (Uma tabela com esse papel acabou
+  entrando pelos lembretes, e não pelas notificações: `notification_logs` é a
+  deduplicação do agendador. As notificações de gravação continuam sem ela --
+  elas já são únicas por definição.)
 - **Confirmação de leitura** ("Fulano ainda não abriu a escala"). Vira
   vigilância, e vai contra a mesma linha que escondeu o nome de quem recusa uma
   sugestão.
@@ -800,3 +799,85 @@ Duas coisas que esse ambiente não cobre, e continuam sem verificação:
   um celular no bolso.
 
 Ambas só se verificam num Android 13+ físico, com o app horas em segundo plano.
+
+---
+
+## Segunda rodada: linguagem humana e lembretes (08/09/2026)
+
+A implementação estava correta e os textos, mecânicos -- tinham cara de sistema
+administrativo, não de uma equipe que se prepara para servir junta.
+
+### O que mudou nos textos
+
+Os 14 avisos foram reescritos. Três regras passaram a valer para todo texto
+novo, e as três estão no `AGENTS.md`:
+
+- **Dia da semana sempre por extenso.** "domingo", nunca "dom". A equipe tem
+  gente de idades e familiaridades muito diferentes com aplicativo, e `qui` e
+  `qua` se confundem numa olhada rápida na tela de bloqueio -- que é exatamente
+  onde o aviso é lido. `weekdayShort` foi **deletado**, não desativado: deixá-lo
+  vivo era convidar o próximo a usá-lo.
+- **Hora do jeito que se fala:** `9h`, `19h30`, nunca `09:00`. O formato de
+  tabela (`wallClock`) sobrevive só no histórico, que é uma tabela mesmo.
+- **`em`, nunca `na`/`no`, para funções.** Os nomes são cadastrados pela equipe
+  ("Ministração", "Data show"), e adivinhar o gênero produziria "no
+  Ministração". Com dia da semana é o contrário -- o gênero é fixo em português
+  --, então `onScheduleDay` concorda certo: "no domingo", "na segunda-feira".
+
+`servicesLabel` passou a dizer "Cultos às 9h e 19h" em vez de "Manhã 09:00,
+Noite 19:00". **O rótulo do culto se perdeu no aviso**, e isso é uma troca
+consciente: numa linha só ele dobrava o tamanho para repetir o que a hora já
+diz. A tela da escala continua mostrando o rótulo, que é onde ele importa.
+
+### `SCHEDULE_DETAILS` deixou de ler o histórico
+
+Ele filtrava as frases de `describeDetailsChange` por prefixo de string. Era
+frágil de um jeito silencioso: renomear "Local" no histórico calaria a
+notificação, sem erro em lugar nenhum. E contrariava a decisão 1 deste plano,
+que a própria implementação tinha violado.
+
+Agora recebe o **antes/depois estruturado** e monta a própria frase. O
+histórico ficou intocado.
+
+### Lembretes
+
+Cinco novos, de uma família diferente: notificação é *aconteceu alguma coisa*,
+lembrete é *há algo útil que você pode fazer agora*. Regras, prazos e a tabela
+de deduplicação estão na seção "Notificações" do `AGENTS.md`.
+
+Três decisões que sustentam o resto:
+
+- **`@nestjs/schedule` fixado na linha 5.x.** A 12 é ESM e quebra o Jest
+  CommonJS do projeto. Preferi a versão CJS a mexer no `transformIgnorePatterns`
+  de toda a suíte por causa de uma dependência.
+- **Grava primeiro, envia depois.** Morrendo o processo entre as duas coisas,
+  perde-se um lembrete -- muito melhor do que repetir. O produto suporta um
+  aviso a menos; não suporta virar máquina de spam.
+- **Um lembrete por escala por pessoa por dia.** Com o ensaio no sábado e o
+  culto no domingo, "hoje tem ensaio" e "amanhã é dia de servir" cairiam no
+  mesmo sábado. O ensaio de hoje ganha.
+
+`assignedUserIds`, `leaderUserIds` e `positionsByMember` saíram do
+`NotificationsService` para `audience.ts`: os lembretes precisavam exatamente
+das mesmas regras, e a segunda cópia é que teria esquecido o filtro de conta
+um dia.
+
+### Um bug pré-existente, encontrado por acaso
+
+`song-suggestions.spec.ts` calculava "ontem" em UTC e comparava com o dia civil
+da equipe. Ele falha na janela entre a meia-noite de Greenwich e a de São Paulo
+-- que era exatamente o horário em que a suíte rodou (UTC 00:01, SP 21:01).
+Veio com o commit das sugestões, não com este trabalho. Corrigido; o teste da
+divergência de fuso no mesmo arquivo dependia do comportamento antigo, e as
+duas leituras foram separadas em vez de misturadas.
+
+### Verificação
+
+Backend: `tsc --noEmit` limpo, **205 testes em 15 suítes** (41 novos, em
+`notification-text.spec.ts` -- puro, sem banco -- e `reminders.spec.ts`).
+App: `flutter analyze` sem issues, **267 testes**.
+
+**Nenhum arquivo do Flutter mudou.** O app trata `kind` como string e nunca
+decide por ele: renderiza título e corpo do FCM e navega pelo `route`. Os cinco
+tipos novos não exigiram nada lá, o que é a propriedade "o backend é a fonte da
+verdade" se sustentando sozinha.

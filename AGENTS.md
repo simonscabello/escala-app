@@ -106,6 +106,8 @@ Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
 - **Notificações push** (seção própria abaixo): a escala publicada avisa quem
   está nela, e quem lidera fica sabendo da sugestão nova e de quem avisou que
   não pode num domingo em que já está escalado.
+- **Lembretes agendados**: repertório para ouvir, ensaio de hoje, véspera do
+  culto, convite a sugerir e repertório vazio — com deduplicação em banco.
 
 O que o plano ainda prevê e **não** foi feito: lembretes agendados (ensaio hoje,
 culto amanhã, domingo ainda em rascunho), modo culto offline (letra garantida
@@ -849,13 +851,39 @@ gravação que já existiam e que já calculavam o que mudou.
    vazia. O que sobra é publicar e corrigir o horário em seguida — dois avisos
    em minutos, aceito.
 
-### O catálogo
+### Duas famílias
 
-Escala: `SCHEDULE_PUBLISHED`, `ASSIGNMENT_ADDED`, `ASSIGNMENT_REMOVED`,
-`ASSIGNMENT_MOVED`, `SCHEDULE_DETAILS`, `SETLIST_READY`, `SETLIST_CHANGED`,
-`SCHEDULE_CANCELLED`, `SCHEDULE_UNPUBLISHED`. Equipe: `SUGGESTION_CREATED`,
-`SUGGESTION_ACCEPTED`, `SUGGESTION_DECLINED`, `UNAVAILABLE_ASSIGNED`,
-`INVITE_ACCEPTED`.
+- **Notificação** — *aconteceu alguma coisa*. Nasce de uma gravação, no mesmo
+  instante em que ela acontece. Escala: `SCHEDULE_PUBLISHED`,
+  `ASSIGNMENT_ADDED`, `ASSIGNMENT_REMOVED`, `ASSIGNMENT_MOVED`,
+  `SCHEDULE_DETAILS`, `SETLIST_READY`, `SETLIST_CHANGED`, `SCHEDULE_CANCELLED`,
+  `SCHEDULE_UNPUBLISHED`. Equipe: `SUGGESTION_CREATED`, `SUGGESTION_ACCEPTED`,
+  `SUGGESTION_DECLINED`, `UNAVAILABLE_ASSIGNED`, `INVITE_ACCEPTED`.
+- **Lembrete** — *há algo útil que você pode fazer agora*. Nasce do relógio:
+  `SETLIST_REMINDER`, `REHEARSAL_REMINDER`, `SERVICE_REMINDER`,
+  `SUGGESTION_NUDGE`, `SETLIST_EMPTY_NUDGE`. Seção própria abaixo.
+
+### Como se escreve um aviso
+
+O texto é lido na tela de bloqueio, por gente de idades e familiaridades muito
+diferentes com aplicativo. Daí três regras que valem para todo texto novo:
+
+- **Dia da semana sempre por extenso.** "domingo", nunca "dom" — `qui` e `qua`
+  se confundem numa olhada rápida, e o custo de escrever inteiro são alguns
+  caracteres. `weekdayLong` é o único caminho; **não existe `weekdayShort` no
+  projeto**, e isso é de propósito.
+- **Hora do jeito que se fala.** "9h", "19h30" — não "09:00". `naturalHour`.
+  O formato de tabela (`wallClock`) sobrevive **só no histórico**, que é uma
+  tabela mesmo.
+- **`em`, nunca `na`/`no`, para funções.** Os nomes são cadastrados pela equipe
+  ("Ministração", "Data show"), e adivinhar o gênero produziria "no
+  Ministração". Com dias da semana é o contrário: o gênero é fixo em português,
+  então `onScheduleDay` concorda certo ("no domingo", "na segunda-feira").
+
+Vocabulário: **servir, equipe, preparar, repertório, ensaiar, com a gente**.
+Situação positiva pode ter alegria (`Pedro agora faz parte da equipe!`);
+situação operacional é clara; situação negativa é respeitosa e **sem frase
+motivacional** — cancelamento não se enfeita.
 
 Quatro detalhes que são regra e não acabamento:
 
@@ -872,6 +900,38 @@ Quatro detalhes que são regra e não acabamento:
   radar: o líder só descobriria reabrindo aquele domingo. Abre direto em
   `/agenda/:eventId/escalar`, e entrega boa parte da "solicitação de troca" sem
   criar entidade nenhuma.
+
+### Lembretes
+
+Saem às **9h no fuso da equipe** — de manhã, para dar tempo de a pessoa fazer
+alguma coisa com o aviso. O cron acorda de hora em hora e só trabalha nas
+equipes cuja hora local bateu; Manaus e São Paulo não recebem no mesmo instante.
+
+Os prazos estão em `reminder-settings.ts`, **num lugar só**: mudar "três dias"
+para "quatro" é conversa de produto, não caça a literais.
+
+| Lembrete | Quando | Para quem | Só se |
+|---|---|---|---|
+| `SUGGESTION_NUDGE` | 5 dias antes | escalados | repertório vazio |
+| `SETLIST_EMPTY_NUDGE` | 4 dias antes | OWNER/LEADER | repertório vazio |
+| `SETLIST_REMINDER` | 3 dias antes | escalados | há repertório |
+| `SERVICE_REMINDER` | véspera | escalados | — |
+| `REHEARSAL_REMINDER` | dia do ensaio | escalados | ensaio ainda por vir |
+
+Três coisas que sustentam isso e não são detalhe:
+
+- **`notification_logs` é a deduplicação**, com chave única
+  `(userId, kind, eventId)`. Sem ela o cron mandaria o mesmo lembrete 24 vezes
+  por dia. Timer em memória não serviria: o container reinicia a cada deploy.
+- **Grava primeiro, envia depois.** Morrendo o processo entre as duas coisas,
+  perde-se um lembrete — muito melhor do que repetir. O produto suporta um
+  aviso a menos; não suporta virar máquina de spam.
+- **Um lembrete por escala por pessoa por dia.** Com o ensaio no sábado e o
+  culto no domingo, "hoje tem ensaio" e "amanhã é dia de servir" cairiam no
+  mesmo sábado. O ensaio de hoje ganha.
+
+O cron em processo é seguro porque `numReplicas = 1`. Com duas réplicas, quem
+impediria o aviso dobrado seria a chave única — não o cron.
 
 ### Configuração
 
@@ -912,9 +972,8 @@ chegar e não aparecer, sem erro em lugar nenhum.
   do `flutter_local_notifications`. Sem ela o build falha em
   `checkReleaseAarMetadata`, e a mensagem não diz qual dependência pediu.
 
-Fora do v1, decidido: lembretes agendados (exigem `@nestjs/schedule` e um cron),
-push na Web (VAPID + service worker), preferências por categoria, central de
-notificações dentro do app e confirmação de leitura.
+Fora do v1, decidido: push na Web (VAPID + service worker), preferências por
+categoria, central de notificações dentro do app e confirmação de leitura.
 
 Plano e registro de execução:
 `docs/superpowers/plans/2026-09-08-notificacoes.md`.
