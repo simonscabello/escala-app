@@ -40,6 +40,26 @@ class SuggestionAuthor {
   }
 }
 
+/// Que tipo de material é o link.
+///
+/// Enum e não três campos soltos na tela: é o que faz a lista e o detalhe
+/// mostrarem o mesmo ícone e o mesmo rótulo sem ninguém precisar lembrar de
+/// mudar nos dois lugares.
+enum SuggestionMaterialKind { lyrics, spotify, youtube }
+
+class SuggestionMaterial {
+  const SuggestionMaterial(this.kind, this.url);
+
+  final SuggestionMaterialKind kind;
+  final String url;
+
+  String get label => switch (kind) {
+        SuggestionMaterialKind.lyrics => 'Letra ou cifra',
+        SuggestionMaterialKind.spotify => 'Spotify',
+        SuggestionMaterialKind.youtube => 'YouTube',
+      };
+}
+
 /// Alguém da equipe pedindo que a equipe cante uma música.
 ///
 /// Uma coisa só, com data opcional: `targetDate` nulo quer dizer "para o
@@ -53,7 +73,9 @@ class SongSuggestion {
     required this.createdBy,
     this.songId,
     this.artist,
-    this.link,
+    this.lyricsUrl,
+    this.spotifyUrl,
+    this.youtubeUrl,
     this.targetDate,
     this.declineReason,
     this.inRepertoire = false,
@@ -70,7 +92,19 @@ class SongSuggestion {
   /// Já resolvido pelo servidor: com `songId`, é o título da música.
   final String title;
   final String? artist;
-  final String? link;
+
+  /// Onde a equipe encontra a música. Os mesmos três materiais que a tela de
+  /// uma música do repertório oferece.
+  ///
+  /// **Letra e cifra num campo só**, ao contrário de [Song]: quem sugere manda
+  /// o link que tem na mão. Obrigatório no servidor quando a sugestão não
+  /// aponta para o repertório — sem ele o líder teria de sair procurando.
+  ///
+  /// Com `songId`, o servidor cai nos links da própria música quando a
+  /// sugestão não trouxe os dela: a mesma regra do título.
+  final String? lyricsUrl;
+  final String? spotifyUrl;
+  final String? youtubeUrl;
 
   /// Dia civil pedido, ou nulo para "sem data".
   final DateTime? targetDate;
@@ -99,6 +133,20 @@ class SongSuggestion {
   /// Dá para pôr direto no culto? Sem cadastro, não há o que selecionar.
   bool get canGoToSetlist => songId != null;
 
+  /// Os materiais que existem, na ordem em que a tela os mostra.
+  ///
+  /// Só o que veio preenchido: link que não existe não vira botão apagado nem
+  /// linha "—". A lista usa isto para os indicadores miúdos do cartão, e a
+  /// tela de detalhes para os botões — uma verdade só, nos dois lugares.
+  List<SuggestionMaterial> get materials => [
+        if ((lyricsUrl ?? '').isNotEmpty)
+          SuggestionMaterial(SuggestionMaterialKind.lyrics, lyricsUrl!),
+        if ((spotifyUrl ?? '').isNotEmpty)
+          SuggestionMaterial(SuggestionMaterialKind.spotify, spotifyUrl!),
+        if ((youtubeUrl ?? '').isNotEmpty)
+          SuggestionMaterial(SuggestionMaterialKind.youtube, youtubeUrl!),
+      ];
+
   factory SongSuggestion.fromJson(Map<String, dynamic> json) {
     final raw = json['targetDate'] as String?;
     final parts = raw?.split('-').map(int.parse).toList();
@@ -108,7 +156,9 @@ class SongSuggestion {
       songId: json['songId'] as String?,
       title: json['title'] as String,
       artist: json['artist'] as String?,
-      link: json['link'] as String?,
+      lyricsUrl: json['lyricsUrl'] as String?,
+      spotifyUrl: json['spotifyUrl'] as String?,
+      youtubeUrl: json['youtubeUrl'] as String?,
       // Sem UTC nem fuso: é data de calendário, não instante. Mesma leitura de
       // `Unavailability.date`.
       targetDate: parts == null ? null : DateTime(parts[0], parts[1], parts[2]),

@@ -32,6 +32,10 @@ class AddSongScreen extends ConsumerStatefulWidget {
     required this.teamId,
     this.onCreated,
     this.initialSearch,
+    this.initialArtist,
+    this.initialLyricsUrl,
+    this.initialYoutubeUrl,
+    this.initialSpotifyUrl,
   });
 
   final String teamId;
@@ -42,6 +46,21 @@ class AddSongScreen extends ConsumerStatefulWidget {
   /// o nome já foi digitado uma vez por quem sugeriu, e obrigar o líder a
   /// digitá-lo de novo seria trabalho repetido. A busca dispara sozinha.
   final String? initialSearch;
+
+  /// O resto do que a sugestão trouxe.
+  ///
+  /// Quem sugeriu já mandou artista e links — o servidor até **exige** o link
+  /// da letra ou da cifra de música que não está no repertório. Pedir tudo de
+  /// novo ao líder é o tipo de trabalho repetido que faz a sugestão ficar para
+  /// depois e nunca ser respondida.
+  ///
+  /// Vale nas três portas de cadastro: o que o catálogo ou o Spotify já
+  /// trouxerem manda, e estes preenchem só o que ficou vazio (ver
+  /// [_aplicarLinksDaSugestao]).
+  final String? initialArtist;
+  final String? initialLyricsUrl;
+  final String? initialYoutubeUrl;
+  final String? initialSpotifyUrl;
 
   /// O que fazer com a música recém-criada.
   ///
@@ -154,7 +173,8 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
     });
 
     try {
-      final song = await create();
+      var song = await create();
+      song = await _aplicarLinksDaSugestao(song);
       if (!mounted) return;
 
       // A lista do repertório precisa enxergar a música nova: quem volta para
@@ -182,6 +202,58 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
     }
   }
 
+  /// Completa a música recém-criada com os links que a sugestão trouxe.
+  ///
+  /// **Só o que ficou vazio.** O catálogo traz cifra e letra de verdade, e o
+  /// enriquecimento do Spotify vai ao CifraClub: sobrescrever com o link que
+  /// alguém colou no celular trocaria o melhor pelo aproximado. E o que
+  /// chegou como "letra ou cifra" — um campo só na sugestão, porque perguntar
+  /// qual dos dois é cobrar uma classificação que não muda nada para quem
+  /// sugere — cai na coluna que o próprio endereço denuncia.
+  ///
+  /// Um PATCH a mais, e não campos no POST, porque as três portas de cadastro
+  /// têm corpos diferentes: aqui a regra é uma só para as três.
+  Future<Song> _aplicarLinksDaSugestao(Song song) async {
+    final letraOuCifra = widget.initialLyricsUrl?.trim();
+    final ehCifra = letraOuCifra != null && _pareceCifra(letraOuCifra);
+
+    final patch = <String, dynamic>{
+      if (ehCifra && (song.chordsUrl ?? '').isEmpty) 'chordsUrl': letraOuCifra,
+      if (letraOuCifra != null &&
+          !ehCifra &&
+          (song.lyricsUrl ?? '').isEmpty)
+        'lyricsUrl': letraOuCifra,
+      if ((widget.initialYoutubeUrl ?? '').isNotEmpty &&
+          (song.youtubeUrl ?? '').isEmpty)
+        'youtubeUrl': widget.initialYoutubeUrl!.trim(),
+      if ((widget.initialSpotifyUrl ?? '').isNotEmpty &&
+          (song.spotifyUrl ?? '').isEmpty)
+        'spotifyUrl': widget.initialSpotifyUrl!.trim(),
+    };
+    if (patch.isEmpty) return song;
+
+    try {
+      return await ref
+          .read(songRepositoryProvider)
+          .update(widget.teamId, song.id, patch);
+    } on ApiException {
+      // A música já existe, e é isso que o líder veio fazer. Um link recusado
+      // (endereço torto digitado por quem sugeriu) não pode desfazer o
+      // cadastro nem virar erro numa tela que deu certo — ele se completa na
+      // edição.
+      return song;
+    }
+  }
+
+  /// Site de cifra ou site de letra. Heurística curta de propósito: errar aqui
+  /// põe o link na outra coluna da mesma tela, e o líder corrige num toque.
+  static bool _pareceCifra(String url) {
+    final endereco = url.toLowerCase();
+    return endereco.contains('cifraclub') ||
+        endereco.contains('cifras') ||
+        endereco.contains('cifra');
+  }
+
   /// Porta de saída quando a música não existe nem no catálogo nem no
   /// Spotify. O backend sempre aceitou cadastro manual, mas a interface só
   /// expunha as duas buscas — numa equipe nova, sem catálogo e sem credenciais
@@ -193,6 +265,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       showDragHandle: true,
       builder: (_) => _ManualSongSheet(
         initialTitle: _controller.text.trim(),
+        initialArtist: widget.initialArtist,
       ),
     );
     if (draft == null || !mounted) return;
@@ -415,9 +488,12 @@ class _ManualSongDraft {
 /// pede o que identifica a música, para não transformar a saída de emergência
 /// da busca num formulário de doze campos.
 class _ManualSongSheet extends StatefulWidget {
-  const _ManualSongSheet({required this.initialTitle});
+  const _ManualSongSheet({required this.initialTitle, this.initialArtist});
 
   final String initialTitle;
+
+  /// Vem da sugestão que se está acolhendo, quando há uma.
+  final String? initialArtist;
 
   @override
   State<_ManualSongSheet> createState() => _ManualSongSheetState();
@@ -427,7 +503,8 @@ class _ManualSongSheetState extends State<_ManualSongSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title =
       TextEditingController(text: widget.initialTitle);
-  final _artist = TextEditingController();
+  late final TextEditingController _artist =
+      TextEditingController(text: widget.initialArtist ?? '');
 
   @override
   void dispose() {

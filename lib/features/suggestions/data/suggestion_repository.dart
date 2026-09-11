@@ -43,13 +43,31 @@ class SuggestionRepository {
     });
   }
 
+  /// Uma sugestão sozinha — o que a tela de detalhes abre.
+  ///
+  /// A tela busca em vez de confiar no objeto que a lista passou: sem isto ela
+  /// continuaria mostrando "pendente" depois de o próprio líder ter respondido
+  /// de outro aparelho.
+  Future<SongSuggestion> find(String teamId, String id) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/song-suggestions/$id',
+      );
+      return SongSuggestion.fromJson(response.data!);
+    });
+  }
+
+  /// `lyricsUrl` é obrigatório no servidor quando não há `songId`: sem
+  /// cadastro, o título sozinho manda o líder procurar.
   Future<SongSuggestion> create(
     String teamId, {
     required String title,
     required String reason,
     String? songId,
     String? artist,
-    String? link,
+    String? lyricsUrl,
+    String? spotifyUrl,
+    String? youtubeUrl,
     DateTime? targetDate,
   }) async {
     return _guard(() async {
@@ -60,7 +78,11 @@ class SuggestionRepository {
           'reason': reason,
           if (songId != null) 'songId': songId,
           if (artist != null && artist.isNotEmpty) 'artist': artist,
-          if (link != null && link.isNotEmpty) 'link': link,
+          if (lyricsUrl != null && lyricsUrl.isNotEmpty) 'lyricsUrl': lyricsUrl,
+          if (spotifyUrl != null && spotifyUrl.isNotEmpty)
+            'spotifyUrl': spotifyUrl,
+          if (youtubeUrl != null && youtubeUrl.isNotEmpty)
+            'youtubeUrl': youtubeUrl,
           if (targetDate != null) 'targetDate': dateKey(targetDate),
         },
       );
@@ -161,6 +183,15 @@ final openSuggestionCountProvider =
   );
   return abertas.length;
 });
+
+typedef SuggestionRef = ({String teamId, String id});
+
+/// Uma sugestão sozinha, para a tela de detalhes.
+final suggestionProvider =
+    FutureProvider.autoDispose.family<SongSuggestion, SuggestionRef>(
+  (ref, args) =>
+      ref.watch(suggestionRepositoryProvider).find(args.teamId, args.id),
+);
 
 final eventSuggestionsProvider =
     FutureProvider.autoDispose.family<EventSuggestions, String>(

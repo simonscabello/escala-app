@@ -32,6 +32,8 @@ import '../../features/songs/presentation/song_detail_screen.dart';
 import '../../features/songs/presentation/song_form_screen.dart';
 import '../../features/songs/presentation/song_usage_screen.dart';
 import '../../features/songs/presentation/songs_screen.dart';
+import '../../features/suggestions/domain/song_suggestion.dart';
+import '../../features/suggestions/presentation/suggestion_detail_screen.dart';
 import '../../features/suggestions/presentation/suggestions_screen.dart';
 import '../../features/team/presentation/create_team_screen.dart';
 import '../../features/team/presentation/member_form_screen.dart';
@@ -265,6 +267,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/equipe/sugestoes',
             builder: (_, __) =>
                 _withActiveTeam(ref, (id) => SuggestionsScreen(teamId: id)),
+            routes: [
+              // O detalhe também tem endereço próprio, para o aviso de "sua
+              // sugestão foi respondida" poder levar direto a ela. Aberto pela
+              // lista, quem empilha é o `Navigator` (ver
+              // `openSuggestionDetail`), que devolve a tela de trás intacta.
+              GoRoute(
+                path: ':suggestionId',
+                builder: (_, state) => _withRouteTeam(
+                  ref,
+                  state,
+                  (id) => SuggestionDetailScreen(
+                    teamId: id,
+                    suggestionId: state.pathParameters['suggestionId']!,
+                    initial: state.extra as SongSuggestion?,
+                  ),
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: '/equipe/musicas',

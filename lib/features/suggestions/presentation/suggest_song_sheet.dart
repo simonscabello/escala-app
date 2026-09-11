@@ -65,6 +65,9 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   final _reasonController = TextEditingController();
   final _titleController = TextEditingController();
   final _artistController = TextEditingController();
+  final _lyricsController = TextEditingController();
+  final _spotifyController = TextEditingController();
+  final _youtubeController = TextEditingController();
   Timer? _debounce;
 
   /// A escolha feita. Um dos três: música do repertório, resultado do Spotify,
@@ -91,6 +94,7 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     super.initState();
     _song = widget.song;
     _date = widget.targetDate;
+    if (_song != null) _preencherLinks(_song!);
   }
 
   @override
@@ -100,6 +104,9 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     _reasonController.dispose();
     _titleController.dispose();
     _artistController.dispose();
+    _lyricsController.dispose();
+    _spotifyController.dispose();
+    _youtubeController.dispose();
     super.dispose();
   }
 
@@ -110,6 +117,28 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
 
   String? get _artista =>
       _song?.artist ?? _external?.artist ?? _artistController.text.trim();
+
+  /// Sem cadastro, o link da letra ou da cifra é obrigatório — a mesma regra
+  /// do servidor, espelhada aqui para não gastar uma ida de rede só para
+  /// receber o mesmo "não".
+  bool get _exigeLetra => _song == null;
+
+  /// O que já se sabe dos links, preenchido sozinho.
+  ///
+  /// **Preencher é melhor que perguntar**: a URL do Spotify vem pronta da
+  /// busca, e os links da música do repertório já estão cadastrados. Os campos
+  /// continuam editáveis — o que se evita é pedir de novo o que já se tem.
+  void _preencherLinks(Song song) {
+    _lyricsController.text = song.chordsUrl ?? song.lyricsUrl ?? '';
+    _spotifyController.text = song.spotifyUrl ?? '';
+    _youtubeController.text = song.youtubeUrl ?? '';
+  }
+
+  void _limparLinks() {
+    _lyricsController.clear();
+    _spotifyController.clear();
+    _youtubeController.clear();
+  }
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
@@ -180,6 +209,13 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
       });
       return;
     }
+    if (_exigeLetra && _lyricsController.text.trim().isEmpty) {
+      setState(() {
+        _error = 'Essa música ainda não está no repertório. Mande o link da '
+            'letra ou da cifra.';
+      });
+      return;
+    }
 
     setState(() {
       _sending = true;
@@ -193,7 +229,9 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
             reason: reason,
             songId: _song?.id,
             artist: _artista,
-            link: _external?.spotifyUrl,
+            lyricsUrl: _lyricsController.text.trim(),
+            spotifyUrl: _spotifyController.text.trim(),
+            youtubeUrl: _youtubeController.text.trim(),
             targetDate: _date,
           );
 
@@ -247,6 +285,8 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
           if (!_escolhida) ..._buscaDeMusica(theme) else _escolhaFeita(theme),
 
           if (_escolhida) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _blocoLinks(theme),
             const SizedBox(height: AppSpacing.lg),
             _blocoData(theme),
             const SizedBox(height: AppSpacing.lg),
@@ -307,7 +347,10 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
                   horizontal: AppSpacing.lg,
                   vertical: AppSpacing.sm,
                 ),
-                onTap: () => setState(() => _song = song),
+                onTap: () => setState(() {
+                  _song = song;
+                  _preencherLinks(song);
+                }),
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(song.title),
@@ -327,7 +370,12 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
                   horizontal: AppSpacing.lg,
                   vertical: AppSpacing.sm,
                 ),
-                onTap: () => setState(() => _external = candidate),
+                // O Spotify já entrega a URL: gravá-la sozinha é o que
+                // separa "a equipe ouviu" de "a equipe leu um título".
+                onTap: () => setState(() {
+                  _external = candidate;
+                  _spotifyController.text = candidate.spotifyUrl;
+                }),
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(candidate.title),
@@ -425,11 +473,72 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
                 _song = null;
                 _external = null;
                 _manual = false;
+                // Os links vieram da escolha anterior; mantê-los amarraria a
+                // cifra de uma música ao título de outra.
+                _limparLinks();
               }),
               child: const Text('Trocar'),
             ),
         ],
       ),
+    );
+  }
+
+  /// Onde a equipe encontra a música.
+  ///
+  /// Fica **antes** do porquê e depois da escolha: é o bloco que o Spotify
+  /// preenche sozinho, e vê-lo já preenchido é o que faz a pessoa entender que
+  /// só falta completar o resto. A letra/cifra vem primeiro porque é a única
+  /// que o servidor às vezes exige.
+  Widget _blocoLinks(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Onde encontrar a música', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _lyricsController,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: _exigeLetra
+                ? 'Link da letra ou cifra'
+                : 'Link da letra ou cifra (opcional)',
+            hintText: 'https://www.cifraclub.com.br/...',
+            prefixIcon: const Icon(Icons.article_outlined),
+            // O motivo de ser obrigatório, e não só a cobrança: essa música
+            // ainda não existe no repertório, e o líder precisaria sair
+            // procurando qual das cinco versões é a certa.
+            helperText: _exigeLetra
+                ? 'Obrigatório: essa música ainda não está no repertório'
+                : null,
+            helperMaxLines: 2,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _spotifyController,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Spotify (opcional)',
+            hintText: 'https://open.spotify.com/track/...',
+            prefixIcon: Icon(Icons.headphones_rounded),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _youtubeController,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'YouTube (opcional)',
+            hintText: 'https://www.youtube.com/watch?v=...',
+            prefixIcon: Icon(Icons.play_circle_outline_rounded),
+          ),
+        ),
+      ],
     );
   }
 

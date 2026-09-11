@@ -99,9 +99,10 @@ Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
 - **Relatórios** de participação e de uso do repertório (seção Relatórios).
 - **Histórico da escala e trava de edição simultânea** (seção própria).
 - **Sugestões de música pela equipe** — qualquer integrante pede uma música,
-  para o repertório ou para um domingo, com justificativa assinada; quem monta
-  a escala vê as daquela data na tela do repertório (seção Sugestões da
-  equipe).
+  para o repertório ou para um domingo, com justificativa assinada e os links
+  de onde encontrá-la (letra/cifra, Spotify, YouTube); quem monta a escala vê
+  as daquela data na tela do repertório. A lista é compacta e cada sugestão tem
+  tela própria, com "Aceitar sugestão" e "Recusar" (seção Sugestões da equipe).
 
 - **Modo de repertório da escala** — planejado ou definido na hora (seção
   própria abaixo). O culto em que as músicas saem no momento deixou de aparecer
@@ -888,6 +889,74 @@ não faz sentido — ela já entrou.
 - sem data → "Por que vale a pena a equipe aprender essa música?"
 - com data → "Por que essa música nesse domingo?"
 
+### Onde encontrar a música: três links, e um deles obrigatório
+
+Três colunas — `lyricsUrl`, `spotifyUrl`, `youtubeUrl` — no lugar do `link`
+único que existia antes. O campo antigo guardava "o link que a pessoa mandou"
+sem dizer qual dos três era, e **por isso nunca apareceu em tela nenhuma**: não
+dá para rotular um botão sem saber para onde ele leva. A migration
+`20260911150000_song_suggestion_links` reparte o que havia pelo endereço
+(spotify.com, youtube.com/youtu.be, o resto) e derruba a coluna.
+
+**Letra e cifra num campo só**, ao contrário de `Song`, que separa os dois.
+Quem sugere manda o link que tem na mão, e perguntar "isso é letra ou cifra?"
+é cobrar uma classificação que não muda nada do que o líder faz com ele. Quem
+decide em qual coluna ele cai é o cadastro da música, na hora de acolher.
+
+**`lyricsUrl` é obrigatório quando não há `songId`** (`LYRICS_URL_REQUIRED`). A
+pergunta diante de uma sugestão é "o que é essa música?": com cadastro a
+resposta está a um toque; sem ele, um título manda o líder procurar — e
+procurar "Aleluia" devolve cinco versões, então ele para de procurar. Quem
+sugere tem o link na mão no momento em que sugere, e é ali que ele custa menos.
+
+A regra mora no **service**, e não no DTO: depende de `songId`, e uma classe de
+validação não lê o repertório.
+
+**Na leitura, o cadastro manda — e a sugestão preenche o que falta.** A mesma
+regra do título: com `songId`, `toPublic` cai em `song.chordsUrl ??
+song.lyricsUrl`, `song.spotifyUrl` e `song.youtubeUrl` quando a sugestão não
+trouxe os seus. Sugerir uma música do repertório não obriga ninguém a colar de
+novo o que já está lá.
+
+**O Spotify se preenche sozinho.** A escolha vinda da busca externa já tem a
+URL na mão; pedir que a pessoa a cole seria pedir o que já se tem.
+
+### A lista é índice; o detalhe é onde se decide
+
+O cartão nascia mostrando a justificativa inteira e os dois botões de decisão.
+Numa equipe ativa cada sugestão ocupava meia tela, e achar a de hoje virava
+rolagem. Agora:
+
+- **Cartão compacto** (`SuggestionCard`): título, artista, para quando, o motivo
+  cortado em uma linha, quem pediu, e uns ícones miúdos dizendo que há cifra,
+  áudio ou vídeo do outro lado. Repetida vira contagem (`+2 pessoas`) — os
+  nomes não cabem na linha e voltam por extenso no detalhe.
+- **Nenhum botão no cartão**, de propósito: decisão tomada de raspão numa lista
+  é decisão tomada sem ler o motivo, e o motivo é a razão de o campo ser
+  obrigatório. O cartão inteiro é o toque.
+- **`/equipe/sugestoes/:id`** (`SuggestionDetailScreen`) segue o formato da tela
+  de uma música do repertório — título grande, artista embaixo, materiais como
+  chips, corpo num cartão — porque é a mesma pergunta nos dois lugares. Só os
+  links que existem viram chip: botão apagado é promessa falsa.
+- As decisões ficam **no fim da página**, depois do motivo, empilhadas:
+  "Aceitar sugestão" e "Recusar" não cabem lado a lado num celular estreito, e
+  meio botão cortado num par de decisões opostas é como se toca na errada.
+- `GET /teams/:teamId/song-suggestions/:id` existe para o detalhe ser dono do
+  que mostra: sem ele a tela continuaria dizendo "pendente" depois de o líder
+  ter respondido de outro aparelho.
+
+**Aceitar sem cadastro reaproveita o que a sugestão trouxe.** `AddSongScreen`
+ganhou `initialArtist` e os três links; depois de criar (pelas três portas —
+manual, catálogo, Spotify), `_aplicarLinksDaSugestao` completa por PATCH **só
+o que ficou vazio**: o catálogo traz cifra de verdade e o enriquecimento vai ao
+CifraClub, e sobrescrever isso com o que alguém colou no celular trocaria o
+melhor pelo aproximado.
+
+**O rótulo da recusa mudou para "Recusar"** na tela de detalhes, a pedido do
+produto. O que está por trás continua igual e é o que importava no "por
+enquanto não": o motivo é opcional, o campo avisa que quem sugeriu vai ler, e
+`reopen` continua existindo para o toque errado não virar beco sem saída.
+
 ### Recusar é "Por enquanto não", e o motivo é opcional
 
 `declineReason` é nulável **de propósito**: às vezes o motivo certo (teologia,
@@ -921,6 +990,7 @@ que fez `EventSong.serviceId` ser `NOT NULL`.
 
 ```
 GET    /teams/:teamId/song-suggestions?scope=open|closed   toda a equipe
+GET    /teams/:teamId/song-suggestions/:id                 toda a equipe
 POST   /teams/:teamId/song-suggestions                     toda a equipe
 DELETE /teams/:teamId/song-suggestions/:id                 autor, ou LEADER+
 POST   /teams/:teamId/song-suggestions/:id/accept          LEADER+  { songId? }
@@ -951,8 +1021,9 @@ integrante, um número que ele não resolve seria enfeite.
 Sem push no projeto, **é esse selo que faz o líder descobrir que alguém
 sugeriu**. Sugestão que ninguém vê é sugestão que ninguém faz duas vezes.
 
-- `/equipe/sugestoes` — duas abas, "Abertas" e "Encerradas". O cartão mostra a
-  justificativa **inteira**, sem cortar: ela é o conteúdo, não um detalhe.
+- `/equipe/sugestoes` — duas abas, "Abertas" e "Encerradas". O cartão é
+  compacto e leva ao detalhe; a justificativa inteira mora lá (ver "A lista é
+  índice" acima).
 - No **Repertório**, um botão por papel: para quem lidera o flutuante continua
   "Adicionar" e "Sugerir" vai para o cabeçalho; para o integrante — que não
   tinha ação nenhuma naquela tela — o flutuante é "Sugerir".

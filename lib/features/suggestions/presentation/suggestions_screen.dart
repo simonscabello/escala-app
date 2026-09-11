@@ -9,15 +9,12 @@ import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
-import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
-import '../../songs/data/song_repository.dart';
-import '../../songs/domain/song_models.dart';
-import '../../songs/presentation/add_song_screen.dart';
 import '../data/suggestion_repository.dart';
 import '../domain/song_suggestion.dart';
 import 'suggest_song_sheet.dart';
+import 'suggestion_detail_screen.dart';
 
 /// As sugestões da equipe.
 ///
@@ -25,6 +22,14 @@ import 'suggest_song_sheet.dart';
 /// que aconteceu com a sugestão dele — inclusive o "por enquanto não" e o
 /// motivo, quando houver. Foi por não enxergar isso que o Repertório já esteve
 /// escondido atrás da engrenagem de Gerenciar equipe.
+///
+/// **A lista é índice, não é o conteúdo.** O cartão nasceu mostrando a
+/// justificativa inteira e as duas decisões do líder; com dezenas de sugestões
+/// numa equipe ativa, cada uma ocupava meia tela e encontrar a de hoje virava
+/// rolagem. Agora a linha responde só "qual música, para quando, de quem, e
+/// tem material?" — o resto mora na tela de detalhes, que é onde também ficam
+/// as decisões. Ler a lista e decidir uma sugestão passaram a ser dois gestos
+/// diferentes, e é assim que a página densa deixa de ser perigosa.
 class SuggestionsScreen extends ConsumerStatefulWidget {
   const SuggestionsScreen({super.key, required this.teamId});
 
@@ -108,7 +113,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                         itemBuilder: (_, index) => SuggestionCard(
                           suggestion: list[index],
                           teamId: widget.teamId,
-                          canManage: team?.canManage ?? false,
                           isMine: list[index].createdBy.membershipId ==
                               team?.membershipId,
                         ),
@@ -144,179 +148,46 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
   }
 }
 
-class SuggestionCard extends ConsumerStatefulWidget {
+/// Uma linha da lista. **Índice, não resumo executivo.**
+///
+/// Quatro fatos e nada mais: qual música, para quando, por que (a primeira
+/// linha do motivo), quem pediu — e uns pontinhos dizendo que há cifra, áudio
+/// ou vídeo esperando do outro lado. O cartão inteiro é o toque; não há botão
+/// nenhum aqui, de propósito: decisão que se toma de raspão numa lista é
+/// decisão que se toma sem ler o motivo, e o motivo é a razão de o campo ser
+/// obrigatório.
+class SuggestionCard extends StatelessWidget {
   const SuggestionCard({
     super.key,
     required this.suggestion,
     required this.teamId,
-    required this.canManage,
     required this.isMine,
   });
 
   final SongSuggestion suggestion;
   final String teamId;
-  final bool canManage;
   final bool isMine;
-
-  @override
-  ConsumerState<SuggestionCard> createState() => _SuggestionCardState();
-}
-
-class _SuggestionCardState extends ConsumerState<SuggestionCard> {
-  bool _busy = false;
-
-  SongSuggestion get s => widget.suggestion;
-
-  void _refresh() {
-    ref.invalidate(suggestionsProvider);
-    ref.invalidate(openSuggestionCountProvider);
-    ref.invalidate(eventSuggestionsProvider);
-  }
-
-  Future<void> _run(Future<void> Function() action, String ok) async {
-    setState(() => _busy = true);
-    try {
-      await action();
-      _refresh();
-      if (mounted) showAppSnackBar(context, ok, tone: AppTone.success);
-    } on ApiException catch (error) {
-      if (mounted) {
-        showAppSnackBar(context, error.message, tone: AppTone.danger);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  /// Acolher a sugestão.
-  ///
-  /// Sem cadastro, o caminho passa pela tela de adicionar música — **e é ali
-  /// que o líder decide o `isNew`**, que já nasce marcado naquela tela. Ligar
-  /// a marca aqui seria deduzir "a equipe está aprendendo" de "alguém
-  /// sugeriu", que é justamente o que o campo existe para não fazer.
-  Future<void> _accept() async {
-    String? songId = s.songId;
-
-    if (songId == null) {
-      // `Navigator.push` sobre esta tela, e não `context.push` do go_router: a
-      // lista continua viva embaixo e volta intacta se o cadastro for
-      // abandonado. A busca já abre preenchida com o nome sugerido.
-      final criada = await Navigator.of(context).push<Song>(
-        MaterialPageRoute(
-          builder: (rota) => AddSongScreen(
-            teamId: widget.teamId,
-            initialSearch: s.title,
-            onCreated: (song) => Navigator.of(rota).pop(song),
-          ),
-        ),
-      );
-      if (criada == null || !mounted) return;
-      songId = criada.id;
-      ref.invalidate(songsProvider);
-    }
-
-    await _run(
-      () => ref
-          .read(suggestionRepositoryProvider)
-          .accept(widget.teamId, s.id, songId: songId)
-          .then((_) {}),
-      'Sugestão acolhida.',
-    );
-  }
-
-  /// "Por enquanto não" — nunca "recusar".
-  ///
-  /// O motivo é opcional e a tela **não** empurra ninguém a escrever: às vezes
-  /// o motivo certo (teologia, por exemplo) é uma conversa pessoal, e o app não
-  /// é o canal. O rótulo avisa que quem sugeriu vai ler — sem isso, um líder
-  /// escreve achando que é nota interna e o app entrega na cara da pessoa.
-  Future<void> _decline() async {
-    final controller = TextEditingController();
-    final confirmou = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Por enquanto não'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('"${s.title}" sai da lista de abertas.'),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              maxLines: 3,
-              maxLength: 500,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Motivo (opcional)',
-                helperText: 'Quem sugeriu vai ler. Pode deixar em branco e '
-                    'conversar pessoalmente.',
-                // O aviso de que a pessoa vai ler é a parte que não pode
-                // sumir num "…" -- ela é a razão de o rótulo existir.
-                helperMaxLines: 3,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Voltar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-
-    final motivo = controller.text.trim();
-    controller.dispose();
-    if (confirmou != true) return;
-
-    await _run(
-      () => ref
-          .read(suggestionRepositoryProvider)
-          .decline(widget.teamId, s.id, reason: motivo)
-          .then((_) {}),
-      'Respondido.',
-    );
-  }
-
-  Future<void> _reopen() => _run(
-        () => ref
-            .read(suggestionRepositoryProvider)
-            .reopen(widget.teamId, s.id)
-            .then((_) {}),
-        'Sugestão reaberta.',
-      );
-
-  Future<void> _remove() async {
-    final confirmou = await showConfirmDialog(
-      context,
-      title: 'Excluir sugestão?',
-      message: '"${s.title}" some da lista para todo mundo.',
-      confirmLabel: 'Excluir',
-      destructive: true,
-    );
-    if (!confirmou) return;
-
-    await _run(
-      () => ref.read(suggestionRepositoryProvider).remove(widget.teamId, s.id),
-      'Sugestão excluída.',
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final s = suggestion;
 
     return AppCard(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      // `AppCard` não tem padding padrão: sem isto o conteúdo encosta na borda
-      // e o `Clip.antiAlias` do canto arredondado come a primeira letra.
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      // Mais apertado que o cartão de leitura: vertical menor porque são
+      // quatro linhas curtas, horizontal cheio porque o `Clip.antiAlias` do
+      // canto arredondado come a primeira letra de quem encosta na borda.
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      onTap: () => openSuggestionDetail(
+        context,
+        teamId: teamId,
+        suggestion: s,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -324,121 +195,76 @@ class _SuggestionCardState extends ConsumerState<SuggestionCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(s.title, style: theme.textTheme.titleMedium),
-                    if ((s.artist ?? '').isNotEmpty)
-                      Text(
-                        s.artist!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
+                child: Text(
+                  s.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
                 ),
               ),
-              _selo(),
-              // Excluir vive aqui, e não junto das decisões: liberta a linha
-              // de baixo (era ela que fazia a lixeira quebrar para baixo) e
-              // afasta a ação destrutiva do "Acolher", que fica ao lado.
-              if (widget.isMine || widget.canManage)
-                IconButton(
-                  tooltip: 'Excluir',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 40,
-                  ),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                  onPressed: _busy ? null : _remove,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
+              const SizedBox(width: AppSpacing.sm),
+              // Para quando. Em primeiro plano porque é o que muda a urgência:
+              // domingo marcado corre contra o relógio, repertório espera.
               AppBadge(
                 label: s.isForRepertoire
-                    ? 'Para o repertório'
+                    ? 'Repertório'
                     : _dataCurta(s.targetDate!),
                 icon: s.isForRepertoire
                     ? Icons.library_music_outlined
                     : Icons.event_rounded,
                 tone: s.isForRepertoire ? AppTone.neutral : AppTone.primary,
               ),
-              if (s.inRepertoire)
-                const AppBadge(
-                  label: 'Já está no repertório',
-                  icon: Icons.check_rounded,
-                  tone: AppTone.neutral,
-                ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-
-          // A justificativa inteira, sem cortar: ela é o conteúdo da sugestão,
-          // não um detalhe. É o que o líder lê para decidir.
-          Text(s.reason, style: theme.textTheme.bodyMedium),
-
-          const SizedBox(height: AppSpacing.md),
+          if ((s.artist ?? '').isNotEmpty)
+            Text(
+              s.artist!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          // Uma linha só. O motivo inteiro é o conteúdo da sugestão e continua
+          // inteiro — na tela de detalhes. Aqui ele é a isca que faz abrir.
+          Text(
+            s.reason,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
               AppAvatar(
                 name: s.createdBy.displayName,
                 imageUrl: s.createdBy.avatarUrl,
-                radius: 12,
+                radius: 9,
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
                   _assinatura(),
-                  // Duas linhas: com um nome a mais a assinatura já batia na
-                  // borda direita e era cortada -- e o "e mais quem sugeriu" é
-                  // justamente a informação que o líder usa para priorizar.
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ),
+              // Os materiais como pontinhos, e não como botões: aqui eles só
+              // respondem "tem o que ouvir e o que ler?". Quem abre são os
+              // botões da tela de detalhes.
+              SuggestionMaterialDots(materials: s.materials),
+              if (s.status.isResolved) ...[
+                const SizedBox(width: AppSpacing.xs),
+                _selo(),
+              ],
             ],
           ),
-
-          // O motivo do adiamento, quando existe. Em branco não vira rótulo
-          // pendurado no vazio -- campo vazio é uso legítimo, não esquecimento.
-          if ((s.declineReason ?? '').isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              surface: CardSurface.sunken,
-              child: Text(
-                s.declineReason!,
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-          ],
-
-          if (_acoes().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            // Largura cheia + alinhamento à direita: quando os botões não
-            // couberem numa linha (tela estreita, rótulo longo), as duas
-            // linhas continuam encostadas na direita em vez de uma centralizar.
-            SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: _acoes(),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -446,63 +272,73 @@ class _SuggestionCardState extends ConsumerState<SuggestionCard> {
 
   /// Quem resolveu **não** aparece: recusa com o nome do líder do lado azeda a
   /// equipe. O selo diz o quê, não quem.
-  Widget _selo() => switch (s.status) {
+  Widget _selo() => switch (suggestion.status) {
         SuggestionStatus.accepted => const AppBadge(
             label: 'Acolhida',
             tone: AppTone.success,
             icon: Icons.check_circle_outline_rounded,
           ),
         SuggestionStatus.declined => const AppBadge(
-            label: 'Por enquanto não',
+            label: 'Recusada',
             tone: AppTone.neutral,
           ),
         SuggestionStatus.pending => const SizedBox.shrink(),
       };
 
   String _assinatura() {
-    final quem = widget.isMine ? 'Você' : s.createdBy.displayName;
-    if (s.alsoSuggestedBy.isEmpty) return 'Sugerida por $quem';
-
-    // Repetida é sinal, não erro: dizer quantos mais querem a mesma música é
-    // metade do que o líder precisa para priorizar.
-    final outros = s.alsoSuggestedBy;
-    final lista = outros.length == 1
-        ? outros.first
-        : '${outros.take(outros.length - 1).join(', ')} e ${outros.last}';
-    // Verbo inteiro nas duas formas. Concatenar o sufixo ("sugeriu" + "ram")
-    // produzia "sugeriuram" com duas pessoas ou mais.
-    final verbo = outros.length == 1 ? 'também sugeriu' : 'também sugeriram';
-    return 'Sugerida por $quem · $lista $verbo';
-  }
-
-  List<Widget> _acoes() {
-    if (_busy) {
-      return const [
-        Padding(
-          padding: EdgeInsets.all(AppSpacing.sm),
-          child: SizedBox(
-            height: 16,
-            width: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ];
-    }
-
-    // Só as decisões ficam aqui. **Excluir subiu para o cabeçalho**: com os
-    // três lado a lado, "Por enquanto não" + "Acolher" + a lixeira passavam de
-    // 300dp num cartão de 295dp, e a lixeira quebrava sozinha para a linha de
-    // baixo. Duas ações cabem sempre.
-    return [
-      if (widget.canManage && s.status.isPending) ...[
-        TextButton(onPressed: _decline, child: const Text('Por enquanto não')),
-        FilledButton.tonal(onPressed: _accept, child: const Text('Acolher')),
-      ],
-      if (widget.canManage && s.status.isResolved)
-        TextButton(onPressed: _reopen, child: const Text('Reabrir')),
-    ];
+    final quem = isMine ? 'Você' : suggestion.createdBy.displayName;
+    final outros = suggestion.alsoSuggestedBy;
+    // Repetida é sinal, não erro. Na lista vira contagem: o nome de cada um
+    // não caberia numa linha, e o que o líder usa para priorizar é o número.
+    if (outros.isEmpty) return quem;
+    return '$quem · +${outros.length} ${outros.length == 1 ? 'pessoa' : 'pessoas'}';
   }
 }
+
+/// Os pontinhos de material. Ícones miúdos e apagados, sem rótulo.
+///
+/// Vive aqui e não na tela de detalhes porque é a **lista** que precisa dizer
+/// muito em pouco espaço; no detalhe os mesmos materiais viram botões com
+/// nome. Cada ícone leva o rótulo no leitor de tela: sem isso a informação
+/// existiria só para quem enxerga.
+class SuggestionMaterialDots extends StatelessWidget {
+  const SuggestionMaterialDots({super.key, required this.materials});
+
+  final List<SuggestionMaterial> materials;
+
+  @override
+  Widget build(BuildContext context) {
+    if (materials.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final material in materials)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Tooltip(
+              message: material.label,
+              child: Icon(
+                suggestionMaterialIcon(material.kind),
+                size: 14,
+                color: scheme.onSurfaceVariant,
+                semanticLabel: material.label,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// O ícone de cada material, num lugar só: a lista e o detalhe mostram o mesmo
+/// desenho para a mesma coisa.
+IconData suggestionMaterialIcon(SuggestionMaterialKind kind) => switch (kind) {
+      SuggestionMaterialKind.lyrics => Icons.article_outlined,
+      SuggestionMaterialKind.spotify => Icons.headphones_rounded,
+      SuggestionMaterialKind.youtube => Icons.play_circle_outline_rounded,
+    };
 
 const _meses = [
   'jan', 'fev', 'mar', 'abr', 'mai', 'jun',

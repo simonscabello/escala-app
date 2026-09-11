@@ -99,6 +99,13 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
         builder: (rota) => AddSongScreen(
           teamId: widget.teamId,
           initialSearch: s.title,
+          // O mesmo reaproveitamento da tela de detalhes: quem sugeriu já
+          // mandou artista e links, e redigitá-los é o trabalho repetido que
+          // faz a sugestão ficar para depois.
+          initialArtist: s.artist,
+          initialLyricsUrl: s.lyricsUrl,
+          initialYoutubeUrl: s.youtubeUrl,
+          initialSpotifyUrl: s.spotifyUrl,
           onCreated: (song) => Navigator.of(rota).pop(song),
         ),
       ),

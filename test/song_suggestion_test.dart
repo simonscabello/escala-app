@@ -11,6 +11,9 @@ void main() {
     String? targetDate,
     String? songId,
     Object? status,
+    String? lyricsUrl,
+    String? spotifyUrl,
+    String? youtubeUrl,
     List<String> alsoSuggestedBy = const [],
   }) =>
       {
@@ -18,7 +21,9 @@ void main() {
         'songId': songId,
         'title': 'Bondade de Deus',
         'artist': 'Isaías Saad',
-        'link': null,
+        'lyricsUrl': lyricsUrl,
+        'spotifyUrl': spotifyUrl,
+        'youtubeUrl': youtubeUrl,
         'targetDate': targetDate,
         'reason': 'A igreja já canta essa nos cultos de oração.',
         'status': status ?? 'PENDING',
@@ -86,6 +91,35 @@ void main() {
     expect(suggestions.undated, hasLength(1));
     expect(suggestions.selectable, hasLength(2));
     expect(suggestions.isEmpty, isFalse);
+  });
+
+  test('os materiais saem na ordem da tela, e só os que existem', () {
+    final s = SongSuggestion.fromJson(
+      json(
+        lyricsUrl: 'https://www.cifraclub.com.br/x/',
+        youtubeUrl: 'https://youtu.be/x',
+      ),
+    );
+
+    // Letra/cifra primeiro (é o que quem toca abre), Spotify depois, YouTube
+    // por último. O que ninguém mandou não entra -- botão apagado seria
+    // promessa falsa.
+    expect(
+      s.materials.map((m) => m.kind),
+      [SuggestionMaterialKind.lyrics, SuggestionMaterialKind.youtube],
+    );
+    expect(s.materials.first.url, 'https://www.cifraclub.com.br/x/');
+    expect(s.materials.first.label, 'Letra ou cifra');
+  });
+
+  test('sugestão sem material nenhum não inventa link', () {
+    expect(SongSuggestion.fromJson(json()).materials, isEmpty);
+  });
+
+  test('string vazia não conta como material', () {
+    // O servidor manda null, mas um cache antigo ou uma tela que gravou ""
+    // não podem virar um botão que abre o nada.
+    expect(SongSuggestion.fromJson(json(spotifyUrl: '')).materials, isEmpty);
   });
 
   test('quem mais sugeriu vem como lista de nomes', () {

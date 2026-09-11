@@ -1,30 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:louvor_app/features/suggestions/presentation/suggestions_screen.dart';
 import 'package:louvor_app/shared/widgets/app_card.dart';
 
 /// O cartão da sugestão, no tamanho de um celular de verdade.
 ///
-/// Dois defeitos chegaram por print e voltam aqui como teste: o conteúdo
-/// colado na borda (que fazia o canto arredondado comer a primeira letra do
-/// título) e a lixeira caindo sozinha para a linha de baixo porque três botões
-/// não cabiam numa linha de 375dp.
+/// O cartão nasceu grande — justificativa inteira, dois botões de decisão — e
+/// numa equipe ativa cada sugestão ocupava meia tela. Aqui se protege o que a
+/// densidade comprou: quatro linhas curtas, nenhuma decisão de raspão, e o
+/// cartão inteiro levando ao detalhe.
 void main() {
-  SongSuggestion sugestao({String? declineReason, String status = 'PENDING'}) =>
+  SongSuggestion sugestao({
+    String status = 'PENDING',
+    String? targetDate,
+    String? lyricsUrl = 'https://www.cifraclub.com.br/x/',
+    String? spotifyUrl,
+    String? youtubeUrl,
+    List<String> alsoSuggestedBy = const [],
+  }) =>
       SongSuggestion.fromJson({
         'id': 'sg1',
         'songId': null,
-        // Título e artista reais do print, para o teste medir a mesma coisa
-        // que a pessoa viu.
         'title': 'Louvores e Honras',
         'artist': 'Guilherme Kerr',
-        'link': null,
-        'targetDate': null,
-        'reason': 'Linda canção.',
+        'lyricsUrl': lyricsUrl,
+        'spotifyUrl': spotifyUrl,
+        'youtubeUrl': youtubeUrl,
+        'targetDate': targetDate,
+        // Longa de propósito: é ela que precisa caber numa linha só.
+        'reason': 'A igreja já canta essa nos cultos de oração e a letra fala '
+            'exatamente do que o pastor tem pregado neste mês.',
         'status': status,
-        'declineReason': declineReason,
+        'declineReason': null,
         'inRepertoire': false,
         'createdBy': {
           'membershipId': 'm1',
@@ -32,28 +42,29 @@ void main() {
           'avatarUrl': null,
         },
         'createdAt': '2026-09-03T12:00:00.000Z',
-        'alsoSuggestedBy': const [],
+        'alsoSuggestedBy': alsoSuggestedBy,
       });
 
   Future<void> montar(
     WidgetTester tester, {
-    required bool canManage,
     SongSuggestion? item,
+    ThemeData? theme,
+    Size size = const Size(375 * 3, 812 * 3),
   }) async {
-    // Celular comum. É a largura em que os três botões não cabiam.
-    tester.view.physicalSize = const Size(375 * 3, 812 * 3);
+    // Celular comum, e é nele que a densidade importa.
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          theme: theme,
           home: Scaffold(
             body: SingleChildScrollView(
               child: SuggestionCard(
                 suggestion: item ?? sugestao(),
                 teamId: 't1',
-                canManage: canManage,
                 isMine: true,
               ),
             ),
@@ -65,84 +76,118 @@ void main() {
   }
 
   testWidgets('o conteúdo não encosta na borda do cartão', (tester) async {
-    await montar(tester, canManage: true);
+    await montar(tester);
 
     final cartao = tester.getTopLeft(find.byType(AppCard));
     final titulo = tester.getTopLeft(find.text('Louvores e Honras'));
 
     // Sem padding o título nascia em cima da borda e o Clip.antiAlias do canto
     // arredondado cortava o "L".
-    expect(titulo.dx - cartao.dx, greaterThanOrEqualTo(16));
-    expect(titulo.dy - cartao.dy, greaterThanOrEqualTo(16));
-
-    final motivo = tester.getTopLeft(find.text('Linda canção.'));
-    expect(motivo.dx - cartao.dx, greaterThanOrEqualTo(16));
+    expect(titulo.dx - cartao.dx, greaterThanOrEqualTo(12));
+    expect(titulo.dy - cartao.dy, greaterThanOrEqualTo(8));
   });
 
-  testWidgets('excluir saiu da linha das decisões e foi para o cabeçalho',
+  testWidgets('cabe em pouca altura: é índice, não é a sugestão inteira',
       (tester) async {
-    await montar(tester, canManage: true);
+    await montar(tester);
 
-    final lixeira = tester.getCenter(
-      find.byIcon(Icons.delete_outline_rounded),
+    // Dezenas de sugestões precisam caber numa rolagem curta. O teto é generoso
+    // de propósito — a fonte do ambiente de teste é mais larga que a do
+    // aparelho —, mas o cartão antigo, com o motivo inteiro e dois botões,
+    // passava com folga daqui.
+    expect(tester.getSize(find.byType(AppCard)).height, lessThan(150));
+  });
+
+  testWidgets('o motivo é truncado numa linha', (tester) async {
+    await montar(tester);
+
+    final motivo = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (w) => w is Text && (w.data ?? '').startsWith('A igreja já canta'),
+      ),
     );
-    final acolher = tester.getCenter(find.text('Acolher'));
-    final recusar = tester.getCenter(find.text('Por enquanto não'));
-    final titulo = tester.getCenter(find.text('Louvores e Honras'));
-
-    // O defeito era a lixeira dividir a linha com os dois botões e ser
-    // empurrada para baixo. Agora ela está no topo, na altura do título.
-    //
-    // Note que aqui NÃO se afirma que os dois botões cabem numa linha: a fonte
-    // do ambiente de teste é bem mais larga que a Roboto do aparelho, e medir
-    // largura de texto aqui diria respeito ao teste, não ao app.
-    expect(lixeira.dy, lessThan(acolher.dy));
-    expect(lixeira.dy, lessThan(recusar.dy));
-    expect(lixeira.dy, closeTo(titulo.dy, 24));
+    expect(motivo.maxLines, 1);
+    expect(motivo.overflow, TextOverflow.ellipsis);
   });
 
-  testWidgets('o integrante vê só excluir, sem as decisões do líder',
+  testWidgets('nenhuma decisão no cartão: o toque abre os detalhes',
       (tester) async {
-    await montar(tester, canManage: false);
+    await montar(tester);
 
+    // Decidir de raspão numa lista é decidir sem ler o motivo, e o motivo é a
+    // razão de o campo ser obrigatório.
     expect(find.text('Acolher'), findsNothing);
+    expect(find.text('Aceitar sugestão'), findsNothing);
     expect(find.text('Por enquanto não'), findsNothing);
-    // A própria sugestão continua podendo ser excluída por quem a fez.
-    expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+    expect(find.text('Recusar'), findsNothing);
+    expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
+
+    expect(tester.widget<AppCard>(find.byType(AppCard)).onTap, isNotNull);
   });
 
-  testWidgets('recusa sem motivo não desenha caixa vazia', (tester) async {
+  testWidgets('os materiais viram pontinhos, e só os que existem',
+      (tester) async {
     await montar(
       tester,
-      canManage: true,
-      item: sugestao(status: 'DECLINED'),
+      item: sugestao(spotifyUrl: 'https://open.spotify.com/track/x'),
     );
 
-    // Um AppCard só: o de dentro só existe quando há motivo escrito. Campo em
-    // branco é uso legítimo, e não pode virar um retângulo vazio na tela.
-    expect(find.byType(AppCard), findsOneWidget);
-    expect(find.text('Reabrir'), findsOneWidget);
-
-    // "Por enquanto não" continua na tela -- como SELO de estado, não como
-    // botão. É por isso que a busca é pelo TextButton, e não pelo texto.
-    expect(
-      find.widgetWithText(TextButton, 'Por enquanto não'),
-      findsNothing,
-    );
-    expect(find.text('Por enquanto não'), findsOneWidget);
+    expect(find.byIcon(Icons.article_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.headphones_rounded), findsOneWidget);
+    // Link que ninguém mandou não vira ícone apagado: seria promessa falsa.
+    expect(find.byIcon(Icons.play_circle_outline_rounded), findsNothing);
   });
 
-  testWidgets('com motivo, o texto aparece para quem sugeriu', (tester) async {
+  testWidgets('sem material nenhum, não sobra ícone solto', (tester) async {
+    await montar(tester, item: sugestao(lyricsUrl: null));
+
+    expect(find.byType(SuggestionMaterialDots), findsOneWidget);
+    expect(find.byIcon(Icons.article_outlined), findsNothing);
+    expect(find.byIcon(Icons.headphones_rounded), findsNothing);
+  });
+
+  testWidgets('a data manda no selo; sem data, é o repertório', (tester) async {
+    await montar(tester, item: sugestao(targetDate: '2026-09-13'));
+    expect(find.text('13 set'), findsOneWidget);
+
+    await montar(tester);
+    expect(find.text('Repertório'), findsOneWidget);
+  });
+
+  testWidgets('repetida vira contagem, não lista de nomes', (tester) async {
+    await montar(tester, item: sugestao(alsoSuggestedBy: ['Ana', 'João']));
+
+    // Os nomes não caberiam na linha; o que o líder usa para priorizar é o
+    // número. Eles voltam por extenso na tela de detalhes.
+    expect(find.text('Você · +2 pessoas'), findsOneWidget);
+  });
+
+  testWidgets('a linha não estoura no celular estreito, nem no escuro',
+      (tester) async {
     await montar(
       tester,
-      canManage: true,
+      theme: AppTheme.dark,
+      size: const Size(320 * 3, 640 * 3),
       item: sugestao(
-        status: 'DECLINED',
-        declineReason: 'Já temos duas músicas novas neste mês.',
+        targetDate: '2026-09-13',
+        spotifyUrl: 'https://open.spotify.com/track/x',
+        youtubeUrl: 'https://youtu.be/x',
+        status: 'ACCEPTED',
+        alsoSuggestedBy: const ['Ana', 'João'],
       ),
     );
 
-    expect(find.text('Já temos duas músicas novas neste mês.'), findsOneWidget);
-    expect(find.byType(AppCard), findsNWidgets(2));
+    // A linha de baixo é a que mais aperta: avatar, nome, três ícones e o
+    // selo. Overflow aqui vira exceção, que é o aviso que só chegaria pelo
+    // print de alguém.
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SuggestionMaterialDots), findsOneWidget);
+  });
+
+  testWidgets('encerrada mostra o estado, sem dizer quem resolveu',
+      (tester) async {
+    await montar(tester, item: sugestao(status: 'DECLINED'));
+
+    expect(find.text('Recusada'), findsOneWidget);
   });
 }
