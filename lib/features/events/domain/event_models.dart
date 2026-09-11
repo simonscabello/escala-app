@@ -8,6 +8,7 @@ class AssignmentMember {
     required this.displayName,
     required this.note,
     required this.isRegisteredForPosition,
+    this.avatarUrl,
   });
 
   factory AssignmentMember.fromJson(Map<String, dynamic> json) {
@@ -17,6 +18,7 @@ class AssignmentMember {
       displayName: json['displayName'] as String,
       note: json['note'] as String?,
       isRegisteredForPosition: json['isRegisteredForPosition'] as bool? ?? true,
+      avatarUrl: json['avatarUrl'] as String?,
     );
   }
 
@@ -25,6 +27,15 @@ class AssignmentMember {
   final String displayName;
   final String? note;
   final bool isRegisteredForPosition;
+
+  /// Foto da conta, quando ela existe. Caminho relativo ao host da API, como
+  /// em toda resposta do servidor -- quem monta o endereço é o [AppAvatar].
+  ///
+  /// Nula em três casos, e todos caem na inicial do nome: integrante sem
+  /// conta, convidado, e cache gravado antes desta versão. **A listagem da
+  /// agenda continua sem foto**: ela devolve dezenas de escalas por resposta,
+  /// e nenhum card mostra rosto.
+  final String? avatarUrl;
 }
 
 /// Quem conduz a ministração do louvor nesta escala.

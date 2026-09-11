@@ -58,9 +58,10 @@ void main() {
       (tester) async {
     await _pumpAgenda(tester, const Size(375, 812));
 
-    expect(find.byType(FloatingActionButton), findsOneWidget);
-    // E não nos dois lugares ao mesmo tempo.
-    expect(find.byTooltip('Nova escala'), findsNothing);
+    expect(find.widgetWithText(FloatingActionButton, 'Nova'), findsOneWidget);
+    // E num lugar só: o botão do cabeçalho é o mesmo, e some no celular --
+    // por isso o tooltip aparece uma vez, e não duas.
+    expect(find.byTooltip('Criar escala ou evento'), findsOneWidget);
   });
 
   testWidgets('no monitor a ação principal sobe para o cabeçalho',
@@ -69,7 +70,7 @@ void main() {
 
     expect(find.byType(FloatingActionButton), findsNothing);
     // Continua existindo — mudou de lugar, não sumiu.
-    expect(find.byTooltip('Nova escala'), findsOneWidget);
+    expect(find.byTooltip('Criar escala ou evento'), findsOneWidget);
   });
 
   testWidgets('não repete painel da Home em nenhuma largura', (tester) async {
@@ -85,7 +86,7 @@ void main() {
     await _pumpAgenda(tester, const Size(1440, 900), canManage: false);
 
     expect(find.textContaining('rascunho'), findsNothing);
-    expect(find.byTooltip('Nova escala'), findsNothing);
+    expect(find.byTooltip('Criar escala ou evento'), findsNothing);
     expect(find.byType(FloatingActionButton), findsNothing);
     expect(find.text('Criar escala'), findsNothing);
     expect(find.textContaining('escala com você'), findsNothing);

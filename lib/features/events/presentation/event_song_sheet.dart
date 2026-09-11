@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_spacing.dart';
@@ -21,6 +22,11 @@ import '../domain/event_models.dart';
 ///
 /// **Vale para MEMBER.** É justamente quem toca que precisa da cifra; o líder
 /// já tem o caminho da edição.
+///
+/// **E daqui se chega ao repertório** ([_RepertoireLink]). Perceber que a
+/// música está sem cifra é o que mais acontece nesta folha, e consertar isso
+/// custava sair da escala, abrir o repertório, procurar a música e abri-la de
+/// novo — quatro passos para chegar a uma tela que já se sabia qual era.
 Future<void> showEventSongSheet({
   required BuildContext context,
   required String teamId,
@@ -98,6 +104,8 @@ class _EventSongSheet extends ConsumerWidget {
           ],
           const SizedBox(height: AppSpacing.lg),
           _Links(song: song),
+          const SizedBox(height: AppSpacing.lg),
+          _RepertoireLink(teamId: teamId, songId: song.songId),
           const SizedBox(height: AppSpacing.xl),
           // A escala não carrega a letra -- são centenas de caracteres por
           // música e ela já é a tela mais pesada. Aqui a busca é de uma música
@@ -252,6 +260,49 @@ class _Links extends StatelessWidget {
             onPressed: () => _open(context, url!),
           ),
       ],
+    );
+  }
+}
+
+/// A ponte para o repertório: a mesma música, na tela onde ela se cadastra.
+///
+/// **Vai pelo id, nunca pelo nome.** A música da escala aponta para a do
+/// repertório (`songId`), e procurar por título abriria a música errada nas
+/// duas situações em que a equipe mais precisa dela: o repertório com duas
+/// versões da mesma canção, e o título gravado com acento diferente.
+///
+/// A equipe é a **da escala**, e vai na consulta (`?equipe=`): quem serve em
+/// duas equipes veria a música ser procurada no repertório da equipe ativa,
+/// que não é a que ele está consultando.
+///
+/// Fecha a folha antes de navegar, e é isso que faz o botão "voltar" do
+/// aparelho devolver a **escala** -- e não esta folha por cima dela, que é o
+/// que aconteceria se ela continuasse empilhada embaixo.
+///
+/// O rótulo diz "Ver", e não "Editar": quem é MEMBER também chega aqui, e a
+/// tela do repertório é que decide se mostra o lápis. Prometer edição a quem
+/// não pode editar seria pior do que não oferecer o caminho.
+class _RepertoireLink extends StatelessWidget {
+  const _RepertoireLink({required this.teamId, required this.songId});
+
+  final String teamId;
+  final String songId;
+
+  @override
+  Widget build(BuildContext context) {
+    final router = GoRouter.of(context);
+    final navigator = Navigator.of(context);
+
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          navigator.pop();
+          router.push('/equipe/musicas/$songId?equipe=$teamId');
+        },
+        icon: const Icon(Icons.library_music_outlined, size: 18),
+        label: const Text('Ver no repertório'),
+      ),
     );
   }
 }

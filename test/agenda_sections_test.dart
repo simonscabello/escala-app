@@ -130,8 +130,12 @@ void main() {
     GoRouter.of(context).pop();
     await tester.pumpAndSettle();
     // O botão flutuante leva o dia selecionado junto -- é o que a agenda tem
-    // a mais do que a Home, que só sabe criar "uma escala nova".
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Nova escala'));
+    // a mais do que a Home, que só sabe criar "uma escala nova". Ele abre o
+    // menu com as duas naturezas de compromisso; a escala é uma delas.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Nova'));
+    await tester.pumpAndSettle();
+    expect(find.text('Novo evento'), findsOneWidget);
+    await tester.tap(find.text('Nova escala'));
     await tester.pumpAndSettle();
     expect(find.text('novo 2026-09-10'), findsOneWidget);
   });

@@ -10,6 +10,7 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
@@ -174,11 +175,6 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-/// Escolha do tema.
-///
-/// "Sistema" e o padrao e vem primeiro: quem ja deixou o Android no escuro nao
-/// precisa configurar nada aqui. As outras duas existem para quem quer o app
-/// diferente do resto do aparelho.
 /// O interruptor dos avisos no celular.
 ///
 /// **Diz quando o Android esta bloqueando.** Sem isso o interruptor fica ligado,
@@ -256,6 +252,23 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
   }
 }
 
+/// Claro, Escuro e Sistema — no mesmo controle de escolha do resto do app.
+///
+/// Era um `SegmentedButton`, e num celular estreito ele quebrava: três rótulos
+/// com ícone dentro de um cartão com folga de 16px de cada lado não cabem em
+/// 320px, e o Material resolvia isso desmanchando o texto em duas linhas
+/// dentro do segmento. Quem tem a fonte do sistema aumentada via o mesmo
+/// defeito em qualquer largura.
+///
+/// [AppChoiceBar] em `expanded` é a resposta que o app já tinha: as três
+/// opções dividem a largura em partes iguais, cada uma com o mesmo alvo de
+/// toque, e quando o rótulo não cabe ao lado do ícone **as três** passam a
+/// mostrar o ícone em cima. A folga do cartão encolheu de `lg` para `md` pelo
+/// mesmo motivo — são 8px de largura que voltam para os segmentos, e a barra
+/// já tem a folga interna dela.
+///
+/// "Sistema" é o padrão e vem por último, ao lado das duas escolhas manuais:
+/// quem já deixou o Android no escuro não precisa mexer aqui.
 class _ThemeModeCard extends ConsumerWidget {
   const _ThemeModeCard();
 
@@ -264,23 +277,24 @@ class _ThemeModeCard extends ConsumerWidget {
     final mode = ref.watch(themeModeProvider);
 
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<ThemeMode>(
-          segments: [
-            for (final option in ThemeMode.values)
-              ButtonSegment(
-                value: option,
-                icon: Icon(_iconFor(option), size: 18),
-                label: Text(themeModeLabel(option)),
-              ),
-          ],
-          selected: {mode},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) =>
-              ref.read(themeModeProvider.notifier).select(selection.first),
-        ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: AppChoiceBar<ThemeMode>(
+        expanded: true,
+        value: mode,
+        onChanged: (option) =>
+            ref.read(themeModeProvider.notifier).select(option),
+        options: [
+          for (final option in [
+            ThemeMode.light,
+            ThemeMode.dark,
+            ThemeMode.system,
+          ])
+            AppChoice(
+              value: option,
+              label: themeModeLabel(option),
+              icon: _iconFor(option),
+            ),
+        ],
       ),
     );
   }

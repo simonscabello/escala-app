@@ -75,21 +75,37 @@ void main() {
       expect(find.byKey(const ValueKey('upcoming-evento/ev1')), findsOneWidget);
     });
 
-    testWidgets('quem lidera tem o caminho de marcar um evento no dia',
-        (tester) async {
+    // Criar evento e criar escala passaram a sair do **mesmo** botão: eram
+    // dois pontos de partida, em dois cantos da tela, para a mesma intenção de
+    // "quero marcar alguma coisa".
+    testWidgets('quem lidera marca um evento pelo botão Nova', (tester) async {
       await _pumpAgenda(tester);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Evento'));
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Nova'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Novo evento'));
       await tester.pumpAndSettle();
 
-      // Leva o dia selecionado junto, como o botão de nova escala.
+      // Leva o dia selecionado junto, como o caminho da escala.
       expect(find.text('novo evento 2026-09-09'), findsOneWidget);
+    });
+
+    testWidgets('o mesmo botão leva à escala', (tester) async {
+      await _pumpAgenda(tester);
+
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Nova'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nova escala'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('nova escala 2026-09-09'), findsOneWidget);
     });
 
     testWidgets('quem não gerencia não vê o caminho de marcar', (tester) async {
       await _pumpAgenda(tester, canManage: false);
 
-      expect(find.widgetWithText(TextButton, 'Evento'), findsNothing);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.text('Novo evento'), findsNothing);
       // Mas continua vendo o que já está marcado.
       expect(find.byKey(const ValueKey('upcoming-evento/ev1')), findsOneWidget);
     });
@@ -213,7 +229,9 @@ Future<void> _pumpAgenda(
       GoRoute(path: '/agenda', builder: (_, __) => const AgendaScreen()),
       GoRoute(
         path: '/agenda/novo',
-        builder: (_, __) => const Scaffold(body: Text('nova escala')),
+        builder: (_, state) => Scaffold(
+          body: Text('nova escala ${state.uri.queryParameters['data']}'),
+        ),
       ),
       GoRoute(
         path: '/eventos/novo',
@@ -259,7 +277,9 @@ Future<void> _pumpHome(
       ),
       GoRoute(
         path: '/agenda/novo',
-        builder: (_, __) => const Scaffold(body: Text('nova escala')),
+        builder: (_, state) => Scaffold(
+          body: Text('nova escala ${state.uri.queryParameters['data']}'),
+        ),
       ),
       GoRoute(
         path: '/eventos/:id',

@@ -292,8 +292,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: ':songId',
-                builder: (_, state) => _withActiveTeam(
+                builder: (_, state) => _withRouteTeam(
                   ref,
+                  state,
                   (id) => SongDetailScreen(
                     teamId: id,
                     songId: state.pathParameters['songId']!,
@@ -302,8 +303,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'editar',
-                    builder: (_, state) => _withActiveTeam(
+                    builder: (_, state) => _withRouteTeam(
                       ref,
+                      state,
                       (id) => SongFormScreen(
                         teamId: id,
                         songId: state.pathParameters['songId']!,
@@ -418,6 +420,29 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// A equipe que a **rota** pediu (`?equipe=`), caindo na ativa quando não
+/// houver pedido.
+///
+/// Existe por causa do atalho "Ver no repertório", dentro da escala: quem serve
+/// em duas equipes pode estar consultando a escala de uma enquanto a equipe
+/// ativa é a outra, e abrir a música pela equipe ativa iria procurá-la no
+/// repertório errado — a armadilha 10, de novo. Como o id vem da barra de
+/// endereço, ele só é aceito quando a pessoa **participa** daquela equipe; um
+/// id válido de outro lugar passaria pela validação de formato e daria erro
+/// no servidor em vez de erro na tela.
+Widget _withRouteTeam(
+  Ref ref,
+  GoRouterState state,
+  Widget Function(String teamId) build,
+) {
+  final pedida = state.uri.queryParameters['equipe'];
+  if (pedida != null &&
+      ref.read(authControllerProvider).teams.any((t) => t.teamId == pedida)) {
+    return build(pedida);
+  }
+  return _withActiveTeam(ref, build);
+}
 
 /// As telas de equipe dependem da equipe ativa. Se ela ainda não carregou,
 /// mostramos um aviso em vez de quebrar a navegacao.

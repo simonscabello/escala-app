@@ -10,9 +10,24 @@ import '../domain/event_datetime.dart';
 
 /// Calendário de consulta, independente dos modelos de escala e de Riverpod.
 /// Segue a semana e as cores do seletor de indisponibilidade; aqui o passado
-/// também é selecionável e os pontos representam as escalas que existem.
+/// também é selecionável.
 ///
-/// **O que o ponto significa é de quem chama** ([legend]): a agenda inteira
+/// **O dia com compromisso é um dia pintado, não um dia com um ponto.** O ponto
+/// de 5px embaixo do número era o desenho anterior, e ele pedia atenção para
+/// ser notado: quem abre a agenda de relance — que é como ela é usada — via
+/// trinta números iguais. Agora o dia marcado ganha o fundo de
+/// `primaryContainer`, o número em negrito e um traço embaixo; o mês inteiro se
+/// lê sem procurar. O traço fica porque cor sozinha não é sinal para quem não
+/// distingue as duas, e porque é ele que conta **quantos** compromissos o dia
+/// tem (um por compromisso, até três).
+///
+/// **Quatro estados, quatro desenhos diferentes**, e é isso que a tela precisa
+/// garantir: dia comum (sem fundo), hoje (moldura), dia com compromisso (fundo
+/// claro + traço) e dia selecionado (fundo cheio, da cor da marca). Selecionado
+/// **com** compromisso é o fundo cheio com o traço por cima, em `onPrimary` —
+/// selecionar um dia não pode apagar a informação que trouxe o dedo até ele.
+///
+/// **O que o traço significa é de quem chama** ([legend]): a agenda inteira
 /// pinta os dias com algo marcado -- escala ou evento --, e o recorte pessoal
 /// pinta os dias que são seus.
 /// É o mesmo desenho dizendo duas coisas, e o rótulo embaixo é o que separa as
@@ -33,13 +48,26 @@ class AgendaCalendar extends StatelessWidget {
   final DateTime month;
   final DateTime selectedDay;
   final DateTime today;
-  final Set<String> markedDays;
+
+  /// Dia (`AAAA-MM-DD`) -> quantos compromissos ele tem.
+  ///
+  /// É um mapa e não um conjunto porque o número aparece: o traço embaixo do
+  /// dia se repete uma vez por compromisso, e a leitura de tela diz "2
+  /// compromissos" em vez de só "com compromisso".
+  final Map<String, int> markedDays;
   final ValueChanged<DateTime> onSelected;
   final ValueChanged<DateTime> onMonthChanged;
   final VoidCallback onToday;
 
   /// O que um dia marcado quer dizer. Vai na legenda e na leitura de tela.
   final String legend;
+
+  /// Quantos traços cabem embaixo do número sem virar tracejado.
+  ///
+  /// Acima disto a contagem some do desenho e fica só na leitura de tela e na
+  /// lista do dia: três domingos de vigília não precisam de sete riscos de
+  /// 4px para dizer "tem bastante coisa aqui".
+  static const int maxMarks = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +173,13 @@ class AgendaCalendar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Row(
               children: [
-                Icon(Icons.circle, size: 5, color: scheme.primary),
+                // A legenda mostra o **mesmo** desenho do dia marcado, em
+                // miniatura: um ponto solto ao lado de "Com compromisso"
+                // mandava procurar no mês uma coisa que não está lá.
+                _LegendChip(
+                  background: scheme.primaryContainer,
+                  foreground: scheme.onPrimaryContainer,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -168,8 +202,23 @@ class AgendaCalendar extends StatelessWidget {
     final scheme = theme.colorScheme;
     final selected = dateKey(day) == dateKey(selectedDay);
     final isToday = dateKey(day) == dateKey(today);
-    final marked = markedDays.contains(dateKey(day));
-    final color = selected ? scheme.onPrimary : scheme.onSurface;
+    final count = markedDays[dateKey(day)] ?? 0;
+    final marked = count > 0;
+
+    // Fundo cheio para o selecionado, fundo claro para o dia que tem algo,
+    // nada para o resto. São três superfícies distintas, e é delas que vem a
+    // leitura de relance -- o traço embaixo confirma e conta.
+    final background = selected
+        ? scheme.primary
+        : marked
+            ? scheme.primaryContainer
+            : Colors.transparent;
+    final foreground = selected
+        ? scheme.onPrimary
+        : marked
+            ? scheme.onPrimaryContainer
+            : scheme.onSurface;
+
     return Semantics(
       key: ValueKey('agenda-day-${dateKey(day)}'),
       button: true,
@@ -177,14 +226,17 @@ class AgendaCalendar extends StatelessWidget {
       label:
           '${capitalizeWeekday(DateFormat("EEEE, d 'de' MMMM 'de' y", 'pt_BR').format(day))}'
           '${isToday ? ', hoje' : ''}'
-          '${marked ? ', ${legend.toLowerCase()}' : ''}',
+          '${marked ? ', ${_countLabel(count)}' : ''}',
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.all(1),
         child: Material(
-          color: selected ? scheme.primary : Colors.transparent,
+          color: background,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            // Hoje é uma **moldura**, e continua sendo nos quatro estados: é o
+            // único sinal que não disputa com o fundo, e sem ele o dia de hoje
+            // desapareceria dentro de um mês cheio de dias pintados.
             side: isToday
                 ? BorderSide(
                     color: selected ? scheme.onPrimary : scheme.primary,
@@ -205,19 +257,21 @@ class AgendaCalendar extends StatelessWidget {
                     Text(
                       '${day.day}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: color,
-                        fontWeight: selected || isToday
+                        color: foreground,
+                        fontWeight: selected || isToday || marked
                             ? FontWeight.w700
                             : FontWeight.w400,
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Icon(
-                      Icons.circle,
-                      size: 5,
-                      color: marked
-                          ? (selected ? scheme.onPrimary : scheme.primary)
-                          : Colors.transparent,
+                    // O espaço é reservado mesmo vazio: sem isto a grade
+                    // sacode meio pixel entre um mês com compromissos e outro
+                    // sem.
+                    SizedBox(
+                      height: 4,
+                      child: marked
+                          ? _DayMarks(count: count, color: foreground)
+                          : null,
                     ),
                   ],
                 ),
@@ -226,6 +280,67 @@ class AgendaCalendar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  String _countLabel(int count) => count == 1
+      ? '1 compromisso'
+      : '$count compromissos';
+}
+
+/// Os traços embaixo do número: um por compromisso, até [AgendaCalendar.maxMarks].
+///
+/// Traço e não ponto porque ele é mais largo que alto, e é essa proporção que
+/// o faz aparecer num quadrado de 44px sem virar uma bolinha disputando espaço
+/// com o número.
+class _DayMarks extends StatelessWidget {
+  const _DayMarks({required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final marks = count.clamp(1, AgendaCalendar.maxMarks);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < marks; i++) ...[
+          if (i > 0) const SizedBox(width: 3),
+          Container(
+            width: 6,
+            height: 4,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// O dia marcado em miniatura, para a legenda.
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({required this.background, required this.foreground});
+
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+      ),
+      alignment: Alignment.center,
+      child: _DayMarks(count: 1, color: foreground),
     );
   }
 }

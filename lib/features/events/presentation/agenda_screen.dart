@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/storage/read_cache.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/presentation/team_onboarding.dart';
@@ -149,8 +151,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       filter: _filter,
       membershipId: team.membershipId,
     );
-    final markedDays = groupAgendaEntries(entries).keys.toSet();
     final groups = groupAgendaRows(entries);
+    // **Linhas, e não horários**: o calendário conta compromissos como a lista
+    // os conta. Um domingo com culto de manhã e de noite é *uma* escala, e
+    // marcar dois traços ali faria a equipe achar que toca em dobro -- a mesma
+    // razão pela qual `groupAgendaRows` existe.
+    final markedDays = {
+      for (final entry in groups.entries) entry.key: entry.value.length,
+    };
     final selectedRows = groups[dateKey(selected)] ?? const <AgendaEntry>[];
     final dayHasAny =
         (groupAgendaRows(allEntries)[dateKey(selected)] ?? const <AgendaEntry>[])
@@ -206,7 +214,9 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     ]..sort();
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    void create() => context.push('/agenda/novo?data=${dateKey(selected)}');
+    void createSchedule() =>
+        context.push('/agenda/novo?data=${dateKey(selected)}');
+    void create() => _openCreateMenu(context, selected, today);
 
     // Largura da **janela**, e não a da lista: onde o botão de criar mora é
     // decisão sobre o formato da tela (polegar × mouse), e é a mesma decisão
@@ -263,18 +273,12 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         subtitle: dayIncomplete
             ? 'A consulta disponível não cobre este dia por completo.'
             : null,
-        // O caminho para marcar o que **não** é escala, já no dia escolhido.
-        // Fica aqui, e não num segundo botão flutuante: escala é a ação
-        // frequente e fica com o botão grande; o evento é ocasional e cabe ao
-        // lado da data a que ele vai pertencer.
-        trailing: team.canManage
-            ? TextButton.icon(
-                onPressed: () =>
-                    context.push('/eventos/novo?data=${dateKey(selected)}'),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Evento'),
-              )
-            : null,
+        // Sem ação própria: criar evento saiu daqui e entrou no menu do botão
+        // **Nova**, junto de criar escala. Eram dois pontos de partida para a
+        // mesma intenção ("quero marcar alguma coisa"), em dois cantos da
+        // tela e com dois pesos visuais -- e quem não conhece o vocabulário do
+        // app precisava saber de antemão que "escala" e "evento" são coisas
+        // diferentes para escolher por qual dos dois começar.
         dividerIndent: AppGroup.textIndent,
         children: selectedRows.isEmpty
             ? [
@@ -282,7 +286,10 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   dayIncomplete: dayIncomplete,
                   dayHasAny: dayHasAny,
                   canManage: team.canManage,
-                  onCreate: create,
+                  // Direto na escala, e não no menu: a linha já **diz** o que
+                  // vai acontecer ("Criar escala"). Perguntar de novo logo
+                  // depois seria um passo a mais para chegar no mesmo lugar.
+                  onCreate: createSchedule,
                 ),
               ]
             : [
@@ -306,7 +313,8 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           ? FloatingActionButton.extended(
               onPressed: create,
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Nova escala'),
+              label: const Text('Nova'),
+              tooltip: 'Criar escala ou evento',
             )
           : null,
       body: SafeArea(
@@ -377,7 +385,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                         ),
                         if (team.canManage && janelaLarga)
                           IconButton.filled(
-                            tooltip: 'Nova escala',
+                            tooltip: 'Criar escala ou evento',
                             onPressed: create,
                             icon: const Icon(Icons.add_rounded),
                           ),
@@ -502,6 +510,145 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
               },
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// O que se cria pelo botão **Nova**.
+enum _NewKind { schedule, event }
+
+/// O único ponto de partida da agenda: "quero marcar alguma coisa neste dia".
+///
+/// Eram dois. O botão flutuante criava escala e um "+ Evento" discreto, dentro
+/// do cabeçalho da lista do dia, criava evento -- dois pesos visuais, dois
+/// cantos da tela e a exigência de já saber a diferença entre as duas palavras
+/// para escolher por onde começar. Agora a diferença é **explicada no momento
+/// da escolha**, com uma linha embaixo de cada opção dizendo para que ela
+/// serve.
+///
+/// Folha no celular e diálogo no monitor, pelo [showAdaptiveSheet] que o resto
+/// do app já usa: a mesma escolha, no lugar onde a mão (ou o cursor) a espera.
+/// Os dois caminhos continuam sendo os de sempre -- este menu só decide para
+/// qual deles ir, e leva junto o **dia selecionado**, que é o que o botão da
+/// agenda sempre teve de seu.
+Future<void> _openCreateMenu(
+  BuildContext context,
+  DateTime selected,
+  DateTime today,
+) async {
+  final choice = await showAdaptiveSheet<_NewKind>(
+    context: context,
+    maxWidth: 420,
+    builder: (sheetContext) {
+      final theme = Theme.of(sheetContext);
+      final scheme = theme.colorScheme;
+
+      return SafeArea(
+        // Rolável: com a fonte do sistema aumentada as duas explicações
+        // passam de duas linhas cada, e uma folha que não rola engole a
+        // segunda opção — que é justamente a que veio ganhar visibilidade.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xs,
+                  AppSpacing.xl,
+                  AppSpacing.md,
+                ),
+                // A data vem escrita: o botão leva o dia selecionado junto, e
+                // quem toca nele depois de navegar pelo mês precisa ver em
+                // qual dia a coisa vai nascer -- antes do formulário.
+                child: SectionHeader(
+                  title: 'Criar',
+                  subtitle: _dayLabel(selected, today),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+              _CreateOption(
+                icon: Icons.groups_rounded,
+                title: 'Nova escala',
+                subtitle: 'Culto com equipe escalada e repertório',
+                onTap: () => Navigator.pop(sheetContext, _NewKind.schedule),
+              ),
+              Divider(
+                color: scheme.outlineVariant,
+                height: 1,
+                indent: AppSpacing.xl,
+                endIndent: AppSpacing.xl,
+              ),
+              _CreateOption(
+                icon: Icons.event_rounded,
+                title: 'Novo evento',
+                subtitle: 'Reunião, ensaio extra, confraternização',
+                onTap: () => Navigator.pop(sheetContext, _NewKind.event),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  if (choice == null || !context.mounted) return;
+  final dia = dateKey(selected);
+  switch (choice) {
+    case _NewKind.schedule:
+      context.push('/agenda/novo?data=$dia');
+    case _NewKind.event:
+      context.push('/eventos/novo?data=$dia');
+  }
+}
+
+/// Uma opção do menu de criação.
+///
+/// Linha inteira tocável e com a explicação embaixo do nome: é o mesmo formato
+/// de [AppGroupRow], que é como o app escreve "escolha um destes" em toda
+/// tela de configuração.
+class _CreateOption extends StatelessWidget {
+  const _CreateOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.xs,
+      ),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+        child: Icon(icon, size: 20, color: scheme.onPrimaryContainer),
+      ),
+      title: Text(title, style: theme.textTheme.titleSmall),
+      subtitle: Text(
+        subtitle,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: scheme.onSurfaceVariant,
         ),
       ),
     );

@@ -783,7 +783,18 @@ class _TeamSection extends StatelessWidget {
 /// aparece **uma vez** como cabeçalho e as pessoas dela vêm listadas logo
 /// abaixo — inclusive quando são várias, que era o caso em que "Vocalista"
 /// acabava escrito duas vezes.
-class _AssignedTeamCard extends StatelessWidget {
+///
+/// **Com muita gente, a lista se recolhe.** Uma escala de banda completa com
+/// multimídia passa de doze pessoas, e doze linhas empurravam o repertório
+/// para fora da tela — sendo que **o repertório é o que traz o músico a esta
+/// tela**. Aparecem [_collapsedLimit] nomes e uma linha dizendo quantos
+/// faltam; quem quer a lista inteira toca nela. O corte segue a ordem das
+/// funções, então o que fica visível é o topo da escala (ministrante,
+/// vocais), e não cinco nomes quaisquer.
+///
+/// **O recolhimento não vale para as músicas**: elas continuam inteiras, e por
+/// isso o comportamento mora aqui e não numa seção genérica.
+class _AssignedTeamCard extends StatefulWidget {
   const _AssignedTeamCard({
     required this.groups,
     this.minister,
@@ -799,8 +810,57 @@ class _AssignedTeamCard extends StatelessWidget {
   final Map<String, String?> unavailable;
 
   @override
+  State<_AssignedTeamCard> createState() => _AssignedTeamCardState();
+}
+
+class _AssignedTeamCardState extends State<_AssignedTeamCard> {
+  /// Quantos nomes ficam à vista antes de "Ver mais".
+  ///
+  /// Cinco é o tamanho da banda mínima (ministrante, violão, baixo, bateria,
+  /// vocal) — abaixo disso a escala já cabe inteira, e recolher seria esconder
+  /// o que não atrapalha.
+  static const int _collapsedLimit = 5;
+
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final groups = widget.groups;
+    final total = groups.fold<int>(0, (sum, g) => sum + g.members.length);
+
+    // Com **um** a mais que o limite, esconder essa pessoa gastaria a mesma
+    // linha que mostrá-la. O corte só compensa a partir de dois — a mesma
+    // conta que a pilha de avatares faz antes de escrever "+N".
+    final recolhivel = total > _collapsedLimit + 1;
+    final mostrando = recolhivel && !_expanded ? _collapsedLimit : total;
+
+    // O corte atravessa os grupos: uma função pode entrar pela metade, e a
+    // contagem no cabeçalho dela continua sendo a de verdade — é ela que diz
+    // que ainda há gente ali embaixo.
+    final sections = <Widget>[];
+    var restante = mostrando;
+    for (final group in groups) {
+      if (restante <= 0) break;
+      final visiveis = group.members.length <= restante
+          ? group.members
+          : group.members.take(restante).toList();
+      restante -= visiveis.length;
+      if (sections.isNotEmpty) {
+        sections.addAll([
+          const SizedBox(height: AppSpacing.md),
+          Divider(color: scheme.outlineVariant, height: 1),
+          const SizedBox(height: AppSpacing.md),
+        ]);
+      }
+      sections.add(
+        _AssignmentGroupSection(
+          group: group,
+          visibleMembers: visiveis,
+          unavailable: widget.unavailable,
+        ),
+      );
+    }
 
     return AppCard(
       padding: const EdgeInsets.symmetric(
@@ -810,24 +870,64 @@ class _AssignedTeamCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (minister != null) ...[
-            _MinisterBanner(name: minister!.displayName),
+          // O ministrante fica fora da conta e sempre à vista: é uma linha só,
+          // e é a primeira pergunta de quem abre a escala.
+          if (widget.minister != null) ...[
+            _MinisterBanner(name: widget.minister!.displayName),
             const SizedBox(height: AppSpacing.md),
             Divider(color: scheme.outlineVariant, height: 1),
             const SizedBox(height: AppSpacing.md),
           ],
-          for (var i = 0; i < groups.length; i++) ...[
-            if (i > 0) ...[
-              const SizedBox(height: AppSpacing.md),
-              Divider(color: scheme.outlineVariant, height: 1),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            _AssignmentGroupSection(
-              group: groups[i],
-              unavailable: unavailable,
+          ...sections,
+          if (recolhivel) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Divider(color: scheme.outlineVariant, height: 1),
+            _MoreMembersButton(
+              hidden: total - mostrando,
+              expanded: _expanded,
+              onTap: () => setState(() => _expanded = !_expanded),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// "Ver mais 4 integrantes" / "Ver menos".
+///
+/// O número vai escrito, e não "Ver todos": quem lê precisa saber se o que
+/// falta são dois nomes ou dez antes de decidir abrir — é a diferença entre um
+/// toque e perder o repertório de vista.
+class _MoreMembersButton extends StatelessWidget {
+  const _MoreMembersButton({
+    required this.hidden,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final int hidden;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = expanded
+        ? 'Ver menos'
+        : hidden == 1
+            ? 'Ver mais 1 integrante'
+            : 'Ver mais $hidden integrantes';
+
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(
+        expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+        size: 20,
+      ),
+      label: Text(label),
+      style: TextButton.styleFrom(
+        // Largura inteira: a linha inteira é o alvo, como nas listas do app.
+        minimumSize: const Size.fromHeight(AppSpacing.touchTarget),
       ),
     );
   }
@@ -887,10 +987,17 @@ class _MinisterBanner extends StatelessWidget {
 class _AssignmentGroupSection extends StatelessWidget {
   const _AssignmentGroupSection({
     required this.group,
+    required this.visibleMembers,
     required this.unavailable,
   });
 
   final AssignmentGroup group;
+
+  /// Quem desta função aparece agora. Pode ser um pedaço de [group.members]
+  /// quando o cartão está recolhido — a contagem do cabeçalho continua sendo a
+  /// do grupo inteiro, e é ela que avisa que há mais gente.
+  final List<AssignmentMember> visibleMembers;
+
   final Map<String, String?> unavailable;
 
   @override
@@ -932,13 +1039,13 @@ class _AssignmentGroupSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        for (var i = 0; i < group.members.length; i++)
+        for (var i = 0; i < visibleMembers.length; i++)
           _AssignedMemberRow(
-            member: group.members[i],
-            unavailableReason: unavailable[group.members[i].membershipId],
+            member: visibleMembers[i],
+            unavailableReason: unavailable[visibleMembers[i].membershipId],
             isUnavailable:
-                unavailable.containsKey(group.members[i].membershipId),
-            isLast: i == group.members.length - 1,
+                unavailable.containsKey(visibleMembers[i].membershipId),
+            isLast: i == visibleMembers.length - 1,
           ),
       ],
     );
@@ -971,7 +1078,16 @@ class _AssignedMemberRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              AppAvatar(name: member.displayName, radius: 14),
+              // A foto da conta quando ela existe, a inicial quando não.
+              // Quem monta o endereço, mostra a inicial enquanto a imagem
+              // carrega e volta para ela se o carregamento falhar é o próprio
+              // [AppAvatar] — a lista não pode ficar com buraco nem com ícone
+              // quebrado quando a rede da igreja oscila.
+              AppAvatar(
+                name: member.displayName,
+                imageUrl: member.avatarUrl,
+                radius: 14,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
@@ -1257,67 +1373,74 @@ class _SongRow extends StatelessWidget {
     final scheme = theme.colorScheme;
     final hasKey = song.key != null && song.key!.isNotEmpty;
 
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      // O que faltava: o vocalista e o instrumentista viam título, tom e
-      // recado, mas não alcançavam a cifra nem a letra -- que é justamente o
-      // que se procura antes de tocar. Vale para MEMBER, não só para o líder.
-      onTap: () => showEventSongSheet(
-        context: context,
-        teamId: teamId,
-        song: song,
-      ),
-      leading: Text(
-        '$position',
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
+    // `Material` transparente em volta: o [AppCard] é uma superfície pintada,
+    // e sem isto a onda do toque ia parar no `Material` do `Scaffold`, atrás
+    // do cartão — a linha da música não dava sinal nenhum de ter sido tocada,
+    // justamente na linha que abre a cifra.
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        // O que faltava: o vocalista e o instrumentista viam título, tom e
+        // recado, mas não alcançavam a cifra nem a letra -- que é justamente o
+        // que se procura antes de tocar. Vale para MEMBER, não só para o líder.
+        onTap: () => showEventSongSheet(
+          context: context,
+          teamId: teamId,
+          song: song,
         ),
-      ),
-      // A etiqueta fica ao lado do título, e não no `trailing`: ali já está o
-      // tom, e dois selos disputando a mesma ponta espremiam os dois numa
-      // linha que o nome da música já ocupa.
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              song.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyLarge,
-            ),
+        leading: Text(
+          '$position',
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
           ),
-          if (song.isNew) ...[
-            const SizedBox(width: AppSpacing.sm),
-            const AppBadge(
-              label: 'Nova',
-              tone: AppTone.info,
-              semanticsLabel: 'Música nova: a equipe ainda não tocou esta',
+        ),
+        // A etiqueta fica ao lado do título, e não no `trailing`: ali já está o
+        // tom, e dois selos disputando a mesma ponta espremiam os dois numa
+        // linha que o nome da música já ocupa.
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                song.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge,
+              ),
             ),
+            if (song.isNew) ...[
+              const SizedBox(width: AppSpacing.sm),
+              const AppBadge(
+                label: 'Nova',
+                tone: AppTone.info,
+                semanticsLabel: 'Música nova: a equipe ainda não tocou esta',
+              ),
+            ],
           ],
-        ],
+        ),
+        subtitle: song.artist == null && song.note == null
+            ? null
+            : Text(
+                [
+                  if (song.artist != null && song.artist!.isNotEmpty)
+                    song.artist!,
+                  if (song.note != null && song.note!.isNotEmpty) song.note!,
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+        trailing: !hasKey
+            ? null
+            : AppBadge(
+                label: song.key!,
+                tone: song.hasCustomKey ? AppTone.primary : AppTone.neutral,
+                semanticsLabel: song.hasCustomKey
+                    ? 'Tom desta escala: ${song.key}'
+                    : 'Tom: ${song.key}',
+              ),
       ),
-      subtitle: song.artist == null && song.note == null
-          ? null
-          : Text(
-              [
-                if (song.artist != null && song.artist!.isNotEmpty)
-                  song.artist!,
-                if (song.note != null && song.note!.isNotEmpty) song.note!,
-              ].join(' · '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-      trailing: !hasKey
-          ? null
-          : AppBadge(
-              label: song.key!,
-              tone: song.hasCustomKey ? AppTone.primary : AppTone.neutral,
-              semanticsLabel: song.hasCustomKey
-                  ? 'Tom desta escala: ${song.key}'
-                  : 'Tom: ${song.key}',
-            ),
     );
   }
 }

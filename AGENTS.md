@@ -245,8 +245,8 @@ emprestado.
 ## A Agenda (`/agenda`)
 
 **O mês da equipe.** A Home responde "quando eu toco?"; a agenda responde "como
-está o mês?" — e é por isso que ela virou um calendário: um ponto por dia com
-escala, o dia selecionado embaixo, e as próximas em seguida.
+está o mês?" — e é por isso que ela virou um calendário: os dias com
+compromisso pintados, o dia selecionado embaixo, e as próximas em seguida.
 
 - **A linha da lista é a mesma da Home**: `CompactScheduleTile`
   (`features/events/presentation/agenda_event_tile.dart`), dentro de um
@@ -266,12 +266,39 @@ escala, o dia selecionado embaixo, e as próximas em seguida.
 - **A lista tem escalas e eventos**, misturados pelo relógio — é assim que o mês
   acontece. Por isso ela se chama "Próximos compromissos": prometer só escala
   faria a reunião de quinta parecer uma delas. Ver **Eventos da equipe**.
+- **O dia marcado é um dia pintado, não um dia com um ponto.**
+  `AgendaCalendar` recebe `markedDays` como **mapa** (`dia -> quantos`) e
+  desenha: fundo de `primaryContainer`, número em negrito e um traço de 6×4
+  embaixo, um por compromisso até três (`AgendaCalendar.maxMarks`). O ponto de
+  5px anterior pedia atenção para ser notado, e a agenda é lida de relance. O
+  traço fica porque cor sozinha não é sinal para quem não distingue as duas, e
+  porque é ele que conta.
+  **Quatro estados, quatro desenhos**, e nenhum apaga o outro: comum (sem
+  fundo), hoje (moldura de 2px, em todos os casos), com compromisso (fundo
+  claro + traço), selecionado (fundo cheio da marca). Selecionado **com**
+  compromisso é o fundo cheio com o traço em `onPrimary` — selecionar um dia
+  não pode apagar a informação que trouxe o dedo até ele.
+  A contagem vem de `groupAgendaRows`, e não de `groupAgendaEntries`: o
+  domingo com manhã e noite é **uma** escala, e dois traços ali fariam a equipe
+  achar que toca em dobro. Coberto por `test/agenda_calendar_test.dart`.
+- **Um botão só, `+ Nova`, e um menu com as duas naturezas.** Havia dois
+  pontos de partida para a mesma intenção — o flutuante criava escala, e um
+  "+ Evento" discreto, no cabeçalho da lista do dia, criava evento. Dois pesos
+  visuais, dois cantos da tela, e a exigência de já saber a diferença entre as
+  duas palavras para escolher por onde começar. Agora a diferença é explicada
+  no momento da escolha, com uma linha embaixo de cada opção, e a data em que
+  a coisa vai nascer vem escrita no topo da folha. É `showAdaptiveSheet` —
+  folha no celular, diálogo no monitor. **Os fluxos não mudaram**:
+  `/agenda/novo?data=` e `/eventos/novo?data=`.
+  A linha do dia vazio continua indo **direto** para a escala: ela já diz
+  "Criar escala", e perguntar de novo seria um passo a mais para o mesmo
+  lugar.
 - **O botão de criar é o da Home, no mesmo lugar:** flutuante no celular (onde
   o polegar chega), no cabeçalho no monitor. A agenda chegou a ter só o ícone
   do cabeçalho nas duas larguras — alvo menor para a ação principal, e o botão
   mudando de forma ao trocar de aba é o que faz duas telas parecerem de dois
-  apps. A diferença legítima é o que ele leva junto: o dia selecionado
-  (`/agenda/novo?data=`).
+  apps. O que ele tem de seu é o dia selecionado, e o rótulo: na Home é "Nova
+  escala" (lá só há uma coisa a criar); aqui é "Nova", porque abre as duas.
 - **O recorte** (`AgendaFilter`): "Todas" × "Minhas escalas". Governa também os
   **pontos do calendário** — "em que domingos eu toco?" se responde no mês, não
   numa lista. Responsabilidade é estar em `assignments`; o ministrante entra
@@ -732,6 +759,25 @@ A folha recebe `event.teamId` e busca a letra por ele.
 A escala não carrega `lyrics` (continua não carregando). A folha busca a música
 inteira só quando alguém a abre, e falhar ali não esconde tom, recado nem
 links, que já vieram com a escala.
+
+**E daqui se chega ao repertório.** Perceber que a música está sem cifra é o
+que mais acontece nesta folha, e consertar isso custava quatro passos: sair da
+escala, abrir o repertório, procurar a música, abri-la de novo. O botão
+**"Ver no repertório"** faz o caminho direto.
+
+- **Pelo `songId`, nunca pelo nome.** A música da escala já aponta para a do
+  repertório; procurar por título abriria a errada no repertório com duas
+  versões da mesma canção, ou com o acento gravado diferente.
+- **Leva a equipe da escala na consulta** (`/equipe/musicas/:songId?equipe=`).
+  A rota usa `_withRouteTeam` (`app_router.dart`): o id da consulta só é aceito
+  quando a pessoa participa daquela equipe, e sem consulta cai na equipe ativa
+  como sempre. É a armadilha 10 resolvida no lugar certo — sem isto, quem serve
+  em duas equipes veria a música ser procurada no repertório da outra.
+- **Fecha a folha antes de navegar.** É isso que faz o "voltar" devolver a
+  escala, e não a folha empilhada por cima dela.
+- O rótulo diz **"Ver"**, e não "Editar": MEMBER também chega aqui, e quem
+  decide se mostra o lápis é a tela do repertório. Coberto por
+  `test/musica_da_escala_no_repertorio_test.dart`.
 
 ### Edição da música: o que a equipe decide × o que veio de fora
 
@@ -1194,6 +1240,33 @@ Outros pontos do tema (`app_theme.dart`):
   só arredonda a transição, e por isso o cartão continua legível com "reduzir
   animações" ligado.
 
+### "Escolha uma destas" é `AppChoiceBar`, e só ele
+
+Havia três respostas para a mesma pergunta: pílulas à mão na agenda,
+`ChoiceChip` no repertório e `SegmentedButton` no perfil. O `SegmentedButton`
+era o último sobrevivente, e ele **quebrava**: três rótulos com ícone dentro de
+um cartão com folga de 16px de cada lado não cabem em 320px, e o Material
+resolvia isso desmanchando o texto em duas linhas dentro do segmento — o mesmo
+defeito em qualquer largura, para quem tem a fonte do sistema aumentada.
+
+`AppChoiceBar` tem dois modos:
+
+- **O padrão** (`expanded: false`) é a barra do tamanho do conteúdo, rolando na
+  horizontal quando não couber. É o filtro da agenda: duas opções de
+  comprimentos bem diferentes, encostadas num canto.
+- **`expanded: true`** divide a largura recebida em partes iguais. É para
+  quando a barra **é** o bloco e não um filtro no canto — o seletor de tema do
+  Perfil —, porque ali um segmento que rolou para fora da tela esconde uma
+  opção que a pessoa precisa encontrar. Quando o rótulo não cabe ao lado do
+  ícone, **todos** passam a mostrá-lo em cima, de uma vez: a decisão é tomada
+  por quem vê a barra inteira (`_needsStacking`, com `TextPainter` na fonte e
+  na escala do aparelho), porque medida segmento a segmento "Claro" ficaria
+  deitado enquanto "Sistema" sobe o ícone — três opções iguais desenhadas de
+  dois jeitos na mesma linha.
+
+Coberto por `test/profile_screen_test.dart`, que varre 320–768px cruzados com
+escala de fonte 1,0–1,6.
+
 ## Os horários da escala na tela
 
 `EventTimesList` (`features/events/presentation/event_times.dart`) desenha os
@@ -1218,6 +1291,37 @@ não deve reapresentar a mesma informação num formato diferente.
 - No **item** da lista os horários seguem em linha corrida
   (`Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00`): ali a pergunta é "qual
   escala é esta?", e a coluna alinhada gastaria três linhas por item.
+
+## A escala escrita: integrantes recolhidos e com foto
+
+A seção "Equipe escalada" do detalhe (`_AssignedTeamCard`) tem dois
+comportamentos que existem **pela mesma razão**: o que traz o músico a esta
+tela é o repertório, e a lista de nomes não pode empurrá-lo para fora.
+
+- **"Ver mais N integrantes".** Uma banda completa com multimídia passa de
+  doze pessoas, e doze linhas enterravam as músicas. Aparecem **cinco** (a
+  banda mínima: ministrante, violão, baixo, bateria, vocal) e uma linha
+  dizendo quantos faltam; tocar abre tudo e a linha vira "Ver menos". Com
+  **seis** ninguém é escondido: guardar uma pessoa gastaria a mesma linha que
+  mostrá-la — a conta que `AppAvatarStack` já fazia antes de escrever "+N". O
+  corte atravessa os grupos, seguindo a ordem das funções, então o que fica à
+  vista é o topo da escala; a contagem no cabeçalho da função continua sendo a
+  de verdade, e é ela que avisa que há mais gente. O ministrante fica fora da
+  conta e sempre visível — é uma linha só, e é a primeira pergunta de quem abre
+  a escala.
+  **Isto não vale para as músicas.** Elas continuam inteiras, e é por isso que
+  o comportamento mora no cartão da equipe e não numa seção genérica.
+- **A foto de quem está escalado.** `avatarUrl` entrou no membro da escalação
+  (`groupAssignments`, no backend) e o `_AssignedMemberRow` a entrega ao
+  `AppAvatar`, que já sabia recortar em círculo, mostrar a inicial enquanto
+  carrega e voltar para ela se falhar — a lista não pode ficar com buraco nem
+  ícone quebrado quando a rede da igreja oscila. Membro sem conta e convidado
+  vêm nulos e continuam na inicial, como antes.
+  **Só no detalhe.** `EventsService.assignmentInclude`, da listagem, continua
+  sem juntar a conta: são dezenas de escalas por resposta e nenhum card mostra
+  rosto. `AssignmentRow.membership.user` é opcional por causa disso.
+
+Coberto por `test/escala_integrantes_test.dart`.
 
 ## Regras de escalação
 
