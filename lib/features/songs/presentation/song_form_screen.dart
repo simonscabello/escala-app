@@ -10,8 +10,10 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
+import '../domain/hymnal_models.dart';
 import '../domain/song_models.dart';
 import '../domain/song_themes.dart';
+import 'hymnal_refs_field.dart';
 import 'song_theme_picker.dart';
 
 /// Edição de uma música, em duas camadas.
@@ -56,11 +58,11 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
   final _chordsUrl = TextEditingController();
   final _youtubeUrl = TextEditingController();
   final _spotifyUrl = TextEditingController();
-  final _hymnNumber = TextEditingController();
 
   String? _kind;
   String? _pace;
   Set<String> _themes = {};
+  List<HymnalRef> _hymnals = const [];
   bool _isNew = false;
   bool _populated = false;
   bool _saving = false;
@@ -83,7 +85,6 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       _chordsUrl,
       _youtubeUrl,
       _spotifyUrl,
-      _hymnNumber,
     ]) {
       controller.dispose();
     }
@@ -97,6 +98,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _kind = song.kind;
     _pace = song.pace;
     _themes = {...song.themes};
+    _hymnals = [...song.hymnals];
     _isNew = song.isNew;
     _artist.text = song.artist ?? '';
     _composer.text = song.composer ?? '';
@@ -106,22 +108,12 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _chordsUrl.text = song.chordsUrl ?? '';
     _youtubeUrl.text = song.youtubeUrl ?? '';
     _spotifyUrl.text = song.spotifyUrl ?? '';
-    _hymnNumber.text = song.hymnNumber?.toString() ?? '';
   }
 
   Future<void> _save(Song song) async {
     final title = _title.text.trim();
     if (title.length < 2) {
       setState(() => _error = 'Informe o nome da música.');
-      return;
-    }
-
-    // Só validado quando o campo existe (hino). Fora da faixa o servidor
-    // recusaria de qualquer jeito; avisar aqui evita a ida perdida à rede.
-    final numeroTexto = _hymnNumber.text.trim();
-    final numero = numeroTexto.isEmpty ? null : int.tryParse(numeroTexto);
-    if (song.isHymn && (numero == null || numero < 1 || numero > 581)) {
-      setState(() => _error = 'O número do hino vai de 1 a 581.');
       return;
     }
 
@@ -145,7 +137,10 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           // pessoa que tirou a última etiqueta não conseguiria salvar isso.
           'themes': _themes.toList(),
           'isNew': _isNew,
-          if (song.isHymn) 'hymnNumber': numero,
+          // Sempre enviada, inclusive vazia: `[]` é o que apaga a última
+          // referência, e omitir o campo significaria "não mexi nele" — quem
+          // tirou o hinário errado não conseguiria salvar isso.
+          'hymnals': [for (final ref in _hymnals) ref.toJson()],
           'artist': _artist.text.trim(),
           'composer': _composer.text.trim(),
           'originalKey': _originalKey.text.trim(),
@@ -213,22 +208,6 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(labelText: 'Nome da música'),
         ),
-        // Só em hino, e só para corrigir. Oferecer "número do hino" em todo
-        // cântico seria um campo vazio a mais em centenas de telas, para uma
-        // pergunta que quase nunca tem resposta — quem cadastra hino faz isso
-        // pelo import, não um a um.
-        if (song.isHymn) ...[
-          const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: _hymnNumber,
-            enabled: !_saving,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Número no Cantor Cristão',
-              helperText: 'De 1 a 581',
-            ),
-          ),
-        ],
         const SizedBox(height: AppSpacing.lg),
         TextField(
           controller: _key,
@@ -278,6 +257,15 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           themes: _themes,
           enabled: !_saving,
           onChanged: (themes) => setState(() => _themes = themes),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        // Os hinários ficam nesta camada, e não no grupo recolhido: o número
+        // do hino é como a igreja chama a música, e a seção some sozinha
+        // quando não há nenhuma referência — é um botão, não um campo vazio.
+        HymnalRefsField(
+          refs: _hymnals,
+          enabled: !_saving,
+          onChanged: (refs) => setState(() => _hymnals = refs),
         ),
         const SizedBox(height: AppSpacing.lg),
         // Onde a novidade termina.

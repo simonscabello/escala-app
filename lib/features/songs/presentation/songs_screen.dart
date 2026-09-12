@@ -527,7 +527,8 @@ class _KeyBadge extends StatelessWidget {
   }
 }
 
-/// Número do hino, no mesmo bloco onde o cântico mostra o tom.
+/// Número do hino no hinário principal, no mesmo bloco onde o cântico mostra
+/// o tom.
 ///
 /// Mesma medida e mesmo raio do [_KeyBadge] de propósito: as duas abas rolam
 /// com o olho na mesma coluna, e um bloco de tamanho diferente faria a lista
@@ -545,8 +546,10 @@ class _HymnNumber extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    final ref = song.hymnal!;
+
     return Semantics(
-      label: 'Cantor Cristão, hino ${song.hymnNumber}',
+      label: '${ref.name}, hino ${ref.number}',
       excludeSemantics: true,
       child: Container(
         width: 46,
@@ -556,15 +559,33 @@ class _HymnNumber extends StatelessWidget {
           color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
-        child: Text(
-          // Com zero à esquerda, como o hinário imprime: além de fiel, alinha
-          // a coluna de números de uma a três casas.
-          song.hymnNumber!.toString().padLeft(3, '0'),
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: scheme.onSurfaceVariant,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              // Com zero à esquerda, como o hinário imprime: além de fiel,
+              // alinha a coluna de números de uma a três casas.
+              ref.number.toString().padLeft(3, '0'),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                height: 1.1,
+              ),
+            ),
+            // A sigla embaixo, miúda: enquanto a igreja cantava de um hinário
+            // só, "314" bastava. Com dois na mesma lista, o número sozinho
+            // manda abrir o livro errado -- e o rodapé do bloco é onde o
+            // [_KeyBadge] já põe o sinal secundário dele.
+            Text(
+              ref.abbreviation,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 9,
+                height: 1.1,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
         ),
       ),
     );

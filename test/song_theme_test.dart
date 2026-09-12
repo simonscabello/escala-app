@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/domain/hymnal_models.dart';
 import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/songs/domain/song_themes.dart';
 import 'package:louvor_app/features/songs/presentation/song_theme_picker.dart';
@@ -47,7 +48,16 @@ Song musica(
       id: 'id-$title',
       title: title,
       themes: themes,
-      hymnNumber: hymnNumber,
+      hymnals: [
+        if (hymnNumber != null)
+          HymnalRef(
+            hymnalId: 'h-cc',
+            name: 'Cantor Cristão',
+            abbreviation: 'CC',
+            number: hymnNumber,
+            isPrimary: true,
+          ),
+      ],
       isNew: isNew,
     );
 

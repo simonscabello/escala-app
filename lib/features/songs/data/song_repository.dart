@@ -193,6 +193,10 @@ final songRepositoryProvider = Provider<SongRepository>((ref) {
 /// cântico vira garimpo — por isso não existe mais uma aba "Todas". A primeira
 /// aba é "Cânticos", e ela **exclui** os hinos.
 ///
+/// "Hino" aqui é **a música que está em algum hinário**, e não a do Cantor
+/// Cristão: a igreja que cantar da Harpa Cristã terá a mesma aba pelo mesmo
+/// motivo, sem nada mudar aqui.
+///
 /// "Hinos" percorre por número, que é a ordem do hinário impresso e a única
 /// que serve para quem sabe o hino de cor pelo número.
 ///
@@ -266,7 +270,9 @@ final songsProvider =
     SongFilter.canticos => songs.where((s) => !s.isHymn).toList(),
     SongFilter.novas => songs.where((s) => s.isNew).toList(),
     // Por número, e não por título: é a ordem do hinário impresso, e é assim
-    // que se procura um hino que se sabe de cor pelo número.
+    // que se procura um hino que se sabe de cor pelo número. O número é o da
+    // referência principal — a música que está em dois hinários aparece uma
+    // vez, no lugar do livro que a equipe escolheu mostrar.
     SongFilter.hinos => songs.where((s) => s.isHymn).toList()
       ..sort((a, b) => a.hymnNumber!.compareTo(b.hymnNumber!)),
     SongFilter.arquivadas => songs.where((s) => s.isArchived).toList(),

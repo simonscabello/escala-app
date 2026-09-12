@@ -1356,6 +1356,22 @@ class _ServiceSongsSection extends StatelessWidget {
   }
 }
 
+/// A linha de apoio da música na escala: "314 CC · Dízimos e Ofertas".
+///
+/// O artista continua aí, depois dos dois, e o recado por último -- a ordem é
+/// a de quem procura: identificar a música, saber quando ela entra, e só então
+/// o resto. Nulo quando nada disso existe, para o `ListTile` não abrir uma
+/// segunda linha vazia.
+String? _subtitleOf(EventSong song) {
+  final partes = [
+    if (song.hymnal != null) song.hymnal!.label,
+    if (song.momentText != null) song.momentText!,
+    if (song.artist != null && song.artist!.isNotEmpty) song.artist!,
+    if (song.note != null && song.note!.isNotEmpty) song.note!,
+  ];
+  return partes.isEmpty ? null : partes.join(' · ');
+}
+
 class _SongRow extends StatelessWidget {
   const _SongRow({
     required this.teamId,
@@ -1420,14 +1436,17 @@ class _SongRow extends StatelessWidget {
             ],
           ],
         ),
-        subtitle: song.artist == null && song.note == null
+        // "314 CC · Dízimos e Ofertas" -- discreto e compacto, na linha de
+        // apoio. O hinário identifica a música (a igreja pede "314", não
+        // "Estou Seguro"); o momento diz em que ponto do culto ela entra.
+        //
+        // **Sem placeholder.** A música que não tem hinário nem momento não
+        // ganha um traço no lugar: a maioria das linhas é assim, e um marcador
+        // de vazio em cada uma seria mais tinta que as próprias músicas.
+        subtitle: _subtitleOf(song) == null
             ? null
             : Text(
-                [
-                  if (song.artist != null && song.artist!.isNotEmpty)
-                    song.artist!,
-                  if (song.note != null && song.note!.isNotEmpty) song.note!,
-                ].join(' · '),
+                _subtitleOf(song)!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

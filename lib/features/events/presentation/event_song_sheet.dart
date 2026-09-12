@@ -87,6 +87,19 @@ class _EventSongSheet extends ConsumerWidget {
                 ),
             ],
           ),
+          // "314 CC · Dízimos e Ofertas" logo abaixo do título: quem abre
+          // esta folha minutos antes de tocar procura primeiro o número (é
+          // como a igreja pede o hino) e depois em que ponto do culto ela
+          // entra. Some inteira quando não há nem um nem outro.
+          if (_reference(song) != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _reference(song)!,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: scheme.primary,
+              ),
+            ),
+          ],
           if (song.artist?.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -115,6 +128,16 @@ class _EventSongSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// "314 CC · Dízimos e Ofertas", ou o que houver dos dois. Nulo quando não há
+/// nenhum -- a linha inteira some em vez de mostrar campo vazio.
+String? _reference(EventSong song) {
+  final partes = [
+    if (song.hymnal != null) song.hymnal!.label,
+    if (song.momentText != null) song.momentText!,
+  ];
+  return partes.isEmpty ? null : partes.join(' · ');
 }
 
 /// O tom desta escala, em destaque.

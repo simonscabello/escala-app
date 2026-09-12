@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/domain/hymnal_models.dart';
 import 'package:louvor_app/features/songs/domain/song_models.dart';
 
 /// O repertorio virou dois acervos: 581 hinos do Cantor Cristao ao lado de 280
@@ -41,6 +42,16 @@ Song cantico(
       themes: themes,
     );
 
+/// Uma referencia do Cantor Cristao, que e o que este acervo tem.
+HymnalRef cc(int numero) => HymnalRef(
+      hymnalId: 'h-cc',
+      slug: 'cantor-cristao',
+      name: 'Cantor Cristão',
+      abbreviation: 'CC',
+      number: numero,
+      isPrimary: true,
+    );
+
 Song hino(
   int numero,
   String title, {
@@ -52,7 +63,7 @@ Song hino(
       title: title,
       artist: 'Cantor Cristão',
       kind: 'HYMN',
-      hymnNumber: numero,
+      hymnals: [cc(numero)],
       isNew: isNew,
       themes: themes,
     );
@@ -87,24 +98,58 @@ void main() {
   ];
 
   group('Song', () {
-    test('o numero identifica o hino, e cantico nao tem numero', () {
+    test('a referencia de hinario identifica o hino', () {
       expect(hino(142, 'Pão da Vida').isHymn, isTrue);
       expect(hino(142, 'Pão da Vida').hymnNumber, 142);
+      expect(hino(142, 'Pão da Vida').hymnal?.label, '142 CC');
       expect(cantico('Consagração').isHymn, isFalse);
-      expect(cantico('Consagração').hymnNumber, isNull);
+      expect(cantico('Consagração').hymnal, isNull);
     });
 
-    test('le o numero do JSON, e ausente e cantico', () {
+    test('le as referencias do JSON, e ausente e cantico', () {
       final doServidor = Song.fromJson({
         'id': 's1',
         'title': 'Pão da Vida',
-        'hymnNumber': 142,
+        'hymnals': [
+          {
+            'hymnalId': 'h-cc',
+            'slug': 'cantor-cristao',
+            'name': 'Cantor Cristão',
+            'abbreviation': 'CC',
+            'number': 142,
+            'isPrimary': true,
+          },
+        ],
       });
       expect(doServidor.isHymn, isTrue);
-      expect(doServidor.hymnNumber, 142);
+      expect(doServidor.hymnal?.label, '142 CC');
 
+      // Cache gravado antes desta versao: a lista ausente vale vazia, e a
+      // musica continua abrindo como cantico em vez de estourar.
       final semNumero = Song.fromJson({'id': 's2', 'title': 'Consagração'});
       expect(semNumero.isHymn, isFalse);
+      expect(semNumero.hymnals, isEmpty);
+    });
+
+    test('a musica em dois hinarios mostra a principal na escala', () {
+      final santo = Song(
+        id: 's3',
+        title: 'Santo, Santo, Santo',
+        hymnals: [
+          const HymnalRef(
+            hymnalId: 'h-hcc',
+            name: 'Hinário para o Culto Cristão',
+            abbreviation: 'HCC',
+            number: 12,
+            isPrimary: true,
+          ),
+          cc(5),
+        ],
+      );
+
+      // Onde cabe uma so, e a principal -- e ela vem na frente do servidor.
+      expect(santo.hymnal?.label, '12 HCC');
+      expect(santo.hymnals, hasLength(2));
     });
   });
 

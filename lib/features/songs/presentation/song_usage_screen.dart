@@ -245,7 +245,7 @@ class _UsageRow extends StatelessWidget {
                       Flexible(
                         child: Text(
                           usage.isHymn
-                              ? '${usage.hymnNumber} · ${usage.title}'
+                              ? '${usage.hymnRef} · ${usage.title}'
                               : usage.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

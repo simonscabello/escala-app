@@ -1,5 +1,7 @@
+import '../../songs/domain/hymnal_models.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'event_datetime.dart';
+import 'service_moments.dart';
 
 class AssignmentMember {
   const AssignmentMember({
@@ -57,6 +59,9 @@ class EventSong {
     this.defaultKey,
     this.note,
     this.isNew = false,
+    this.moment,
+    this.momentLabel,
+    this.hymnals = const [],
     this.chordsUrl,
     this.lyricsUrl,
     this.youtubeUrl,
@@ -95,12 +100,37 @@ class EventSong {
   /// há anos", para o acervo que entrou no app sem histórico.
   final bool isNew;
 
+  /// Em que momento do culto esta música entra, nos valores do enum do
+  /// servidor (`'ABERTURA'`, `'DIZIMOS_E_OFERTAS'`...). Nulo quando ninguém
+  /// escolheu — e nulo **continua nulo**: nada aqui deduz "Momento de Louvor".
+  ///
+  /// **É desta escala, e não do cadastro da música**, pelo mesmo motivo que o
+  /// tom desta escala: "Estou Seguro" é oferta num domingo e abertura no
+  /// outro.
+  final String? moment;
+
+  /// O nome escrito à mão quando o momento é `OUTRO` ("Santa Ceia").
+  final String? momentLabel;
+
+  /// Em que hinários a MÚSICA está, com a principal na frente. Fato do
+  /// cadastro, como o título — vem junto para a linha da escala poder
+  /// escrever "314 CC" sem uma segunda ida ao servidor.
+  final List<HymnalRef> hymnals;
+
   final String? chordsUrl;
   final String? lyricsUrl;
   final String? youtubeUrl;
   final String? spotifyUrl;
 
   bool get hasCustomKey => keyOverride != null && keyOverride!.isNotEmpty;
+
+  /// A referência que sai na escala, ou nulo quando a música não está em
+  /// hinário nenhum.
+  HymnalRef? get hymnal => primaryHymnalRef(hymnals);
+
+  /// "Dízimos e Ofertas" — ou o que a pessoa escreveu, em `OUTRO`. Nulo sem
+  /// momento: a linha não mostra marcador de campo vazio.
+  String? get momentText => serviceMomentLabel(moment, momentLabel);
 
   factory EventSong.fromJson(Map<String, dynamic> json) {
     return EventSong(
@@ -118,6 +148,13 @@ class EventSong {
       // Falso quando ausente: é o que o cache gravado antes desta versão
       // significa, e é o que a maioria das músicas será para sempre.
       isNew: json['isNew'] as bool? ?? false,
+      moment: json['moment'] as String?,
+      momentLabel: json['momentLabel'] as String?,
+      // Ausente vale lista vazia: é o que o cache gravado antes desta versão
+      // guarda, e é o que a maioria das músicas é.
+      hymnals: (json['hymnals'] as List<dynamic>? ?? const [])
+          .map((e) => HymnalRef.fromJson(e as Map<String, dynamic>))
+          .toList(),
       chordsUrl: json['chordsUrl'] as String?,
       lyricsUrl: json['lyricsUrl'] as String?,
       youtubeUrl: json['youtubeUrl'] as String?,

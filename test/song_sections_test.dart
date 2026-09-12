@@ -1,12 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/domain/hymnal_models.dart';
 import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/songs/domain/song_sections.dart';
 
 Song cantico(String title) => Song(id: title, title: title);
 
 Song hino(int numero) =>
-    Song(id: 'h$numero', title: 'Hino $numero', hymnNumber: numero);
+    Song(
+      id: 'h$numero',
+      title: 'Hino $numero',
+      hymnals: [
+        HymnalRef(
+          hymnalId: 'h-cc',
+          name: 'Cantor Cristão',
+          abbreviation: 'CC',
+          number: numero,
+          isPrimary: true,
+        ),
+      ],
+    );
 
 /// Só os rótulos dos marcadores, na ordem em que aparecem.
 List<String> headers(List<SongSectionEntry> entries) => [

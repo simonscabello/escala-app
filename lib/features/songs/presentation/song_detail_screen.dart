@@ -160,7 +160,9 @@ class _Body extends StatelessWidget {
             Text(
               // O número antes do nome, como o hinário e o púlpito dizem:
               // "cento e quarenta e dois, Pão da Vida".
-              song.isHymn ? '${song.hymnNumber} · ${song.title}' : song.title,
+              song.hymnal != null
+                  ? '${song.hymnal!.number} · ${song.title}'
+                  : song.title,
               style: theme.textTheme.headlineSmall,
             ),
             if (song.isNew)
@@ -186,6 +188,17 @@ class _Body extends StatelessWidget {
             color: scheme.onSurfaceVariant,
           ),
         ),
+        // Os hinários, todos: aqui é a tela da música, e a que está no Cantor
+        // Cristão e no HCC precisa mostrar os dois números -- é justamente o
+        // que a estrutura anterior não sabia dizer. A escala mostra só a
+        // principal, porque lá cabe uma.
+        if (song.hymnals.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            song.hymnals.map((ref) => '${ref.number} ${ref.name}').join(' · '),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.primary),
+          ),
+        ],
         if (song.composer != null && song.composer != song.artist) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(

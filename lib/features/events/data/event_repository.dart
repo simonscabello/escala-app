@@ -7,6 +7,7 @@ import '../../../core/storage/read_cache.dart';
 import '../../../core/storage/shared_preferences_provider.dart';
 import '../domain/event_change.dart';
 import '../domain/event_models.dart';
+import '../domain/service_moments.dart';
 
 final readCacheProvider = Provider<ReadCache>((ref) {
   return ReadCache(ref.watch(sharedPreferencesProvider));
@@ -252,9 +253,21 @@ class EventRepository {
                     'keyOverride': song.keyOverride,
                   if (song.note != null && song.note!.isNotEmpty)
                     'note': song.note,
+                  // O momento do culto, quando escolhido. Ausente é ausente:
+                  // mandar `null` ou omitir dá no mesmo no servidor, e nada
+                  // preenche "Momento de Louvor" por dedução.
+                  if (song.moment != null) 'moment': song.moment,
+                  // Só faz sentido em "Outro"; o servidor limpa nos demais,
+                  // mas mandar o que não vale já seria dizer duas coisas.
+                  if (song.moment == otherServiceMoment &&
+                      (song.momentLabel?.isNotEmpty ?? false))
+                    'momentLabel': song.momentLabel,
                   // `isNew` não vai: quem decide isso é o histórico da equipe,
                   // no servidor. Mandá-lo daqui seria deixar a tela opinar
                   // sobre um fato que ela não tem como conhecer.
+                  //
+                  // Os hinários também não: são do cadastro da música, e esta
+                  // tela monta o repertório de um domingo.
                 },
               )
               .toList(),

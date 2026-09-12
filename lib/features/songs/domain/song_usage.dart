@@ -6,7 +6,7 @@ class SongUsage {
     required this.playCount,
     required this.keys,
     this.artist,
-    this.hymnNumber,
+    this.hymnRef,
     this.isArchived = false,
     this.lastPlayedAt,
   });
@@ -16,7 +16,7 @@ class SongUsage {
       songId: json['songId'] as String,
       title: json['title'] as String,
       artist: json['artist'] as String?,
-      hymnNumber: json['hymnNumber'] as int?,
+      hymnRef: json['hymnRef'] as String?,
       isArchived: json['isArchived'] as bool? ?? false,
       playCount: json['playCount'] as int? ?? 0,
       lastPlayedAt: json['lastPlayedAt'] == null
@@ -31,7 +31,10 @@ class SongUsage {
   final String songId;
   final String title;
   final String? artist;
-  final int? hymnNumber;
+
+  /// "314 CC", já montado pelo servidor. Nulo quando a música não está em
+  /// hinário nenhum — e aí a tela não mostra nada no lugar.
+  final String? hymnRef;
 
   /// A música pode ter sido arquivada depois de tocada. Ela continua no
   /// histórico — ele conta o que aconteceu, e o que aconteceu não muda.
@@ -44,7 +47,7 @@ class SongUsage {
   /// Tons em que a equipe já a cantou, do próprio repertório da escala.
   final List<String> keys;
 
-  bool get isHymn => hymnNumber != null;
+  bool get isHymn => hymnRef != null;
 }
 
 class SongUsageReport {

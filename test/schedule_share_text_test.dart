@@ -516,6 +516,162 @@ void main() {
     expect(event.songsByService[1].songs, isEmpty);
   });
 
+  group('hinário e momento na linha da música', () {
+    Map<String, Object?> hinario(int numero, String sigla) => {
+          'hymnalId': 'h-$sigla',
+          'name': sigla,
+          'abbreviation': sigla,
+          'number': numero,
+          'isPrimary': true,
+        };
+
+    test('com os dois: "Nome - 314 CC (Dízimos e Ofertas)"', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Estou Seguro',
+              'hymnals': [hinario(314, 'CC')],
+              'moment': 'DIZIMOS_E_OFERTAS',
+            },
+          ],
+        ),
+      );
+
+      expect(text, contains('1. Estou Seguro - 314 CC (Dízimos e Ofertas)'));
+    });
+
+    test('só o hinário: "Nome - 208 HCC"', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Eu Não Posso Fugir do Teu Espírito',
+              'hymnals': [hinario(208, 'HCC')],
+            },
+          ],
+        ),
+      );
+
+      expect(
+        text,
+        contains('1. Eu Não Posso Fugir do Teu Espírito - 208 HCC\n'),
+      );
+      expect(text, isNot(contains('(')));
+    });
+
+    test('só o momento: "Nome (Abertura)"', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {'songId': 's1', 'title': 'Alfa e Ômega', 'moment': 'ABERTURA'},
+          ],
+        ),
+      );
+
+      expect(text, contains('1. Alfa e Ômega (Abertura)'));
+      // Sem hinário nenhum: nada de traço solto esperando um número.
+      expect(text, isNot(contains('Alfa e Ômega -')));
+    });
+
+    test('sem nenhum dos dois, sai só o nome', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {'songId': 's1', 'title': 'Nosso General'},
+          ],
+        ),
+      );
+
+      // A maioria das linhas é assim. Um "( )" ou um "—" em cada uma faria a
+      // mensagem parecer um formulário por preencher.
+      expect(text, contains('1. Nosso General\n'));
+      expect(text, isNot(contains('Nosso General -')));
+      expect(text, isNot(contains('Nosso General (')));
+    });
+
+    test('"Outro" sai com o nome escrito à mão', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Invoca-me',
+              'moment': 'OUTRO',
+              'momentLabel': 'Santa Ceia',
+            },
+          ],
+        ),
+      );
+
+      expect(text, contains('1. Invoca-me (Santa Ceia)'));
+      expect(text, isNot(contains('(Outro)')));
+    });
+
+    test('hinário, momento e "Nova" convivem na mesma linha', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Os Que Confiam',
+              'hymnals': [hinario(451, 'CC')],
+              'moment': 'DIZIMOS_E_OFERTAS',
+              'isNew': true,
+            },
+          ],
+        ),
+      );
+
+      expect(
+        text,
+        contains('1. Os Que Confiam - 451 CC (Dízimos e Ofertas) — *Nova*'),
+      );
+    });
+
+    test('nem artista nem tom entram, mesmo com hinário e momento', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Estou Seguro',
+              'artist': 'Cantor Cristão',
+              'key': 'G',
+              'hymnals': [hinario(314, 'CC')],
+              'moment': 'ABERTURA',
+            },
+          ],
+        ),
+      );
+
+      expect(text, isNot(contains('Cantor Cristão')));
+      expect(text, isNot(contains('Tom')));
+      expect(text, isNot(contains('(G)')));
+    });
+
+    test('a música em dois hinários mostra só a principal', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Santo, Santo, Santo',
+              'hymnals': [hinario(12, 'HCC'), hinario(5, 'CC')],
+            },
+          ],
+        ),
+      );
+
+      // Duas siglas na mesma linha é ruído numa mensagem feita para ser lida
+      // de relance. A principal vem na frente, do servidor.
+      expect(text, contains('1. Santo, Santo, Santo - 12 HCC\n'));
+      expect(text, isNot(contains('5 CC')));
+    });
+  });
+
   test('a mensagem não tem emoji nenhum', () {
     // Dois cultos, duas funções, observações e paleta: o caso que mais
     // multiplicava marcador nas versões anteriores. O negrito do WhatsApp faz

@@ -22,6 +22,7 @@ import '../../suggestions/presentation/event_suggestions_band.dart';
 import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
+import '../domain/service_moments.dart';
 
 /// Monta o repertório da escala, **um repertório por culto**: escolhe do
 /// repertório da equipe, arrasta para ordenar, e ajusta o tom quando aquele
@@ -202,6 +203,12 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         artist: song.artist,
         key: song.defaultKey,
         defaultKey: song.defaultKey,
+        // Do cadastro: é o que faz "314 CC" aparecer na linha antes mesmo de
+        // salvar, sem uma volta ao servidor.
+        hymnals: song.hymnals,
+        // Sem momento: quem acabou de escolher a música ainda não disse onde
+        // ela entra, e preencher por dedução poria na escala uma decisão que
+        // ninguém tomou.
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
         youtubeUrl: song.youtubeUrl,
@@ -210,57 +217,15 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   Future<void> _editItem(String serviceId, int index) async {
     final song = _lista(serviceId)[index];
-    final keyController = TextEditingController(text: song.keyOverride ?? '');
-    final noteController = TextEditingController(text: song.note ?? '');
 
     // "Música nova" não está aqui: é a marca que mais se mexe e a que menos
     // precisa de formulário. Ela mora no chip da própria linha, a um toque.
-    final salvou = await showDialog<bool>(
+    final ajuste = await showDialog<_SongSettings>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(song.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keyController,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: 'Tom neste culto',
-                helperText: song.defaultKey != null
-                    ? 'A equipe canta em ${song.defaultKey}'
-                    : 'Deixe vazio para usar o tom da equipe',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(
-                labelText: 'Recado',
-                hintText: 'Ex.: entra só o teclado',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Aplicar'),
-          ),
-        ],
-      ),
+      builder: (_) => _SongSettingsDialog(song: song),
     );
 
-    final novoTom = keyController.text.trim();
-    final novoRecado = noteController.text.trim();
-    keyController.dispose();
-    noteController.dispose();
-
-    if (salvou != true) return;
+    if (ajuste == null) return;
 
     setState(() {
       _lista(serviceId)[index] = EventSong(
@@ -268,11 +233,14 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         serviceId: song.serviceId,
         title: song.title,
         artist: song.artist,
-        key: novoTom.isEmpty ? song.defaultKey : novoTom,
-        keyOverride: novoTom.isEmpty ? null : novoTom,
+        key: ajuste.keyOverride ?? song.defaultKey,
+        keyOverride: ajuste.keyOverride,
         defaultKey: song.defaultKey,
-        note: novoRecado.isEmpty ? null : novoRecado,
+        note: ajuste.note,
         isNew: song.isNew,
+        moment: ajuste.moment,
+        momentLabel: ajuste.momentLabel,
+        hymnals: song.hymnals,
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
         youtubeUrl: song.youtubeUrl,
@@ -593,8 +561,14 @@ class _SetlistTile extends StatelessWidget {
                     ],
                   ],
                 ),
+                // "314 CC · Dízimos e Ofertas · Tom G". O hinário abre a
+                // linha porque é o que identifica a música ("ninguém pede Pão
+                // da Vida, pede 142"), e o que não existe simplesmente não
+                // aparece -- nenhum "—" de campo vazio.
                 Text(
                   [
+                    if (song.hymnal != null) song.hymnal!.label,
+                    if (song.momentText != null) song.momentText!,
                     if (song.artist != null && song.artist!.isNotEmpty)
                       song.artist!,
                     if (song.key != null && song.key!.isNotEmpty)
@@ -634,6 +608,165 @@ class _SetlistTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// O que a folha de ajustes devolve. Campos nulos são o campo apagado, e não
+/// "não mexi": a folha mostra o estado inteiro e devolve o estado inteiro.
+class _SongSettings {
+  const _SongSettings({
+    this.keyOverride,
+    this.note,
+    this.moment,
+    this.momentLabel,
+  });
+
+  final String? keyOverride;
+  final String? note;
+  final String? moment;
+  final String? momentLabel;
+}
+
+/// Tom, momento do culto e recado desta música **nesta escala**.
+///
+/// Os três são da linha da escala, e não do cadastro: a mesma canção sobe um
+/// tom quando quem canta muda, é oferta num domingo e abertura no outro, e o
+/// recado ("entra só o teclado") vale para aquele culto.
+///
+/// **O momento começa em "sem momento", e não em "Momento de Louvor".** A
+/// maioria das músicas de uma escala não tem momento nomeado; escolher um por
+/// quem não escolheu poria na escala publicada uma decisão de ninguém.
+class _SongSettingsDialog extends StatefulWidget {
+  const _SongSettingsDialog({required this.song});
+
+  final EventSong song;
+
+  @override
+  State<_SongSettingsDialog> createState() => _SongSettingsDialogState();
+}
+
+class _SongSettingsDialogState extends State<_SongSettingsDialog> {
+  late final TextEditingController _key = TextEditingController(
+    text: widget.song.keyOverride ?? '',
+  );
+  late final TextEditingController _note = TextEditingController(
+    text: widget.song.note ?? '',
+  );
+  late final TextEditingController _momentLabel = TextEditingController(
+    text: widget.song.momentLabel ?? '',
+  );
+
+  late String? _moment = widget.song.moment;
+
+  @override
+  void dispose() {
+    _key.dispose();
+    _note.dispose();
+    _momentLabel.dispose();
+    super.dispose();
+  }
+
+  void _aplicar() {
+    final tom = _key.text.trim();
+    final recado = _note.text.trim();
+    final rotulo = _momentLabel.text.trim();
+
+    Navigator.pop(
+      context,
+      _SongSettings(
+        keyOverride: tom.isEmpty ? null : tom,
+        note: recado.isEmpty ? null : recado,
+        moment: _moment,
+        // Só em "Outro", como no servidor: guardar "Santa Ceia" preso a
+        // "Abertura" deixaria o nome de uma escolha desfeita na linha.
+        momentLabel: _moment == otherServiceMoment && rotulo.isNotEmpty
+            ? rotulo
+            : null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return AlertDialog(
+      title: Text(widget.song.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _key,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: 'Tom neste culto',
+                helperText: widget.song.defaultKey != null
+                    ? 'A equipe canta em ${widget.song.defaultKey}'
+                    : 'Deixe vazio para usar o tom da equipe',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text('Momento do culto', style: theme.textTheme.titleSmall),
+            Text(
+              'Opcional. É o que diz à equipe em que ponto do culto ela entra.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final entry in serviceMoments.entries)
+                  ChoiceChip(
+                    label: Text(entry.value),
+                    selected: _moment == entry.key,
+                    // Tocar no que já está marcado limpa: é como se volta
+                    // atrás sem um chip "nenhum" ocupando a primeira posição.
+                    onSelected: (marcado) => setState(
+                      () => _moment = marcado ? entry.key : null,
+                    ),
+                  ),
+              ],
+            ),
+            if (_moment == otherServiceMoment) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _momentLabel,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 40,
+                decoration: const InputDecoration(
+                  labelText: 'Qual momento',
+                  hintText: 'Ex.: Santa Ceia',
+                  // O contador de 40 seria a única coisa numerada da folha,
+                  // para um campo de duas palavras.
+                  counterText: '',
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _note,
+              decoration: const InputDecoration(
+                labelText: 'Recado',
+                hintText: 'Ex.: entra só o teclado',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(onPressed: _aplicar, child: const Text('Aplicar')),
+      ],
     );
   }
 }
@@ -938,9 +1071,9 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                       subtitle: Text(
                         [
                           // No hino o número abre a linha: é assim que a igreja
-                          // pede ("142", não "Pão da Vida").
-                          if (song.hymnNumber != null)
-                            'Hino ${song.hymnNumber}',
+                          // pede ("142", não "Pão da Vida"). Com a sigla junto,
+                          // porque a mesma igreja canta de mais de um livro.
+                          if (song.hymnal != null) song.hymnal!.label,
                           song.subtitle,
                           if (song.defaultKey != null) 'Tom ${song.defaultKey}',
                         ].join(' · '),

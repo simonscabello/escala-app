@@ -428,7 +428,7 @@ não só o link: site de letra sai do ar e não abre no meio do culto.
   música devolve. Os campos que faltam preencher vêm na lista, porque é por
   eles que a tela vai filtrar.
 - **`search_text`** é título + artista + compositor em minúsculas e sem
-  acento, montado no serviço. É o que a busca compara: sem isso, procurar
+  acento, mais os números dos hinários da música, montado no serviço. É o que a busca compara: sem isso, procurar
   "coracao" não acha "Coração" — que é como o título está gravado e não é
   como as pessoas digitam. A ordenação também usa ele.
 - Regra 20 (título+artista único por equipe, ignorando maiúsculas) e regra 21
@@ -438,6 +438,90 @@ não só o link: site de letra sai do ar e não abre no meio do culto.
   array na própria linha** e não em tabela de ligação — a listagem já lê a
   música inteira e passaria a precisar de um join só para desenhar as
   etiquetas. Ver a seção "Temas" abaixo.
+
+### Hinários — o número do hino, de qualquer livro
+
+`Hymnal` (tabela) + `SongHymnal` (referência): **"esta música é o 314 do Cantor
+Cristão"**. Não há `hymnNumber`, `numeroHCC` nem `numeroHarpaCrista` — a
+coluna única do Cantor Cristão saiu na migration
+`20260912120000_hymnals_and_service_moments`, depois de os 581 números
+existentes virarem referências.
+
+Por que tabela e não coluna: a estrutura anterior guardava só
+`songs.hymn_number`, com o Cantor Cristão subentendido, porque a igreja cantava
+um só. O segundo hinário por aquele caminho custaria coluna nova, validação
+nova, busca nova e uma regra de qual mostrar na escala; o terceiro, tudo de
+novo. **Hinário novo agora é uma LINHA**, e nada no banco muda.
+
+- Cadastrados: `cantor-cristao` (CC, 581), `hinario-para-o-culto-cristao`
+  (HCC) e `harpa-crista` (HC). `GET /hymnals` devolve a lista — **fora de
+  `/teams/:teamId`**, porque o CC 314 é o mesmo hino em qualquer igreja. Uma
+  cópia por equipe faria "314 CC" significar coisas diferentes em bancos
+  diferentes.
+- `maxNumber` é o teto da validação, e é **do livro**. 581 só no Cantor
+  Cristão, que é o número que o código anterior já afirmava; nos outros dois
+  fica nulo — "ninguém conferiu a última página", e não "sem limite". Chutar
+  640 para a Harpa Cristã recusaria cadastro certo.
+- Chave composta `(song_id, hymnal_id)`: a mesma música em dois hinários são
+  duas linhas, e duas vezes no **mesmo** livro é erro (400 `DUPLICATE_HYMNAL`)
+   — o hino não tem dois números no mesmo hinário.
+- **Uma principal, e só uma** (`isPrimary`). É a que a escala e o texto do
+  WhatsApp mostram: duas siglas na mesma linha são ruído numa mensagem feita
+  para ser lida de relance. Quem garante é o serviço (`normalizeHymnalRefs`),
+  e não um índice parcial — o Prisma não sabe declarar índice com `WHERE`, e a
+  divergência apareceria como drift em toda migration seguinte. Sem ninguém
+  marcar, a primeira assume. A resposta traz a principal **na frente**.
+- `PATCH .../songs/:id` com `hymnals` **substitui a lista inteira**; `[]` apaga
+  todas; **omitir o campo é "não mexi nele"**. A diferença importa: o
+  `searchText` é reconstruído a cada gravação, e sem ela salvar o tom apagaria
+  "314" da busca.
+- Erros: `INVALID_HYMNAL` (livro que não existe), `DUPLICATE_HYMNAL`,
+  `HYMN_NUMBER_OUT_OF_RANGE` (com o teto do próprio livro na mensagem).
+- **`buildSearchText` gera os termos por referência**: `314`, `314` com zeros
+  (`padStart(3)`), `cc 314` e `hino 314`. A sigla vem da referência, não
+  escrita no código — o hinário que entrar amanhã já nasce procurável.
+- A cópia entre equipes (`POST .../songs/from-catalog`) **leva as referências
+  junto**, como leva os temas: o 314 é o 314 em qualquer igreja, e mandar a
+  outra equipe redigitar seria pedir que conferisse o que já foi conferido.
+
+No app: seção **"Hinários"** no formulário de edição da música
+(`hymnal_refs_field.dart`), com adicionar, editar, remover e a estrela de
+principal — que só aparece com duas ou mais referências. O livro que a música
+já tem sai do seletor. A lista de hinários vem de `hymnalsProvider`
+(`GET /hymnals`, sem `autoDispose`) e **não** de uma constante em Dart: é a
+promessa desta estrutura — o quarto hinário entra sem release do APK. Isto é o
+oposto de `songThemes`, que é vocabulário fechado e mora no código dos dois
+lados.
+
+`Song.hymnals` é a lista; `Song.hymnal` é a principal; `Song.hymnNumber`
+continua existindo como **derivado** da principal, porque é por ele que a aba
+"Hinos" ordena e que `song_sections.dart` agrupa por centena. `isHymn` passou a
+ser "está em algum hinário" — a igreja que cantar só da Harpa Cristã ganha a
+mesma aba pelo mesmo motivo.
+
+### Momento do culto (por música da escala)
+
+`EventSong.moment` (`ServiceMoment?`) e `EventSong.momentLabel`. Opcional.
+Vocabulário fechado, na ordem em que os momentos acontecem no domingo:
+`PRELUDIO`, `ABERTURA`, `DIZIMOS_E_OFERTAS`, `LOUVOR`, `ESPECIAL`, `POSLUDIO`,
+`OUTRO`.
+
+- **Mora na linha da escala, não no cadastro da música**, pelo mesmo motivo que
+  `keyOverride`: "Estou Seguro" é oferta num domingo e abertura no outro.
+  Guardado em `Song`, mudar o momento de um domingo reescreveria todas as
+  escalas passadas.
+- **Nulo continua nulo.** Nada preenche "Momento de Louvor" por dedução — é a
+  mesma armadilha de `isNew`, e poria na escala publicada uma decisão que
+  ninguém tomou.
+- `momentLabel` **só vale em `OUTRO`** ("Santa Ceia", "Batismo"); nos demais o
+  serviço limpa, para não sobrar na linha o rótulo de uma escolha desfeita.
+  É a válvula que impede a lista de crescer a cada denominação nova.
+- No app, a escolha fica na mesma folha que ajusta o tom desta escala
+  (`_SongSettingsDialog`, em `setlist_form_screen.dart`): chips, nenhum marcado
+  por padrão, e tocar no marcado limpa. `serviceMoments` (em
+  `events/domain/service_moments.dart`) é o espelho do enum, e
+  `serviceMomentLabel` devolve **nulo** sem momento — nada de "—" nem de "Sem
+  momento" em cada linha.
 
 ### Temas da música
 

@@ -182,17 +182,43 @@ void _writeSongs(StringBuffer buffer, Event event) {
 String _semRepertorio(bool naHora) =>
     naHora ? 'Definidas na hora, no culto.' : 'Ainda não escolhidas.';
 
+/// Uma linha por música: `Nome - 314 CC (Dízimos e Ofertas)`.
+///
+/// Nem artista nem tom. O tom está na cifra que cada um já abre e o artista
+/// nunca decidiu nada -- juntos custavam meia linha por música, e é a lista de
+/// músicas que precisa caber inteira na tela.
+///
+/// O que entra é o que a pessoa **procura na mensagem**:
+///
+/// - **O hinário**, quando existe: ninguém pede "Pão da Vida", pede "142".
+///   Número e sigla, porque a mesma igreja canta de mais de um livro e "208"
+///   sozinho não diz qual.
+/// - **O momento**, quando existe: é o que diz ao instrumentista que aquela
+///   entra na oferta, e à multimídia em que ponto do culto preparar a letra.
+/// - **"Nova"**, quando existe: o único recado que muda o que a pessoa faz
+///   antes do domingo, que é ouvir a música durante a semana.
+///
+/// **Nada aparece vazio.** Sem hinário e sem momento sai só o nome, que é a
+/// esmagadora maioria das linhas -- um "( )" ou um "—" em cada uma delas faria
+/// a mensagem parecer um formulário por preencher.
 List<String> _songLines(List<EventSong> songs) {
   final lines = <String>[];
   for (final song in songs) {
     if (song.title.isEmpty) continue;
-    // Só o título. O tom está na cifra que cada um já abre e o artista nunca
-    // decidiu nada -- juntos custavam meia linha por música, e é a lista de
-    // músicas que precisa caber inteira na tela.
-    //
-    // "Nova" fica: é o único recado que muda o que a pessoa faz antes do
-    // domingo, que é ouvir a música durante a semana.
-    lines.add(song.isNew ? '${song.title} — ${_bold('Nova')}' : song.title);
+
+    final linha = StringBuffer(song.title);
+
+    // Separado por travessão curto, e não por vírgula: "314 CC" é um
+    // identificador, não mais um item de uma lista de atributos.
+    final hinario = song.hymnal;
+    if (hinario != null) linha.write(' - ${hinario.label}');
+
+    final momento = song.momentText;
+    if (momento != null) linha.write(' ($momento)');
+
+    if (song.isNew) linha.write(' — ${_bold('Nova')}');
+
+    lines.add(linha.toString());
   }
   return lines;
 }

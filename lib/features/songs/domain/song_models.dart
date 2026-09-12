@@ -1,3 +1,5 @@
+import 'hymnal_models.dart';
+
 /// Uma música do repertório da equipe.
 ///
 /// O mesmo modelo serve à lista e ao detalhe: a lista não traz `lyrics` (são
@@ -22,7 +24,7 @@ class Song {
     this.spotifyUrl,
     this.isArchived = false,
     this.isNew = false,
-    this.hymnNumber,
+    this.hymnals = const [],
     this.themes = const [],
   });
 
@@ -59,12 +61,17 @@ class Song {
   /// uma vez não encerra a novidade.
   final bool isNew;
 
-  /// Número do hino no Cantor Cristão. Nulo em cântico.
+  /// Em que hinários esta música está, e com que número. Vazia em cântico.
   ///
   /// É como a igreja chama o hino — ninguém pede "Pão da Vida", pede "142" —
-  /// então ele aparece no lugar de maior destaque da linha e a busca do
+  /// então o número aparece no lugar de maior destaque da linha e a busca do
   /// servidor também o compara.
-  final int? hymnNumber;
+  ///
+  /// **Lista, e não um número solto.** O mesmo hino está em mais de um hinário
+  /// com números diferentes, e isso é um fato sobre a música, não sobre a
+  /// igreja que a canta. A primeira é a principal — é ela que a escala e o
+  /// texto do WhatsApp mostram.
+  final List<HymnalRef> hymnals;
 
   /// Sobre o que a música fala, nos valores do enum do servidor
   /// (`'ADORACAO'`, `'CEIA'`...). Vazia enquanto ninguém classificou.
@@ -73,7 +80,15 @@ class Song {
   /// música, a lista filtra por elas e a linha as mostra.
   final List<String> themes;
 
-  bool get isHymn => hymnNumber != null;
+  /// A referência que representa a música, ou nulo quando ela não está em
+  /// hinário nenhum.
+  HymnalRef? get hymnal => primaryHymnalRef(hymnals);
+
+  /// Está em algum hinário. É o que separa os dois acervos do repertório.
+  bool get isHymn => hymnals.isNotEmpty;
+
+  /// O número do hinário principal, para ordenar a aba "Hinos".
+  int? get hymnNumber => hymnal?.number;
 
   bool get hasLyrics => lyrics != null && lyrics!.trim().isNotEmpty;
 
@@ -100,7 +115,11 @@ class Song {
       spotifyUrl: json['spotifyUrl'] as String?,
       isArchived: json['isArchived'] as bool? ?? false,
       isNew: json['isNew'] as bool? ?? false,
-      hymnNumber: json['hymnNumber'] as int?,
+      // Ausente vale lista vazia: é o que o cache gravado antes desta versão
+      // guarda, e é o que a maioria das músicas é.
+      hymnals: (json['hymnals'] as List<dynamic>? ?? const [])
+          .map((e) => HymnalRef.fromJson(e as Map<String, dynamic>))
+          .toList(),
       // Ausente vale lista vazia: é o que o cache gravado antes desta versão
       // guarda, e é o que uma música sem classificação significa.
       themes: (json['themes'] as List<dynamic>? ?? const [])
