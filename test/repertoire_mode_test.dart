@@ -119,7 +119,7 @@ void main() {
         Event.fromJson(_eventJson(repertoireMode: 'ON_THE_FLY')),
       );
 
-      expect(text, contains('🎶 Músicas'));
+      expect(text, contains('*Músicas*'));
       expect(text, contains('Definidas na hora, no culto.'));
       expect(text, isNot(contains('Ainda não escolhidas.')));
     });

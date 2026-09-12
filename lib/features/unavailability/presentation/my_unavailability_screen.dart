@@ -98,25 +98,37 @@ class _MyUnavailabilityScreenState
     }
   }
 
-  Future<String?> _askReason() async {
-    final controller = TextEditingController();
+  /// A caixa do motivo, nas duas entradas: ao marcar dias novos e ao corrigir
+  /// um dia que já estava marcado.
+  ///
+  /// Devolve `null` quando a pessoa desistiu e a string quando confirmou --
+  /// **vazia inclusive**, que é como se apaga um motivo. A diferença só
+  /// importa ao corrigir: desistir não pode limpar o que estava escrito.
+  Future<String?> _askReason({String? initial, bool editing = false}) {
+    final controller = TextEditingController(text: initial ?? '');
 
     return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Quer dizer o motivo?'),
+        title: Text(editing ? 'Motivo desse dia' : 'Quer dizer o motivo?'),
         content: TextField(
           controller: controller,
           autofocus: true,
+          // O mesmo teto do servidor: cortar aqui poupa a ida de rede que
+          // voltaria com o texto recusado depois de escrito.
+          maxLength: 120,
           decoration: const InputDecoration(
             hintText: 'Viagem, trabalho... (opcional)',
           ),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Pular'),
+            // Ao marcar, "Pular" segue com os dias e sem motivo; ao corrigir,
+            // desistir tem de deixar o motivo como estava.
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(editing ? null : ''),
+            child: Text(editing ? 'Cancelar' : 'Pular'),
           ),
           FilledButton(
             onPressed: () =>
@@ -126,6 +138,44 @@ class _MyUnavailabilityScreenState
         ],
       ),
     );
+  }
+
+  /// Corrigir o motivo de **um** dia.
+  ///
+  /// O motivo nasce por lote -- uma viagem cobre cinco domingos --, e depois
+  /// um deles vira outra coisa. Sem isto a saída era desmarcar o dia e marcar
+  /// de novo, que chega para quem lidera como uma ausência nova. O dia em si
+  /// não se edita aqui: trocar de domingo é apagar um aviso e dar outro, e
+  /// isso já é o que o calendário faz.
+  Future<void> _editReason(Unavailability item) async {
+    final reason = await _askReason(initial: item.reason, editing: true);
+    if (reason == null || !mounted) return;
+    if (reason == (item.reason ?? '')) return;
+
+    try {
+      await ref.read(unavailabilityRepositoryProvider).updateReason(
+            widget.teamId,
+            item.id,
+            reason: reason,
+          );
+      ref.invalidate(myUnavailabilityProvider(widget.teamId));
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          // Apagar o motivo não é desmarcar o dia, e a frase diz isso: quem
+          // toca em "Salvar" com o campo vazio precisa saber que continua
+          // indisponível.
+          reason.isEmpty
+              ? 'Motivo apagado. O dia continua marcado.'
+              : 'Motivo atualizado. A equipe já vê.',
+          tone: AppTone.success,
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppSnackBar(context, error.message, tone: AppTone.danger);
+      }
+    }
   }
 
   Future<void> _remove(Unavailability item) async {
@@ -242,6 +292,7 @@ class _MyUnavailabilityScreenState
                           padding: const EdgeInsets.only(bottom: AppSpacing.md),
                           child: _UnavailabilityTile(
                             item: item,
+                            onEditReason: () => _editReason(item),
                             onRemove: () => _remove(item),
                           ),
                         ),
@@ -261,10 +312,22 @@ class _MyUnavailabilityScreenState
   }
 }
 
+/// Um dia marcado, com o motivo logo abaixo da data.
+///
+/// **O cartão inteiro abre o motivo.** O motivo entra por lote no momento de
+/// marcar os dias, e aí ele é um chute sobre vários domingos de uma vez;
+/// corrigir um deles era desmarcar e marcar de novo. O toque fica no cartão e
+/// não num lápis ao lado do X: dois ícones minúsculos e vizinhos, um deles
+/// destrutivo, é como se toca no errado.
 class _UnavailabilityTile extends StatelessWidget {
-  const _UnavailabilityTile({required this.item, required this.onRemove});
+  const _UnavailabilityTile({
+    required this.item,
+    required this.onEditReason,
+    required this.onRemove,
+  });
 
   final Unavailability item;
+  final VoidCallback onEditReason;
   final VoidCallback onRemove;
 
   @override
@@ -274,8 +337,10 @@ class _UnavailabilityTile extends StatelessWidget {
     final label = capitalizeWeekday(
       DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(item.date),
     );
+    final reason = item.reason?.isNotEmpty ?? false ? item.reason! : null;
 
     return AppCard(
+      onTap: onEditReason,
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         AppSpacing.md,
@@ -300,13 +365,18 @@ class _UnavailabilityTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: theme.textTheme.titleSmall),
-                if (item.reason?.isNotEmpty ?? false)
-                  Text(
-                    item.reason!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                // Sem motivo, a segunda linha convida em vez de sumir: é o
+                // que diz que o cartão abre alguma coisa. O motivo escrito
+                // dispensa o convite -- quem já escreveu sabe que dá para
+                // mexer, e "toque para editar" embaixo de cada dia viraria
+                // ruído na lista inteira.
+                Text(
+                  reason ?? 'Toque para dizer o motivo',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontStyle: reason == null ? FontStyle.italic : null,
                   ),
+                ),
               ],
             ),
           ),

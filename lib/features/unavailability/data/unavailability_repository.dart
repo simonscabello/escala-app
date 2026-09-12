@@ -61,6 +61,25 @@ class UnavailabilityRepository {
     });
   }
 
+  /// Trocar o motivo de **um** dia.
+  ///
+  /// O `add` grava um motivo para o lote inteiro e o servidor ignora os dias
+  /// que já existiam, então remarcar nunca corrigia o texto. Vazio apaga o
+  /// motivo, e o dia continua marcado.
+  Future<Unavailability> updateReason(
+    String teamId,
+    String id, {
+    required String? reason,
+  }) {
+    return _guard(() async {
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '/teams/$teamId/unavailabilities/$id',
+        data: {'reason': (reason?.isEmpty ?? true) ? null : reason},
+      );
+      return Unavailability.fromJson(response.data!);
+    });
+  }
+
   Future<void> remove(String teamId, String id) {
     return _guard(() async {
       await _dio.delete<void>('/teams/$teamId/unavailabilities/$id');

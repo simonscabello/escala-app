@@ -11,10 +11,10 @@ import 'package:louvor_app/features/suggestions/presentation/suggest_song_sheet.
 
 /// Os links na folha de sugerir.
 ///
-/// Duas coisas quebram caladas aqui: o Spotify deixar de ser preenchido
-/// sozinho (e a sugestão virar um título sem nada para ouvir) e a cobrança do
-/// link da letra sumir — o que faria toda sugestão sem cadastro voltar do
-/// servidor com 400 depois de a pessoa ter escrito a justificativa inteira.
+/// O que quebra calado aqui é o Spotify deixar de ser preenchido sozinho --
+/// e a sugestão virar um título sem nada para ouvir. O link da letra já foi
+/// obrigatório em música fora do repertório e deixou de ser: o teste agora
+/// guarda o contrário, que sem ele a sugestão sai.
 class _SongsFake extends SongRepository {
   _SongsFake({this.externas = const []}) : super(Dio());
 
@@ -163,8 +163,6 @@ void main() {
       'https://open.spotify.com/track/abc',
     );
 
-    // A letra continua sendo cobrada: o Spotify não resolve "que música é
-    // essa" para quem vai reger o culto.
     // O último campo é a justificativa: os três de link vêm antes dela.
     await tester.enterText(
       find.byType(TextField).last,
@@ -173,24 +171,13 @@ void main() {
     await tester.pumpAndSettle();
     await enviar(tester);
 
-    expect(sugestoes.enviado, isNull);
+    // Sem link nenhum da letra, e vai assim mesmo: a cobrança fazia a pessoa
+    // sair da tela atrás de um endereço e não voltar.
+    expect(sugestoes.enviado?['lyricsUrl'], '');
+    // E a URL do Spotify foi junto, que é o que este teste guarda.
     expect(
-      find.textContaining('Mande o link da letra ou da cifra'),
-      findsOneWidget,
-    );
-
-    // Com o link, vai — e vai com o Spotify junto.
-    await tester.enterText(
-      campo('Link da letra ou cifra'),
-      'https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/',
-    );
-    await tester.pumpAndSettle();
-    await enviar(tester);
-
-    expect(sugestoes.enviado?['spotifyUrl'], 'https://open.spotify.com/track/abc');
-    expect(
-      sugestoes.enviado?['lyricsUrl'],
-      'https://www.cifraclub.com.br/isaias-saad/bondade-de-deus/',
+      sugestoes.enviado?['spotifyUrl'],
+      'https://open.spotify.com/track/abc',
     );
   });
 
@@ -217,12 +204,6 @@ void main() {
     expect(
       tester.widget<TextField>(campo('YouTube (opcional)')).controller?.text,
       'https://www.youtube.com/watch?v=xyz',
-    );
-
-    // E o rótulo não cobra: a música já está no repertório.
-    expect(
-      find.textContaining('Obrigatório: essa música ainda não está'),
-      findsNothing,
     );
 
     await tester.enterText(

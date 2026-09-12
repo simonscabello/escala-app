@@ -42,25 +42,37 @@ void main() {
     });
   }
 
-  test('texto de compartilhamento inclui culto, ensaio e equipe', () {
+  test('texto de compartilhamento abre pelo cabeçalho, data e equipe', () {
     final text = buildScheduleShareText(sampleEvent());
 
-    expect(text, contains('Culto da Manhã'));
-    expect(text, contains('Culto às 09:00'));
-    expect(text, contains('Ensaio:'));
-    expect(text, contains('Guitarra:'));
-    expect(text, contains('• Samuel'));
-    expect(text, contains('Roupas: Preto e dourado'));
-    expect(text, contains('Observações'));
+    expect(text, startsWith('*Escala de Louvor*\n'));
+    expect(text, contains('*Culto da Manhã*'));
+    expect(text, contains('*Domingo, 16 de agosto*'));
+    expect(text, contains('*Equipe*'));
+    expect(text, contains('*Guitarra:* Samuel'));
+    expect(text, contains('*Roupas:* Preto e dourado'));
+    expect(text, contains('*Observações*'));
     expect(text, contains('Chegar cedo'));
     // A seção entra mesmo vazia: escala publicada sem repertório é caso
     // normal, e sumir com ela deixaria quem recebe sem saber se as músicas
     // não saíram ou se o texto veio pela metade.
-    expect(text, contains('🎶 Músicas'));
+    expect(text, contains('*Músicas*'));
     expect(text, contains('Ainda não escolhidas.'));
   });
 
-  test('domingo com dois cultos lista os dois horários', () {
+  test('horários de culto e de ensaio não vão na mensagem', () {
+    // Ambos existem na escala de exemplo: o culto às 09:00 e o ensaio no
+    // sábado às 19:00. Quem recebe o texto já sabe a que horas a igreja abre,
+    // e as duas linhas empurravam o repertório para fora da primeira tela.
+    final text = buildScheduleShareText(sampleEvent());
+
+    expect(text, isNot(contains('09:00')));
+    expect(text, isNot(contains('19:00')));
+    expect(text, isNot(contains('Ensaio')));
+    expect(text, isNot(contains('Sem ensaio')));
+  });
+
+  test('domingo com dois cultos não repete a equipe nem lista horário', () {
     final event = Event.fromJson({
       'id': 'e2',
       'teamId': 't1',
@@ -81,13 +93,14 @@ void main() {
 
     final text = buildScheduleShareText(event);
 
-    expect(text, contains('Manhã às 08:30'));
-    expect(text, contains('Noite às 19:00'));
-    // A equipe é uma só para os dois cultos: nada de repetir a escalação.
-    expect('Manhã'.allMatches(text).length, 1);
+    expect(text, isNot(contains('08:30')));
+    expect(text, isNot(contains('19:00')));
+    // Sem repertório em culto nenhum, os dois rótulos não entram: seria dizer
+    // duas vezes a mesma coisa.
+    expect('Manhã'.allMatches(text).length, 0);
   });
 
-  test('ministrante aparece antes da equipe', () {
+  test('quem ministra aparece dentro do Vocal, e não em linha própria', () {
     final event = Event.fromJson({
       'id': 'e4',
       'teamId': 't1',
@@ -95,15 +108,69 @@ void main() {
       'startsAt': '2026-08-16T12:00:00.000Z',
       'status': 'PUBLISHED',
       'timezone': 'America/Sao_Paulo',
-      'minister': {'membershipId': 'm1', 'displayName': 'Ana'},
-      'assignments': [],
+      'minister': {'membershipId': 'm2', 'displayName': 'Joseane Alves'},
+      'assignments': [
+        {
+          'positionId': 'p1',
+          'positionName': 'Vocal',
+          'sortOrder': 1,
+          'members': [
+            {
+              'id': 'a1',
+              'membershipId': 'm1',
+              'displayName': 'Gisely Ramos',
+              'isRegisteredForPosition': true,
+            },
+            {
+              'id': 'a2',
+              'membershipId': 'm2',
+              'displayName': 'Joseane Alves',
+              'isRegisteredForPosition': true,
+            },
+          ],
+        },
+      ],
       'songs': [],
     });
 
     final text = buildScheduleShareText(event);
 
-    expect(text, contains('Ministrante: Ana'));
-    expect(text.indexOf('Ministrante'), lessThan(text.indexOf('Equipe')));
+    expect(text, contains('*Vocal:* Gisely e Joseane *(Ministrante)*'));
+    // A linha separada some: repetia o nome duas vezes na mesma mensagem e
+    // fazia parecer que eram duas pessoas.
+    expect(text, isNot(contains('*Ministrante:*')));
+    expect('Joseane'.allMatches(text).length, 1);
+  });
+
+  test('quem só conduz, sem função, mantém a linha de ministrante', () {
+    // A regra é não repetir o nome, não escondê-lo: sem nenhuma função, sumir
+    // com a linha deixaria a mensagem sem dizer a quem a equipe se reporta.
+    final event = Event.fromJson({
+      'id': 'e4b',
+      'teamId': 't1',
+      'startsAt': '2026-08-16T12:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'minister': {'membershipId': 'm9', 'displayName': 'Ana Clara Souza'},
+      'assignments': [
+        {
+          'positionId': 'p1',
+          'positionName': 'Violão',
+          'sortOrder': 1,
+          'members': [
+            {
+              'id': 'a1',
+              'membershipId': 'm1',
+              'displayName': 'Gerson',
+              'isRegisteredForPosition': true,
+            },
+          ],
+        },
+      ],
+      'songs': [],
+    });
+
+    expect(buildScheduleShareText(event), contains('*Ministrante:* Ana'));
   });
 
   test('sem ministrante escolhido, a linha não aparece', () {
@@ -122,7 +189,147 @@ void main() {
     expect(buildScheduleShareText(event), isNot(contains('Ministrante')));
   });
 
-  test('escala sem services (cache antigo) cai no horário da escala', () {
+  group('só o primeiro nome', () {
+    Event comVocal(List<Map<String, Object?>> membros) {
+      return Event.fromJson({
+        'id': 'e-nomes',
+        'teamId': 't1',
+        'startsAt': '2026-08-16T12:00:00.000Z',
+        'status': 'PUBLISHED',
+        'timezone': 'America/Sao_Paulo',
+        'assignments': [
+          {
+            'positionId': 'p1',
+            'positionName': 'Vocal',
+            'sortOrder': 1,
+            'members': [
+              for (final membro in membros)
+                {...membro, 'isRegisteredForPosition': true},
+            ],
+          },
+        ],
+        'songs': [],
+      });
+    }
+
+    test('sem ambiguidade, o sobrenome não entra', () {
+      final text = buildScheduleShareText(
+        comVocal([
+          {'id': 'a1', 'membershipId': 'm1', 'displayName': 'Gisely Ramos'},
+          {'id': 'a2', 'membershipId': 'm2', 'displayName': 'Simon Pereira'},
+        ]),
+      );
+
+      expect(text, contains('*Vocal:* Gisely e Simon'));
+      expect(text, isNot(contains('Ramos')));
+    });
+
+    test('dois com o mesmo primeiro nome ganham a parte que os separa', () {
+      final text = buildScheduleShareText(
+        comVocal([
+          {'id': 'a1', 'membershipId': 'm1', 'displayName': 'Simon Lopes'},
+          {'id': 'a2', 'membershipId': 'm2', 'displayName': 'simon pedro'},
+          {'id': 'a3', 'membershipId': 'm3', 'displayName': 'Larissa'},
+        ]),
+      );
+
+      // A comparação ignora a caixa: "simon pedro" digitado em minúscula é o
+      // mesmo primeiro nome de "Simon Lopes".
+      expect(text, contains('Simon Lopes'));
+      expect(text, contains('simon pedro'));
+      // Quem não colide continua curto.
+      expect(text, contains('e Larissa'));
+    });
+
+    test('nomes iguais até o fim vão inteiros, sem laço infinito', () {
+      final text = buildScheduleShareText(
+        comVocal([
+          {'id': 'a1', 'membershipId': 'm1', 'displayName': 'João Silva'},
+          {'id': 'a2', 'membershipId': 'm2', 'displayName': 'João Silva'},
+        ]),
+      );
+
+      expect(text, contains('*Vocal:* João Silva e João Silva'));
+    });
+
+    test('a mesma pessoa em duas funções sai curta nas duas', () {
+      final event = Event.fromJson({
+        'id': 'e-duas',
+        'teamId': 't1',
+        'startsAt': '2026-08-16T12:00:00.000Z',
+        'status': 'PUBLISHED',
+        'timezone': 'America/Sao_Paulo',
+        'assignments': [
+          {
+            'positionId': 'p1',
+            'positionName': 'Vocal',
+            'sortOrder': 1,
+            'members': [
+              {
+                'id': 'a1',
+                'membershipId': 'm1',
+                'displayName': 'Simon Pereira',
+                'isRegisteredForPosition': true,
+              },
+            ],
+          },
+          {
+            'positionId': 'p2',
+            'positionName': 'Teclado',
+            'sortOrder': 2,
+            'members': [
+              {
+                'id': 'a2',
+                'membershipId': 'm1',
+                'displayName': 'Simon Pereira',
+                'isRegisteredForPosition': true,
+              },
+            ],
+          },
+        ],
+        'songs': [],
+      });
+
+      final text = buildScheduleShareText(event);
+
+      expect(text, contains('*Vocal:* Simon\n'));
+      expect(text, contains('*Teclado:* Simon\n'));
+    });
+  });
+
+  test('três ou mais na mesma função saem em lista com "e" no fim', () {
+    final event = Event.fromJson({
+      'id': 'e-lista',
+      'teamId': 't1',
+      'startsAt': '2026-08-16T12:00:00.000Z',
+      'status': 'PUBLISHED',
+      'timezone': 'America/Sao_Paulo',
+      'assignments': [
+        {
+          'positionId': 'p1',
+          'positionName': 'Vocal',
+          'sortOrder': 1,
+          'members': [
+            for (final nome in ['Gisely', 'Joseane', 'Simon'])
+              {
+                'id': 'a-$nome',
+                'membershipId': 'm-$nome',
+                'displayName': nome,
+                'isRegisteredForPosition': true,
+              },
+          ],
+        },
+      ],
+      'songs': [],
+    });
+
+    expect(
+      buildScheduleShareText(event),
+      contains('*Vocal:* Gisely, Joseane e Simon'),
+    );
+  });
+
+  test('escala sem services (cache antigo) não inventa horário', () {
     final event = Event.fromJson({
       'id': 'e3',
       'teamId': 't1',
@@ -136,7 +343,7 @@ void main() {
 
     expect(event.services, isEmpty);
     expect(event.displayServices, hasLength(1));
-    expect(buildScheduleShareText(event), contains('Culto às 09:00'));
+    expect(buildScheduleShareText(event), isNot(contains('Culto às')));
   });
 
   test('texto inclui músicas quando a lista não está vazia', () {
@@ -164,26 +371,17 @@ void main() {
       ),
     );
 
-    expect(text, contains('Músicas'));
+    expect(text, contains('*Músicas*'));
     // Numeradas: a ordem do repertório é o que a equipe vai tocar.
-    expect(text, contains('1. Grande é o Senhor — Adoração (G)'));
-    expect(text, contains('2. Aclame ao Senhor — Diante do Trono (A)'));
+    expect(text, contains('1. Grande é o Senhor\n'));
+    expect(text, contains('2. Aclame ao Senhor\n'));
+    // Nem artista nem tom: o tom está na cifra que cada um já abre, e os dois
+    // juntos custavam meia linha por música.
+    expect(text, isNot(contains('Adoração')));
+    expect(text, isNot(contains('(G)')));
   });
 
-  test('música sem tom não ganha parênteses vazios', () {
-    final text = buildScheduleShareText(
-      sampleEvent(
-        songs: [
-          {'songId': 's1', 'title': 'Corinho da igreja'},
-        ],
-      ),
-    );
-
-    expect(text, contains('1. Corinho da igreja'));
-    expect(text, isNot(contains('()')));
-  });
-
-  test('música nova sai marcada no texto, depois do tom', () {
+  test('música nova sai marcada, e só ela', () {
     final text = buildScheduleShareText(
       sampleEvent(
         songs: [
@@ -199,24 +397,10 @@ void main() {
       ),
     );
 
-    // O tom vem primeiro porque é o que o músico procura; "nova" é recado.
-    expect(text, contains('1. Bondade de Deus — Isaias Saad (G) (nova)'));
+    expect(text, contains('1. Bondade de Deus — *Nova*'));
     // Só a marcada: a etiqueta perde o sentido se aparecer em todas.
-    expect(text, contains('2. Aclame ao Senhor (A)\n'));
-    expect('(nova)'.allMatches(text).length, 1);
-  });
-
-  test('música nova sem tom não ganha parênteses vazios antes do recado', () {
-    final text = buildScheduleShareText(
-      sampleEvent(
-        songs: [
-          {'songId': 's1', 'title': 'Corinho novo', 'isNew': true},
-        ],
-      ),
-    );
-
-    expect(text, contains('1. Corinho novo (nova)'));
-    expect(text, isNot(contains('()')));
+    expect(text, contains('2. Aclame ao Senhor\n'));
+    expect('*Nova*'.allMatches(text).length, 1);
   });
 
   /// Escala de domingo com manhã e noite, cada culto com o próprio repertório.
@@ -228,15 +412,23 @@ void main() {
       'status': 'PUBLISHED',
       'timezone': 'America/Sao_Paulo',
       'services': [
-        {'id': 's-manha', 'label': 'Manhã', 'startsAt': '2026-08-16T11:30:00.000Z'},
-        {'id': 's-noite', 'label': 'Noite', 'startsAt': '2026-08-16T22:00:00.000Z'},
+        {
+          'id': 's-manha',
+          'label': 'Manhã',
+          'startsAt': '2026-08-16T11:30:00.000Z',
+        },
+        {
+          'id': 's-noite',
+          'label': 'Noite',
+          'startsAt': '2026-08-16T22:00:00.000Z',
+        },
       ],
       'assignments': [],
       'songs': songs,
     });
   }
 
-  test('com um culto só, o repertório não ganha cabeçalho de culto', () {
+  test('com um culto só, o repertório sai sob "Músicas"', () {
     final text = buildScheduleShareText(
       sampleEvent(
         songs: [
@@ -245,12 +437,7 @@ void main() {
       ),
     );
 
-    expect(text, contains('🎶 Músicas'));
-    expect(text, contains('1. Uma Canção (G)'));
-    // O horário já está na linha "Culto às 09:00" lá em cima; repeti-lo
-    // sobre a única lista seria ruído numa mensagem lida no celular.
-    expect('Culto às 09:00'.allMatches(text).length, 1);
-    expect(text, isNot(contains('Culto 09:00')));
+    expect(text, contains('*Músicas*\n\n1. Uma Canção'));
   });
 
   test('com dois cultos, cada um ganha sua seção e sua numeração', () {
@@ -272,11 +459,12 @@ void main() {
       ),
     );
 
-    expect(text, contains('Manhã 08:30'));
-    expect(text, contains('Noite 19:00'));
+    expect(text, contains('*Manhã*\n\n1. Abre Manhã\n2. Segue Manhã'));
     // A numeração recomeça: "a 2ª da noite" é como a equipe fala.
-    expect(text, contains('1. Abre Manhã\n2. Segue Manhã'));
-    expect(text, contains('1. Abre Noite\n2. Abre Manhã (Bm)'));
+    expect(text, contains('*Noite*\n\n1. Abre Noite\n2. Abre Manhã'));
+    // O rótulo do culto substitui o "Músicas": os dois juntos seriam três
+    // cabeçalhos para duas listas.
+    expect(text, isNot(contains('*Músicas*')));
   });
 
   test('culto sem música aparece dizendo que o repertório não saiu', () {
@@ -290,14 +478,8 @@ void main() {
 
     expect(text, contains('1. Só de Manhã'));
     // A noite entra nomeada, e não some: sem ela, quem canta à noite lê
-    // "1. Só de Manhã" como o repertório do dia inteiro. Isto passou a
-    // importar quando a escala pôde ser publicada com músicas em aberto --
-    // antes, o culto vazio só existia em rascunho, que ninguém compartilha.
-    expect(text, contains('Manhã 08:30'));
-    expect(
-      text,
-      contains('Noite 19:00\nAinda não escolhidas.'),
-    );
+    // "1. Só de Manhã" como o repertório do dia inteiro.
+    expect(text, contains('*Noite*\n\nAinda não escolhidas.'));
   });
 
   test('repertório agrupado por culto, com o culto vazio preservado', () {
@@ -334,9 +516,10 @@ void main() {
     expect(event.songsByService[1].songs, isEmpty);
   });
 
-  test('emoji marca seção, nunca linha que se repete', () {
-    // Dois cultos e duas funções: é o caso que mais multiplicava marcador na
-    // versão anterior, que punha um em cada horário e um em cada função.
+  test('a mensagem não tem emoji nenhum', () {
+    // Dois cultos, duas funções, observações e paleta: o caso que mais
+    // multiplicava marcador nas versões anteriores. O negrito do WhatsApp faz
+    // o trabalho que o emoji fazia, e renderiza igual em todo aparelho.
     final text = buildScheduleShareText(
       Event.fromJson({
         'id': 'e1',
@@ -406,9 +589,7 @@ void main() {
       unicode: true,
     ).allMatches(text).length;
 
-    // Três: Equipe, Músicas e Observações. Se este número subir, alguém voltou
-    // a marcar linha em vez de seção — que é exatamente o que tinha deixado a
-    // mensagem poluída.
-    expect(emojis, 3, reason: 'texto gerado:\n$text');
+    expect(emojis, 0, reason: 'texto gerado:\n$text');
+    expect(text, contains('*Vocal:* Samuel *(Ministrante)* e Maria'));
   });
 }

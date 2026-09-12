@@ -118,11 +118,6 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   String? get _artista =>
       _song?.artist ?? _external?.artist ?? _artistController.text.trim();
 
-  /// Sem cadastro, o link da letra ou da cifra é obrigatório — a mesma regra
-  /// do servidor, espelhada aqui para não gastar uma ida de rede só para
-  /// receber o mesmo "não".
-  bool get _exigeLetra => _song == null;
-
   /// O que já se sabe dos links, preenchido sozinho.
   ///
   /// **Preencher é melhor que perguntar**: a URL do Spotify vem pronta da
@@ -206,13 +201,6 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     if (reason.length < _minReason) {
       setState(() {
         _error = 'Escreva um pouco mais sobre por que essa música valeria.';
-      });
-      return;
-    }
-    if (_exigeLetra && _lyricsController.text.trim().isEmpty) {
-      setState(() {
-        _error = 'Essa música ainda não está no repertório. Mande o link da '
-            'letra ou da cifra.';
       });
       return;
     }
@@ -487,9 +475,10 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   /// Onde a equipe encontra a música.
   ///
   /// Fica **antes** do porquê e depois da escolha: é o bloco que o Spotify
-  /// preenche sozinho, e vê-lo já preenchido é o que faz a pessoa entender que
-  /// só falta completar o resto. A letra/cifra vem primeiro porque é a única
-  /// que o servidor às vezes exige.
+  /// preenche sozinho, e vê-lo já preenchido é o que faz a pessoa entender
+  /// que só falta completar o resto. Os três são opcionais: a letra/cifra já
+  /// foi exigida de música fora do repertório e era o degrau que fazia a
+  /// pessoa sair da tela atrás de um link e não voltar.
   Widget _blocoLinks(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -500,20 +489,10 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
           controller: _lyricsController,
           keyboardType: TextInputType.url,
           autocorrect: false,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: _exigeLetra
-                ? 'Link da letra ou cifra'
-                : 'Link da letra ou cifra (opcional)',
+          decoration: const InputDecoration(
+            labelText: 'Link da letra ou cifra (opcional)',
             hintText: 'https://www.cifraclub.com.br/...',
-            prefixIcon: const Icon(Icons.article_outlined),
-            // O motivo de ser obrigatório, e não só a cobrança: essa música
-            // ainda não existe no repertório, e o líder precisaria sair
-            // procurando qual das cinco versões é a certa.
-            helperText: _exigeLetra
-                ? 'Obrigatório: essa música ainda não está no repertório'
-                : null,
-            helperMaxLines: 2,
+            prefixIcon: Icon(Icons.article_outlined),
           ),
         ),
         const SizedBox(height: AppSpacing.md),

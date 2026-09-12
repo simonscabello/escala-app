@@ -75,17 +75,19 @@ void main() {
   });
 
   group('Texto compartilhado', () {
-    test('diz "Sem ensaio" quando não há ensaio marcado', () {
-      final texto = buildScheduleShareText(Event.fromJson(eventJson()));
-      expect(texto, contains('Sem ensaio'));
-    });
+    test('o ensaio não entra, marcado ou não', () {
+      // O horário do ensaio vive na tela da escala e na notificação; no
+      // WhatsApp ele custava duas linhas antes do que a pessoa foi ler.
+      expect(
+        buildScheduleShareText(Event.fromJson(eventJson())),
+        isNot(contains('ensaio')),
+      );
 
-    test('mostra o horário quando há ensaio', () {
-      final texto = buildScheduleShareText(
+      final comEnsaio = buildScheduleShareText(
         Event.fromJson(eventJson(rehearsalAt: '2026-08-15T22:00:00.000Z')),
       );
-      expect(texto.contains('Sem ensaio'), isFalse);
-      expect(texto, contains('19:00'));
+      expect(comEnsaio, isNot(contains('Ensaio')));
+      expect(comEnsaio, isNot(contains('19:00')));
     });
 
     test('leva paleta e data, que é o que o convidado precisa saber', () {
