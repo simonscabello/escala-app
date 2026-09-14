@@ -216,17 +216,17 @@ emprestado.
   escala tem (`scheduleSongCount` cala quando não sabe) e quais avisos nascem.
   `test/home_summary_test.dart` trava isso sem widget nenhum.
 - **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximo
-  evento, avisos, **Estamos aprendendo**. Um bloco pode não existir; nenhum
-  troca de lugar.
-- **"Estamos aprendendo"** (`home_learning_card.dart`) é a segunda exceção à
-  regra de não somar requisições, e ela é magra: `learningSongsProvider` chama
-  `GET /teams/:id/songs?isNew=true`, que o servidor filtra — a Home recebe as
-  poucas músicas marcadas como novas, e não o acervo. Até quatro linhas
-  (título; artista · tom · andamento · um tema) e "Ver todas (N)", que abre o
-  repertório na aba "Novas" (`/equipe/musicas?aba=novas`). Sem música nova,
-  carregando ou com falha, o cartão não existe. **Para a equipe inteira, e sem
-  status por integrante** ("pronto", "estudando") — decisão de produto: o
-  cartão lembra o que estudar, e não vigia quem estudou.
+  evento, avisos. Um bloco pode não existir; nenhum troca de lugar.
+- **A Home não lista músicas.** Ela teve um cartão "Estamos aprendendo" com as
+  músicas marcadas como novas, e ele saiu a pedido do produto. O que sobrou é o
+  atalho **"Músicas novas"** em Acessos rápidos: diz quantas há para estudar
+  ("3 para estudar", "Nada novo agora") e abre o repertório na aba "Novas"
+  (`/equipe/musicas?aba=novas`). O atalho **aparece sempre**, com ou sem música
+  nova, para os ladrilhos não trocarem de lugar. A contagem é a segunda
+  exceção à regra de não somar requisições, e é magra:
+  `learningSongsProvider` chama `GET /teams/:id/songs?isNew=true`, que o
+  servidor filtra. **Para a equipe inteira, e sem status por integrante**
+  ("pronto", "estudando").
 - **A Home não lista escalas.** Ela teve um grupo "Próximas escalas" com três
   linhas da equipe, e ele saiu: era a aba Agenda em miniatura ocupando um terço
   da tela, com menos recurso do que a original. Do que ele respondia sobrou uma

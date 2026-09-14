@@ -136,20 +136,12 @@ void main() {
     expect(health.frequent.single.last3Months, 4);
   });
 
-  test('Home: a linha da música em aprendizado diz o que ajuda a estudar', () {
-    expect(
-      learningSongDetails(
-        const Song(
-          id: 's1',
-          title: 'Tudo Entregarei',
-          artist: 'Hinário',
-          defaultKey: 'G',
-          pace: 'CALM',
-          themes: ['ENTREGA', 'GRATIDAO'],
-        ),
-      ),
-      'Hinário · Tom G · Calma · Entrega',
-    );
-    expect(learningSongDetails(const Song(id: 's2', title: 'Sem nada')), isNull);
+  test('Home: o atalho de músicas novas diz quantas, sem inventar zero', () {
+    expect(learningShortcutSubtitle(3), '3 para estudar');
+    expect(learningShortcutSubtitle(1), '1 para estudar');
+    expect(learningShortcutSubtitle(0), 'Nada novo agora');
+    // Carregando ou com falha: legenda genérica, e não um zero que ninguém
+    // contou.
+    expect(learningShortcutSubtitle(null), 'Para estudar');
   });
 }

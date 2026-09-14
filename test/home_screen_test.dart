@@ -244,54 +244,38 @@ void main() {
     }
   });
 
-  testWidgets('"Estamos aprendendo" mostra as novas e leva ao detalhe',
+  testWidgets('músicas novas são um atalho com a contagem, e não uma lista',
       (tester) async {
     await _pumpHome(
       tester,
       events: const [],
       role: 'MEMBER',
       learning: const [
-        Song(
-          id: 's1',
-          title: 'Tudo Entregarei',
-          artist: 'Hinário',
-          defaultKey: 'G',
-          pace: 'CALM',
-        ),
+        Song(id: 's1', title: 'Louvores e Honras'),
+        Song(id: 's2', title: 'Santo'),
+        Song(id: 's3', title: 'Obrigado Jesus Pelo Seu Sangue'),
       ],
     );
 
     // Para o integrante também: estudar a música nova é de quem canta.
-    expect(find.text('Estamos aprendendo'), findsOneWidget);
-    expect(find.text('Hinário · Tom G · Calma'), findsOneWidget);
-    // Uma só: não há o que "ver todas".
-    expect(find.textContaining('Ver todas'), findsNothing);
+    expect(find.text('Músicas novas'), findsOneWidget);
+    expect(find.text('3 para estudar'), findsOneWidget);
+    // A Home não lista música nenhuma.
+    expect(find.text('Estamos aprendendo'), findsNothing);
+    expect(find.text('Louvores e Honras'), findsNothing);
+    expect(find.text('Santo'), findsNothing);
 
-    await tester.ensureVisible(find.text('Tudo Entregarei'));
-    await tester.tap(find.text('Tudo Entregarei'));
+    await tester.tap(find.text('Músicas novas'));
     await tester.pumpAndSettle();
-    expect(find.text('detalhe da música'), findsOneWidget);
+    expect(find.text('tela do repertório'), findsOneWidget);
   });
 
-  testWidgets('com mais de quatro novas, o cartão oferece ver todas',
+  testWidgets('sem música nova, o atalho continua no lugar e diz isso',
       (tester) async {
-    await _pumpHome(
-      tester,
-      events: const [],
-      learning: [
-        for (var i = 1; i <= 6; i++) Song(id: 's$i', title: 'Música $i'),
-      ],
-    );
-
-    expect(find.text('Música 4'), findsOneWidget);
-    expect(find.text('Música 5'), findsNothing);
-    expect(find.text('Ver todas (6)'), findsOneWidget);
-  });
-
-  testWidgets('sem música nova, o cartão não existe', (tester) async {
     await _pumpHome(tester, events: const []);
 
-    expect(find.text('Estamos aprendendo'), findsNothing);
+    expect(find.text('Músicas novas'), findsOneWidget);
+    expect(find.text('Nada novo agora'), findsOneWidget);
   });
 }
 
