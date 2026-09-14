@@ -183,6 +183,7 @@ class AssignmentGroup {
   const AssignmentGroup({
     required this.positionId,
     required this.positionName,
+    this.positionCategory,
     required this.sortOrder,
     required this.members,
   });
@@ -191,6 +192,7 @@ class AssignmentGroup {
     return AssignmentGroup(
       positionId: json['positionId'] as String,
       positionName: json['positionName'] as String,
+      positionCategory: json['positionCategory'] as String?,
       sortOrder: json['sortOrder'] as int? ?? 0,
       members: (json['members'] as List<dynamic>? ?? const [])
           .map((e) => AssignmentMember.fromJson(e as Map<String, dynamic>))
@@ -200,6 +202,14 @@ class AssignmentGroup {
 
   final String positionId;
   final String positionName;
+
+  /// `VOCAL`, `INSTRUMENT`, `TECH` ou `OTHER`. Nulo em cache gravado antes de o
+  /// servidor mandar o campo -- e aí quem usa trata a função como outra
+  /// qualquer, em vez de adivinhar pelo nome.
+  final String? positionCategory;
+
+  bool get isInstrument => positionCategory == 'INSTRUMENT';
+
   final int sortOrder;
   final List<AssignmentMember> members;
 }

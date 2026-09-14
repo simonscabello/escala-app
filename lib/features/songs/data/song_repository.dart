@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/moment_suggestion.dart';
+import '../domain/repertoire_health.dart';
+import '../domain/song_history.dart';
 import '../domain/song_models.dart';
 import '../domain/song_usage.dart';
 
@@ -28,6 +31,23 @@ class SongRepository {
           // repetido.
           if (themes.isNotEmpty) 'themes': themes.join(','),
         },
+      );
+      return response.data!
+          .map((e) => Song.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  /// Só as músicas que a equipe está aprendendo.
+  ///
+  /// Filtrado no servidor (`?isNew=true`), e não aqui: quem pede é a Home, e
+  /// trazer o acervo inteiro para mostrar quatro linhas é o custo que a Home
+  /// prometeu não pagar.
+  Future<List<Song>> learning(String teamId) async {
+    return _guard(() async {
+      final response = await _dio.get<List<dynamic>>(
+        '/teams/$teamId/songs',
+        queryParameters: {'isNew': true},
       );
       return response.data!
           .map((e) => Song.fromJson(e as Map<String, dynamic>))
@@ -76,6 +96,49 @@ class SongRepository {
         queryParameters: {'months': months},
       );
       return SongUsageReport.fromJson(response.data!);
+    });
+  }
+
+  /// O histórico de todas as músicas já cantadas, **numa chamada só**, indexado
+  /// pelo id. O seletor da escala desenha dezenas de linhas; pedir o histórico
+  /// de cada uma seria uma requisição por linha na rede do celular.
+  Future<Map<String, SongHistory>> songContext(String teamId) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/reports/song-context',
+      );
+      final songs = response.data!['songs'] as List<dynamic>? ?? const [];
+      return {
+        for (final item in songs)
+          if (SongHistory.fromJson(item as Map<String, dynamic>)
+              case final history)
+            history.songId: history,
+      };
+    });
+  }
+
+  Future<RepertoireHealth> repertoireHealth(String teamId) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/teams/$teamId/reports/repertoire-health',
+      );
+      return RepertoireHealth.fromJson(response.data!);
+    });
+  }
+
+  /// "Sugestões do Pauta" para um momento do culto desta escala.
+  Future<List<MomentSuggestion>> momentSuggestions(
+    String eventId,
+    String moment,
+  ) async {
+    return _guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/events/$eventId/moment-suggestions',
+        queryParameters: {'moment': moment},
+      );
+      return (response.data!['suggestions'] as List<dynamic>? ?? const [])
+          .map((e) => MomentSuggestion.fromJson(e as Map<String, dynamic>))
+          .toList();
     });
   }
 
@@ -279,6 +342,17 @@ final songsProvider =
   };
 });
 
+/// As músicas que a equipe está aprendendo, para o cartão da Home.
+///
+/// Lista própria, e não o `songsProvider` com a aba "Novas": aquele traz o
+/// acervo inteiro e filtra no aparelho, e a Home não pode pagar centenas de
+/// músicas para desenhar quatro. Visível para toda a equipe — estudar a música
+/// nova é de quem canta.
+final learningSongsProvider =
+    FutureProvider.autoDispose.family<List<Song>, String>(
+  (ref, teamId) => ref.watch(songRepositoryProvider).learning(teamId),
+);
+
 final songProvider = FutureProvider.autoDispose
     .family<Song, ({String teamId, String songId})>((ref, args) {
   return ref.watch(songRepositoryProvider).find(args.teamId, args.songId);
@@ -291,4 +365,26 @@ final songUsageProvider =
   (ref, query) => ref
       .watch(songRepositoryProvider)
       .usage(query.teamId, months: query.months),
+);
+
+/// Histórico por música (id → histórico), para o seletor da escala e a tela
+/// da música. **Só para quem lidera**: é relatório, e o servidor responde 403
+/// ao integrante — quem observa este provider precisa saber disso antes.
+final songHistoryProvider =
+    FutureProvider.autoDispose.family<Map<String, SongHistory>, String>(
+  (ref, teamId) => ref.watch(songRepositoryProvider).songContext(teamId),
+);
+
+final repertoireHealthProvider =
+    FutureProvider.autoDispose.family<RepertoireHealth, String>(
+  (ref, teamId) => ref.watch(songRepositoryProvider).repertoireHealth(teamId),
+);
+
+typedef MomentSuggestionQuery = ({String eventId, String moment});
+
+final momentSuggestionsProvider = FutureProvider.autoDispose
+    .family<List<MomentSuggestion>, MomentSuggestionQuery>(
+  (ref, query) => ref
+      .watch(songRepositoryProvider)
+      .momentSuggestions(query.eventId, query.moment),
 );

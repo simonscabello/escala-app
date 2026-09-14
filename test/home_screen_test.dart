@@ -11,6 +11,8 @@ import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/home/presentation/home_screen.dart';
+import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/shared/widgets/app_hero_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -241,6 +243,56 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'largura $width');
     }
   });
+
+  testWidgets('"Estamos aprendendo" mostra as novas e leva ao detalhe',
+      (tester) async {
+    await _pumpHome(
+      tester,
+      events: const [],
+      role: 'MEMBER',
+      learning: const [
+        Song(
+          id: 's1',
+          title: 'Tudo Entregarei',
+          artist: 'Hinário',
+          defaultKey: 'G',
+          pace: 'CALM',
+        ),
+      ],
+    );
+
+    // Para o integrante também: estudar a música nova é de quem canta.
+    expect(find.text('Estamos aprendendo'), findsOneWidget);
+    expect(find.text('Hinário · Tom G · Calma'), findsOneWidget);
+    // Uma só: não há o que "ver todas".
+    expect(find.textContaining('Ver todas'), findsNothing);
+
+    await tester.ensureVisible(find.text('Tudo Entregarei'));
+    await tester.tap(find.text('Tudo Entregarei'));
+    await tester.pumpAndSettle();
+    expect(find.text('detalhe da música'), findsOneWidget);
+  });
+
+  testWidgets('com mais de quatro novas, o cartão oferece ver todas',
+      (tester) async {
+    await _pumpHome(
+      tester,
+      events: const [],
+      learning: [
+        for (var i = 1; i <= 6; i++) Song(id: 's$i', title: 'Música $i'),
+      ],
+    );
+
+    expect(find.text('Música 4'), findsOneWidget);
+    expect(find.text('Música 5'), findsNothing);
+    expect(find.text('Ver todas (6)'), findsOneWidget);
+  });
+
+  testWidgets('sem música nova, o cartão não existe', (tester) async {
+    await _pumpHome(tester, events: const []);
+
+    expect(find.text('Estamos aprendendo'), findsNothing);
+  });
 }
 
 Future<void> _pumpHome(
@@ -249,6 +301,7 @@ Future<void> _pumpHome(
   Size size = const Size(400, 1400),
   String role = 'OWNER',
   int openSuggestions = 0,
+  List<Song> learning = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -276,6 +329,10 @@ Future<void> _pumpHome(
         path: '/agenda/:eventId',
         builder: (_, __) => const Scaffold(body: Text('detalhe da escala')),
       ),
+      GoRoute(
+        path: '/equipe/musicas/:songId',
+        builder: (_, __) => const Scaffold(body: Text('detalhe da música')),
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -290,6 +347,7 @@ Future<void> _pumpHome(
         openSuggestionCountProvider.overrideWith(
           (ref, teamId) async => openSuggestions,
         ),
+        learningSongsProvider.overrideWith((ref, teamId) async => learning),
         authControllerProvider.overrideWith(
           (ref) => _FakeAuthController(
             ref,

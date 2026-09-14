@@ -167,6 +167,9 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
       // fica pior, porque a música pode ter acabado de sair (ou entrar) no
       // critério que está na tela.
       ref.invalidate(songsProvider);
+      // Desmarcar "nova" aqui tira a música do cartão "Estamos aprendendo",
+      // e a Home continua viva embaixo desta pilha.
+      ref.invalidate(learningSongsProvider(widget.teamId));
       if (mounted) {
         context.pop();
         showAppSnackBar(context, '"$title" foi salva.', tone: AppTone.success);

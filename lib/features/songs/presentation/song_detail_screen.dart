@@ -10,10 +10,12 @@ import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
+import '../domain/song_history.dart';
 import '../domain/song_models.dart';
 import 'song_theme_picker.dart';
 
@@ -83,7 +85,11 @@ class SongDetailScreen extends ConsumerWidget {
                   : 'Não foi possível carregar a música.',
               onRetry: () => ref.invalidate(songProvider(args)),
             ),
-            data: (value) => _Body(song: value),
+            data: (value) => _Body(
+              song: value,
+              teamId: teamId,
+              showHistory: canManage,
+            ),
           ),
         ),
       ),
@@ -120,6 +126,7 @@ class SongDetailScreen extends ConsumerWidget {
           );
       ref.invalidate(songProvider((teamId: teamId, songId: songId)));
       ref.invalidate(songsProvider);
+      ref.invalidate(learningSongsProvider(teamId));
       if (context.mounted) {
         showAppSnackBar(
           context,
@@ -138,9 +145,18 @@ class SongDetailScreen extends ConsumerWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.song});
+  const _Body({
+    required this.song,
+    required this.teamId,
+    required this.showHistory,
+  });
 
   final Song song;
+  final String teamId;
+
+  /// Só para quem lidera: o histórico é relatório, e o servidor o recusa ao
+  /// integrante. Pedir e esconder o erro seria uma requisição à toa.
+  final bool showHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -219,6 +235,7 @@ class _Body extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           SongThemeChips(themes: song.themes),
         ],
+        if (showHistory) _SongHistorySection(teamId: teamId, songId: song.id),
         const SizedBox(height: AppSpacing.xl),
         _Links(song: song),
         if (song.hasLyrics) ...[
@@ -237,6 +254,57 @@ class _Body extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.xxl),
       ],
+    );
+  }
+}
+
+/// Quando a equipe cantou esta música e em que momentos do culto.
+///
+/// Os momentos são **lidos das escalas**, e não cadastrados: é o que responde
+/// "essa serve para a oferta?" sem ninguém ter precisado dizer isso ao app.
+///
+/// Carregando ou com falha, a seção não aparece — a tela da música é a da
+/// cifra e da letra, e o histórico é o complemento.
+class _SongHistorySection extends ConsumerWidget {
+  const _SongHistorySection({required this.teamId, required this.songId});
+
+  final String teamId;
+  final String songId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final all = ref.watch(songHistoryProvider(teamId)).valueOrNull;
+    if (all == null) return const SizedBox.shrink();
+
+    final history = all[songId];
+    final now = DateTime.now();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xl),
+      child: AppGroup(
+        title: 'Histórico',
+        dividerIndent: AppGroup.textIndent,
+        children: history == null
+            ? const [
+                AppGroupRow(title: 'Ainda não entrou em escala publicada'),
+              ]
+            : [
+                AppGroupRow(
+                  title: lastPlayedPhrase(history.lastPlayedAt, now) ??
+                      'Ainda não cantada',
+                  subtitle: '${timesLabel(history.last6Months)} nos últimos '
+                      '6 meses · ${timesLabel(history.playCount)} no total',
+                ),
+                for (final moment in history.moments.take(4))
+                  AppGroupRow(
+                    title: moment.displayLabel,
+                    trailing: Text(
+                      timesLabel(moment.count),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+      ),
     );
   }
 }

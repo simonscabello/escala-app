@@ -97,6 +97,13 @@ class ManageTeamScreen extends ConsumerWidget {
                     onTap: () => context.push('/equipe/musicas/uso'),
                   ),
                   AppGroupRow(
+                    icon: Icons.monitor_heart_outlined,
+                    title: 'Saúde do repertório',
+                    subtitle: 'O que se repete, o que sumiu e o que falta '
+                        'cadastrar',
+                    onTap: () => context.push('/equipe/musicas/saude'),
+                  ),
+                  AppGroupRow(
                     icon: Icons.tune_rounded,
                     title: 'Dados da equipe',
                     subtitle: 'O nome que aparece para os integrantes',

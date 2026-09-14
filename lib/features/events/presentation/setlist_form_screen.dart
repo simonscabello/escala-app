@@ -14,8 +14,11 @@ import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../songs/data/song_repository.dart';
+import '../../songs/domain/moment_suggestion.dart';
+import '../../songs/domain/song_history.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/domain/song_sections.dart';
+import '../../songs/domain/song_themes.dart';
 import '../../songs/presentation/add_song_screen.dart';
 import '../../songs/presentation/song_theme_picker.dart';
 import '../../suggestions/presentation/event_suggestions_band.dart';
@@ -127,6 +130,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
       showDragHandle: true,
       builder: (_) => _SongPicker(
         teamId: widget.teamId,
+        eventId: widget.eventId,
         culto: culto,
         // Já escaladas **neste culto** não aparecem: repetir a mesma música no
         // mesmo culto é erro e o servidor recusaria. No outro culto ela
@@ -151,7 +155,7 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
     setState(() {
       for (final song in escolha.songs) {
-        _lista(culto.id).add(_novoItem(culto, song));
+        _lista(culto.id).add(_novoItem(culto, song, moment: escolha.moment));
       }
     });
   }
@@ -196,7 +200,8 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
     }
   }
 
-  EventSong _novoItem(EventService culto, Song song) => EventSong(
+  EventSong _novoItem(EventService culto, Song song, {String? moment}) =>
+      EventSong(
         songId: song.id,
         serviceId: culto.id,
         title: song.title,
@@ -206,9 +211,10 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
         // Do cadastro: é o que faz "314 CC" aparecer na linha antes mesmo de
         // salvar, sem uma volta ao servidor.
         hymnals: song.hymnals,
-        // Sem momento: quem acabou de escolher a música ainda não disse onde
-        // ela entra, e preencher por dedução poria na escala uma decisão que
-        // ninguém tomou.
+        // O momento só vem quando o líder o escolheu no seletor — aí é decisão
+        // dele, tomada ali. Sem escolha, a música entra sem momento: preencher
+        // por dedução poria na escala uma decisão que ninguém tomou.
+        moment: moment,
         chordsUrl: song.chordsUrl,
         lyricsUrl: song.lyricsUrl,
         youtubeUrl: song.youtubeUrl,
@@ -217,12 +223,22 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   Future<void> _editItem(String serviceId, int index) async {
     final song = _lista(serviceId)[index];
+    // O que o histórico já sabe dos momentos desta música: ajuda a escolher,
+    // e não escolhe.
+    final historico = ref
+        .read(songHistoryProvider(widget.teamId))
+        .valueOrNull?[song.songId];
 
     // "Música nova" não está aqui: é a marca que mais se mexe e a que menos
     // precisa de formulário. Ela mora no chip da própria linha, a um toque.
     final ajuste = await showDialog<_SongSettings>(
       context: context,
-      builder: (_) => _SongSettingsDialog(song: song),
+      builder: (_) => _SongSettingsDialog(
+        song: song,
+        usualMoments: historico == null
+            ? null
+            : usualMomentsPhrase(historico.moments),
+      ),
     );
 
     if (ajuste == null) return;
@@ -251,6 +267,12 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // O histórico das músicas começa a carregar ao abrir a montagem, e não ao
+    // abrir o seletor: quando o líder toca em "Escolher músicas", as linhas já
+    // nascem dizendo "Cantada há 12 dias". Observá-lo aqui também o mantém
+    // vivo entre uma abertura do seletor e a seguinte.
+    ref.watch(songHistoryProvider(widget.teamId));
+
     // O provider devolve o invólucro de cache; aqui só interessa a escala.
     final event = widget.event ??
         ref.watch(eventProvider(widget.eventId)).valueOrNull?.data;
@@ -638,9 +660,13 @@ class _SongSettings {
 /// maioria das músicas de uma escala não tem momento nomeado; escolher um por
 /// quem não escolheu poria na escala publicada uma decisão de ninguém.
 class _SongSettingsDialog extends StatefulWidget {
-  const _SongSettingsDialog({required this.song});
+  const _SongSettingsDialog({required this.song, this.usualMoments});
 
   final EventSong song;
+
+  /// "Momento de Louvor (7 vezes) · Abertura (2 vezes)", do histórico das
+  /// escalas. Só informa: nenhum chip vem marcado por causa disso.
+  final String? usualMoments;
 
   @override
   State<_SongSettingsDialog> createState() => _SongSettingsDialogState();
@@ -717,6 +743,16 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
                 color: scheme.onSurfaceVariant,
               ),
             ),
+            if (widget.usualMoments != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Já entrou em: ${widget.usualMoments}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
@@ -774,13 +810,18 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
 /// O que o seletor devolve: as músicas marcadas, ou o pedido de cadastrar uma
 /// que ainda não existe no repertório.
 class _PickerResult {
-  const _PickerResult.songs(this.songs) : cadastrarNova = false;
+  const _PickerResult.songs(this.songs, {this.moment}) : cadastrarNova = false;
   const _PickerResult.cadastrar()
       : songs = const [],
-        cadastrarNova = true;
+        cadastrarNova = true,
+        moment = null;
 
   final List<Song> songs;
   final bool cadastrarNova;
+
+  /// O momento escolhido no seletor, que as músicas marcadas levam. Nulo = o
+  /// líder não escolheu, e elas entram sem momento.
+  final String? moment;
 }
 
 /// A letra ou a faixa de números que abre um trecho da lista.
@@ -914,16 +955,70 @@ class _PickerEmpty extends StatelessWidget {
   }
 }
 
+/// A segunda linha de uma música no seletor: o que o histórico diz dela.
+///
+/// `Cantada há 12 dias · 3 vezes em 6 meses · Gratidão, Entrega`
+///
+/// - **a última vez** abre a linha, e vem tingida quando é recente — o aviso
+///   discreto de que pô-la de novo vira repetição. Avisa, e não impede;
+/// - **quantas vezes** só a partir de duas, porque "1 vez" repetiria a frase
+///   anterior;
+/// - **até dois temas**, que é o que cabe numa linha e o que ajuda a escolher.
+///
+/// O tom da equipe já está na primeira linha. A música nunca cantada e sem
+/// tema não ganha segunda linha nenhuma: são centenas de hinos importados, e
+/// "nunca cantada" em cada um seria ruído.
+@visibleForTesting
+({String? lastPlayed, bool recent, String? rest}) songPickerHistory(
+  Song song,
+  SongHistory? history,
+  DateTime now,
+) {
+  final rest = [
+    if (recentCountPhrase(history?.last6Months ?? 0) case final vezes?) vezes,
+    if (song.themes.isNotEmpty)
+      song.themes.take(2).map(songThemeLabel).join(', '),
+  ];
+  return (
+    lastPlayed: lastPlayedPhrase(history?.lastPlayedAt, now),
+    recent: isRecentlyPlayed(history?.lastPlayedAt, now),
+    rest: rest.isEmpty ? null : rest.join(' · '),
+  );
+}
+
+/// Os momentos que o seletor oferece. "Outro" fica de fora: ele pede um nome
+/// escrito à mão, e isso continua na folha de ajustes da música.
+final _pickerMoments = [
+  for (final entry in serviceMoments.entries)
+    if (entry.key != otherServiceMoment) entry,
+];
+
+/// Quantas "Sugestões do Pauta" aparecem. Poucas: são um atalho no topo da
+/// lista, e o repertório inteiro continua logo abaixo.
+const _maxMomentSuggestions = 3;
+
+/// Um marcador de trecho que não vem de `buildSongSections`.
+class _MarkerItem {
+  const _MarkerItem(this.label);
+
+  final String label;
+}
+
 /// Escolha múltipla do repertório da equipe, para um culto.
 class _SongPicker extends ConsumerStatefulWidget {
   const _SongPicker({
     required this.teamId,
+    required this.eventId,
     required this.culto,
     required this.jaEscolhidas,
     required this.mostrarTodosOsCultos,
   });
 
   final String teamId;
+
+  /// A escala em montagem: é a data dela que decide o que as sugestões deixam
+  /// de fora (a música do domingo anterior, a do seguinte).
+  final String eventId;
   final EventService culto;
   final Set<String> jaEscolhidas;
 
@@ -935,7 +1030,10 @@ class _SongPicker extends ConsumerStatefulWidget {
 }
 
 class _SongPickerState extends ConsumerState<_SongPicker> {
-  final _selecionadas = <Song>[];
+  /// Por id, e não pelo objeto: a mesma música pode aparecer duas vezes na
+  /// lista — nas sugestões e no trecho dela —, como dois objetos diferentes.
+  /// Marcar uma precisa marcar a outra, e nunca entrar duas vezes no culto.
+  final _selecionadas = <String, Song>{};
   String _search = '';
 
   /// Mesmo filtro do Repertório, e começando em "Cânticos" pelo mesmo motivo.
@@ -948,9 +1046,105 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
   SongFilter _filter = SongFilter.canticos;
   Set<String> _themes = {};
 
+  /// O momento do culto para o qual o líder está escolhendo. Opcional: sem
+  /// ele, o seletor é o de sempre. Com ele, aparecem as "Sugestões do Pauta"
+  /// e as músicas marcadas entram já com esse momento — porque foi o líder
+  /// quem disse, aqui.
+  String? _moment;
+
+  Widget _tile(Song song, {Widget? details}) {
+    final marcada = _selecionadas.containsKey(song.id);
+
+    return CheckboxListTile(
+      value: marcada,
+      isThreeLine: details != null,
+      title: Text(song.title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            [
+              // No hino o número abre a linha: é assim que a igreja pede
+              // ("142", não "Pão da Vida"). Com a sigla junto, porque a mesma
+              // igreja canta de mais de um livro.
+              if (song.hymnal != null) song.hymnal!.label,
+              song.subtitle,
+              if (song.defaultKey != null) 'Tom ${song.defaultKey}',
+            ].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (details != null) details,
+        ],
+      ),
+      onChanged: (_) => setState(() {
+        if (marcada) {
+          _selecionadas.remove(song.id);
+        } else {
+          _selecionadas[song.id] = song;
+        }
+      }),
+    );
+  }
+
+  Widget? _historyLine(Song song, SongHistory? history, DateTime now) {
+    final linha = songPickerHistory(song, history, now);
+    if (linha.lastPlayed == null && linha.rest == null) return null;
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (linha.lastPlayed != null)
+            TextSpan(
+              text: linha.lastPlayed,
+              // Âmbar é o papel de atenção do app: "cuidado com a repetição",
+              // sem o susto do vermelho.
+              style: linha.recent
+                  ? TextStyle(
+                      color: scheme.tertiary,
+                      fontWeight: FontWeight.w600,
+                    )
+                  : null,
+            ),
+          if (linha.lastPlayed != null && linha.rest != null)
+            const TextSpan(text: ' · '),
+          if (linha.rest != null) TextSpan(text: linha.rest),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: scheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget? _reasonsLine(MomentSuggestion suggestion, DateTime now) {
+    final linha = suggestionReasonsLine(suggestion.reasons, now);
+    if (linha.isEmpty) return null;
+
+    final theme = Theme.of(context);
+    return Text(
+      linha,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.primary,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final now = DateTime.now();
+    final searching = _search.trim().isNotEmpty;
+
     final songs = ref.watch(
       songsProvider(
         SongQuery(
@@ -961,6 +1155,28 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
         ),
       ),
     );
+
+    // Uma chamada para a lista inteira (ver `songHistoryProvider`). Sem ela, as
+    // linhas só não ganham a segunda frase: a escolha continua possível.
+    final history = ref.watch(songHistoryProvider(widget.teamId)).valueOrNull ??
+        const <String, SongHistory>{};
+
+    // Só com momento escolhido e sem busca: quem digita um nome já sabe o que
+    // quer, e as sugestões no topo empurrariam o resultado para baixo.
+    final moment = _moment;
+    final sugestoes = moment == null || searching
+        ? const <MomentSuggestion>[]
+        : [
+            for (final sugestao in ref
+                    .watch(
+                      momentSuggestionsProvider(
+                        (eventId: widget.eventId, moment: moment),
+                      ),
+                    )
+                    .valueOrNull ??
+                const <MomentSuggestion>[])
+              if (!widget.jaEscolhidas.contains(sugestao.song.id)) sugestao,
+          ].take(_maxMomentSuggestions).toList();
 
     return DraggableScrollableSheet(
       expand: false,
@@ -973,7 +1189,7 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
               child: Text(
                 'Escolhendo para ${widget.culto.label}',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
+                  color: scheme.primary,
                 ),
               ),
             ),
@@ -1009,6 +1225,42 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
+          // O momento numa faixa que rola de lado, como a dos temas: seis
+          // chips não cabem numa linha de celular, e quebrar em duas empurraria
+          // a lista para baixo. Nenhum vem marcado.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+            ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: Text(
+                    'Momento',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                for (final entry in _pickerMoments)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: ChoiceChip(
+                      label: Text(entry.value),
+                      selected: _moment == entry.key,
+                      visualDensity: VisualDensity.compact,
+                      // Tocar no marcado desmarca, como na folha de ajustes.
+                      onSelected: (marcado) => setState(
+                        () => _moment = marcado ? entry.key : null,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           SongThemeFilterBar(
             selected: _themes,
             onChanged: (themes) => setState(() => _themes = themes),
@@ -1027,10 +1279,10 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                     .where((s) => !widget.jaEscolhidas.contains(s.id))
                     .toList();
 
-                if (disponiveis.isEmpty) {
+                if (disponiveis.isEmpty && sugestoes.isEmpty) {
                   return _PickerEmpty(
                     filter: _filter,
-                    searching: _search.trim().isNotEmpty,
+                    searching: searching,
                     themes: _themes,
                     onCadastrar: () => Navigator.pop(
                       context,
@@ -1043,49 +1295,47 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                 final entries = buildSongSections(
                   disponiveis,
                   filter: _filter,
-                  searching: _search.trim().isNotEmpty,
+                  searching: searching,
                 );
+
+                // As sugestões são itens da mesma lista, e não um bloco fixo
+                // acima dela: rolam junto, e a lista continua construindo só o
+                // que aparece.
+                final items = <Object>[
+                  if (sugestoes.isNotEmpty) ...[
+                    const _MarkerItem('Sugestões do Pauta'),
+                    ...sugestoes,
+                    // Sem marcador próprio no começo do trecho seguinte, as
+                    // sugestões se confundiriam com o resto da lista.
+                    if (entries.isNotEmpty && entries.first is! SongSectionHeader)
+                      const _MarkerItem('Repertório'),
+                  ],
+                  ...entries,
+                ];
 
                 return ListView.builder(
                   controller: controller,
                   // O marcador de seção é item da lista, não cabeçalho fixo:
                   // assim o `ListView` continua construindo só o que aparece,
                   // que com 581 hinos é o que mantém a rolagem leve.
-                  itemCount: entries.length,
+                  itemCount: items.length,
                   itemBuilder: (_, index) {
-                    final entry = entries[index];
-
-                    if (entry is SongSectionHeader) {
-                      return _SectionMarker(
-                        label: entry.label,
-                        first: index == 0,
-                      );
-                    }
-
-                    final song = (entry as SongSectionItem).song;
-                    final marcada = _selecionadas.contains(song);
-
-                    return CheckboxListTile(
-                      value: marcada,
-                      title: Text(song.title),
-                      subtitle: Text(
-                        [
-                          // No hino o número abre a linha: é assim que a igreja
-                          // pede ("142", não "Pão da Vida"). Com a sigla junto,
-                          // porque a mesma igreja canta de mais de um livro.
-                          if (song.hymnal != null) song.hymnal!.label,
-                          song.subtitle,
-                          if (song.defaultKey != null) 'Tom ${song.defaultKey}',
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onChanged: (_) => setState(() {
-                        marcada
-                            ? _selecionadas.remove(song)
-                            : _selecionadas.add(song);
-                      }),
-                    );
+                    final item = items[index];
+                    return switch (item) {
+                      _MarkerItem(:final label) =>
+                        _SectionMarker(label: label, first: index == 0),
+                      SongSectionHeader(:final label) =>
+                        _SectionMarker(label: label, first: index == 0),
+                      MomentSuggestion() => _tile(
+                          item.song,
+                          details: _reasonsLine(item, now),
+                        ),
+                      SongSectionItem(:final song) => _tile(
+                          song,
+                          details: _historyLine(song, history[song.id], now),
+                        ),
+                      _ => const SizedBox.shrink(),
+                    };
                   },
                 );
               },
@@ -1126,8 +1376,14 @@ class _SongPickerState extends ConsumerState<_SongPicker> {
                           ? null
                           : () => Navigator.pop(
                                 context,
-                                _PickerResult.songs(_selecionadas),
+                                _PickerResult.songs(
+                                  _selecionadas.values.toList(),
+                                  moment: _moment,
+                                ),
                               ),
+                      // Sem o momento no rótulo: num celular ele cortava o
+                      // botão ao meio ("Adicionar 1 · Dízimos e…"), e o chip
+                      // marcado logo acima já diz em que momento elas entram.
                       child: Text(
                         _selecionadas.isEmpty
                             ? 'Escolha as músicas'

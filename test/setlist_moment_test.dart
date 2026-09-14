@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
+import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -60,6 +61,8 @@ void main() {
       overrides: [
         eventSuggestionsProvider('e1')
             .overrideWith((ref) => const EventSuggestions(date: '2026-08-16')),
+        // A montagem pede o histórico das músicas ao abrir.
+        songHistoryProvider.overrideWith((ref, teamId) async => const {}),
       ],
       child: MaterialApp(
         home: SetlistFormScreen(teamId: 't1', eventId: 'e1', event: event),

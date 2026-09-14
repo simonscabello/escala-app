@@ -94,7 +94,7 @@ void main() {
       final texto = buildScheduleShareText(Event.fromJson(eventJson()));
       expect(texto, contains('Preto e dourado'));
       expect(texto, contains('Culto de Domingo'));
-      expect(texto.toLowerCase(), contains('agosto'));
+      expect(texto, contains('16/08'));
     });
   });
 }

@@ -182,6 +182,9 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
       // em cache não tem. A família inteira, porque a lista de trás está com
       // os filtros que a pessoa deixou ligados.
       ref.invalidate(songsProvider);
+      // A música nasce marcada como nova com frequência, e o cartão da Home
+      // precisa enxergá-la.
+      ref.invalidate(learningSongsProvider(widget.teamId));
 
       showAppSnackBar(
         context,

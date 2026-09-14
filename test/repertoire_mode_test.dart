@@ -149,7 +149,7 @@ void main() {
       );
 
       expect(text, contains('Definidas na hora. Por enquanto:'));
-      expect(text, contains('1. Aclame ao Senhor'));
+      expect(text, contains('* Aclame ao Senhor'));
       // O culto sem música não é cobrado nem aqui.
       expect(text, contains('Definidas na hora, no culto.'));
       expect(text, isNot(contains('Ainda não escolhidas.')));

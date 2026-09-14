@@ -27,7 +27,9 @@ import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/team/data/team_repository.dart';
 import '../../features/team/domain/team_models.dart';
 import '../../features/songs/domain/song_models.dart';
+import '../../features/songs/data/song_repository.dart';
 import '../../features/songs/presentation/add_song_screen.dart';
+import '../../features/songs/presentation/repertoire_health_screen.dart';
 import '../../features/songs/presentation/song_detail_screen.dart';
 import '../../features/songs/presentation/song_form_screen.dart';
 import '../../features/songs/presentation/song_usage_screen.dart';
@@ -288,20 +290,36 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/equipe/musicas',
-            builder: (_, __) =>
-                _withActiveTeam(ref, (id) => SongsScreen(teamId: id)),
+            builder: (_, state) => _withActiveTeam(
+              ref,
+              (id) => SongsScreen(
+                teamId: id,
+                // `?aba=novas`: o "Ver todas" do cartão "Estamos aprendendo"
+                // da Home abre direto na lista inteira das novas.
+                initialFilter: state.uri.queryParameters['aba'] == 'novas'
+                    ? SongFilter.novas
+                    : null,
+              ),
+            ),
             routes: [
               GoRoute(
                 path: 'nova',
                 builder: (_, __) =>
                     _withActiveTeam(ref, (id) => AddSongScreen(teamId: id)),
               ),
-              // Antes de `:songId`, senão "uso" e "arquivadas" seriam lidos
-              // como o id de uma música e a tela abriria em erro.
+              // Antes de `:songId`, senão "uso", "saude" e "arquivadas" seriam
+              // lidos como o id de uma música e a tela abriria em erro.
               GoRoute(
                 path: 'uso',
                 builder: (_, __) =>
                     _withActiveTeam(ref, (id) => SongUsageScreen(teamId: id)),
+              ),
+              GoRoute(
+                path: 'saude',
+                builder: (_, __) => _withActiveTeam(
+                  ref,
+                  (id) => RepertoireHealthScreen(teamId: id),
+                ),
               ),
               GoRoute(
                 path: 'arquivadas',

@@ -18,6 +18,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../events/presentation/event_schedule_facts.dart';
+import '../../songs/data/song_repository.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
 import '../../team/presentation/team_onboarding.dart';
@@ -26,6 +27,7 @@ import '../../team_events/domain/team_event.dart';
 import '../../team_events/presentation/team_event_tile.dart';
 import '../../update/presentation/app_update_banner.dart';
 import '../domain/home_summary.dart';
+import 'home_learning_card.dart';
 import 'home_next_card.dart';
 import 'home_quick_access.dart';
 
@@ -177,6 +179,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ref.invalidate(openSuggestionCountProvider(teamId));
                       }
                       ref.invalidate(teamEventsProvider((teamId, 'upcoming')));
+                      ref.invalidate(learningSongsProvider(teamId));
                       return ref.refresh(
                         eventsProvider((teamId, 'upcoming')).future,
                       );
@@ -299,6 +302,10 @@ class _HomeBody extends StatelessWidget {
                       const SizedBox(height: AppSpacing.xl),
                       _HomeNotices(notices: summary.notices),
                     ],
+                    // Por último: o que a equipe está aprendendo não tem data
+                    // nem urgência — é o que se estuda entre um domingo e
+                    // outro. Sem música nova, o bloco não existe.
+                    HomeLearningCard(teamId: teamId),
                   ],
                 ),
               );

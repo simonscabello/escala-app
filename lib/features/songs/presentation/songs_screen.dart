@@ -34,6 +34,7 @@ class SongsScreen extends ConsumerStatefulWidget {
     super.key,
     required this.teamId,
     this.archived = false,
+    this.initialFilter,
   });
 
   final String teamId;
@@ -42,6 +43,10 @@ class SongsScreen extends ConsumerStatefulWidget {
   /// O que muda é o acervo consultado e o que não faz sentido lá: escolher
   /// entre cânticos e hinos, e adicionar música.
   final bool archived;
+
+  /// A aba em que a tela abre. Nulo é "Cânticos", como sempre foi; o cartão
+  /// "Estamos aprendendo" da Home pede "Novas".
+  final SongFilter? initialFilter;
 
   @override
   ConsumerState<SongsScreen> createState() => _SongsScreenState();
@@ -52,9 +57,25 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
   Timer? _debounce;
 
   String _search = '';
-  late SongFilter _filter =
-      widget.archived ? SongFilter.arquivadas : SongFilter.canticos;
+  late SongFilter _filter = widget.archived
+      ? SongFilter.arquivadas
+      : (widget.initialFilter ?? SongFilter.canticos);
   Set<String> _themes = {};
+
+  @override
+  void didUpdateWidget(covariant SongsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Um link com outra aba (`?aba=novas`) pode chegar a esta tela já montada:
+    // no navegador, trocar o endereço reaproveita a página de `/equipe/musicas`
+    // que estava embaixo de "saude" ou de uma música. Sem isto, o link abria
+    // na aba em que a tela nasceu.
+    final pedida = widget.initialFilter;
+    if (!widget.archived &&
+        pedida != null &&
+        pedida != oldWidget.initialFilter) {
+      _filter = pedida;
+    }
+  }
 
   @override
   void dispose() {

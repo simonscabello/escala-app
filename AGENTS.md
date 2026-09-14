@@ -215,8 +215,18 @@ emprestado.
   qual é a minha próxima escala, qual é a **minha** seguinte, quantas músicas a
   escala tem (`scheduleSongCount` cala quando não sabe) e quais avisos nascem.
   `test/home_summary_test.dart` trava isso sem widget nenhum.
-- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, avisos. Um
-  bloco pode não existir; nenhum troca de lugar.
+- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximo
+  evento, avisos, **Estamos aprendendo**. Um bloco pode não existir; nenhum
+  troca de lugar.
+- **"Estamos aprendendo"** (`home_learning_card.dart`) é a segunda exceção à
+  regra de não somar requisições, e ela é magra: `learningSongsProvider` chama
+  `GET /teams/:id/songs?isNew=true`, que o servidor filtra — a Home recebe as
+  poucas músicas marcadas como novas, e não o acervo. Até quatro linhas
+  (título; artista · tom · andamento · um tema) e "Ver todas (N)", que abre o
+  repertório na aba "Novas" (`/equipe/musicas?aba=novas`). Sem música nova,
+  carregando ou com falha, o cartão não existe. **Para a equipe inteira, e sem
+  status por integrante** ("pronto", "estudando") — decisão de produto: o
+  cartão lembra o que estudar, e não vigia quem estudou.
 - **A Home não lista escalas.** Ela teve um grupo "Próximas escalas" com três
   linhas da equipe, e ele saiu: era a aba Agenda em miniatura ocupando um terço
   da tela, com menos recurso do que a original. Do que ele respondia sobrou uma
@@ -795,9 +805,13 @@ dois cultos.
 
 - O **cabeçalho do culto aparece sempre**, mesmo com um culto só: some a dúvida
   de "para qual culto estou escolhendo" antes de ela existir.
-- No **texto do WhatsApp** o cabeçalho só entra com 2+ cultos — a linha
-  `⏰ Culto às 09:00` já está no topo, e repeti-la sobre a única lista seria
-  ruído. A numeração recomeça em cada culto. Culto **sem** música entra nomeado,
+- No **texto do WhatsApp** o rótulo é `*Manhã*`/`*Noite*` com 2+ cultos e
+  `*Músicas*` com um só. Música com momento sai como rótulo próprio
+  (`*Abertura:* 208 HCC - Nome`); as sem momento viram lista `* Nome - Artista`
+  (hinário na frente e sem artista quando existe), **na ordem da escala**.
+  Os instrumentos (`positionCategory == INSTRUMENT`) saem numa linha só,
+  `*Instrumentos:* Gerson (violão), Simon (baixo)`; quem ministra vem primeiro
+  na própria função com "(ministrante)". Culto **sem** música entra nomeado,
   com "Ainda não escolhidas.", desde que algum outro tenha repertório; sem
   nenhum em lugar nenhum, a frase aparece uma vez só, sem os rótulos.
 - `Event.songsByService` agrupa e é o que a tela, o texto e os testes usam.
@@ -1226,7 +1240,8 @@ para "quatro" é conversa de produto, não caça a literais.
 |---|---|---|---|
 | `SUGGESTION_NUDGE` | 5 dias antes | escalados | repertório vazio |
 | `SETLIST_EMPTY_NUDGE` | 4 dias antes | OWNER/LEADER | repertório vazio |
-| `SETLIST_REMINDER` | 3 dias antes | escalados | há repertório |
+| `NEW_SONGS_REMINDER` | 1ª manhã entre 7 e 4 dias antes, uma vez | escalados | há música `isNew` no repertório |
+| `SETLIST_REMINDER` | 3 dias antes | escalados | há repertório (e diz quantas em aprendizado) |
 | `SERVICE_REMINDER` | véspera | escalados | — |
 | `REHEARSAL_REMINDER` | dia do ensaio | escalados | ensaio ainda por vir |
 
@@ -1644,7 +1659,7 @@ avisando — em rascunho e publicada:
 - na agenda, `_ScheduleStatusLines` dá até duas linhas: âmbar para o que trava a
   publicação, ardósia (`info`) para "Músicas a definir", que é notícia e não
   pendência de ninguém;
-- no **texto do WhatsApp** a seção 🎶 entra mesmo vazia, com "Ainda não
+- no **texto do WhatsApp** a seção de músicas entra mesmo vazia, com "Ainda não
   escolhidas." — mesma razão do "Sem ensaio": quem recebe não tem o app, e
   seção que some confunde "esqueceram de mandar" com "ainda não escolheram";
 - no detalhe, o vazio do repertório oferece **"Sugerir uma música"** a quem não
@@ -1751,6 +1766,91 @@ Todos em `/teams/:teamId/reports`, restritos a OWNER/LEADER:
   histórico. As não cantadas viram um número (`neverPlayedCount`), não uma
   lista — com os 581 hinos do Cantor Cristão importados de uma vez, a lista
   seria ruído. Tela: `Gerenciar equipe → Uso do repertório`.
+- `GET .../song-context` — o histórico de **toda** música já cantada, numa
+  chamada: última vez, contagem total e nos últimos 3/6/12 meses, e os
+  momentos do culto em que ela entrou. Alimenta o seletor da escala e a seção
+  "Histórico" da tela da música (só para quem lidera).
+- `GET .../repertoire-health` — Saúde do repertório (ver abaixo).
+
+## Inteligência do repertório
+
+O app deixa de só guardar o repertório e passa a ajudar a decidir o que
+cantar. **Tudo é leitura do histórico; nada grava estado nem decide.**
+
+### Uma regra de "cantada", quatro leitores
+
+`backend/src/modules/reports/repertoire-history.ts` é o único lugar que diz o
+que conta como histórico — escala **publicada e já passada**, contada **por
+escala** (manhã e noite do mesmo domingo são uma vez, inclusive no momento). O
+relatório de uso, o contexto do seletor, a saúde e as sugestões usam as mesmas
+funções (`playedSongsWhere`, `aggregateSongHistory`). Não reescreva essa regra
+em outro service. `RepertoireInsightsService` busca; as funções puras contam.
+
+### Momentos do culto inferidos, nunca cadastrados
+
+Ninguém marca "essa música serve para ofertas". O histórico de
+`EventSong.moment` diz em que momentos ela já entrou ("Momento de Louvor (7
+vezes) · Abertura (2 vezes)"). `OUTRO` vem com o nome escrito à mão. Aparece na
+tela da música e como dica ("Já entrou em: …") na folha de ajustes da escala —
+**nenhum chip vem marcado por causa disso**.
+
+### No seletor da escala
+
+- **Segunda linha por música** (`songPickerHistory`): `Cantada há 12 dias · 3
+  vezes em 6 meses · Gratidão, Entrega`. A última vez vem em âmbar quando é das
+  últimas três semanas (avisa, não impede). Música nunca cantada e sem tema não
+  ganha linha — seriam centenas de hinos com "nunca".
+- As frases moram em `songs/domain/song_history.dart` e são testadas: até
+  cinco meses o foco é **quando** ("Cantada há 3 meses"); a partir de seis, a
+  **ausência** ("Há 8 meses sem cantar").
+- **Momento no seletor** (chips, sem "Outro", nenhum marcado): escolher um
+  momento mostra as "Sugestões do Pauta" no topo da lista e faz as músicas
+  marcadas entrarem **já com aquele momento** — é o líder dizendo, ali, e não
+  dedução. Sem momento, tudo segue como antes.
+- A seleção é **por id** (`Map<String, Song>`): a mesma música pode aparecer
+  nas sugestões e no trecho dela, como dois objetos.
+
+### Sugestões do Pauta
+
+`GET /events/:eventId/moment-suggestions?moment=` (LEADER+, `TeamMemberGuard`
+resolve a equipe pela escala). Nome diferente de `song-suggestions` de
+propósito: aquelas são pedidos assinados por gente; estas são contas.
+
+Regras em `moment-suggestions.ts` (`SUGGESTION_RULES`, num lugar só):
+
+- **Só entra música com relação com o momento**: já cantada nele, ou com tema
+  entre os mais frequentes das músicas dele. "Faz tempo que não cantamos"
+  sozinho não é motivo.
+- **Só música que a equipe conhece ou está aprendendo**: nunca cantada e sem
+  `isNew` fica de fora.
+- Fica de fora a música **planejada ou cantada em outra escala a ±21 dias**
+  (rascunho conta aqui — o domingo seguinte em montagem é a repetição a evitar).
+- Pontua: uso no momento, tema, descanso (45/90/180 dias), `isNew`, andamento
+  dominante do momento; perde pontos quem já foi muito cantada em 6 meses. No
+  máximo **uma** música em aprendizado na lista.
+- **Motivos são fatos, e não frases** (`THEME`, `MOMENT_HISTORY`,
+  `LAST_PLAYED`, `LEARNING`, `PACE`). O app escreve ("Gratidão · já utilizada
+  neste momento · 4 meses sem cantar") com as mesmas funções do seletor. Só o
+  que pesou a favor vira motivo; motivo desconhecido é ignorado pelo app.
+- Sem IA e sem API externa. A música vem no formato da lista (`toPublicSong`),
+  para entrar no culto sem outra requisição.
+
+### Saúde do repertório
+
+`/equipe/musicas/saude`, em `Gerenciar equipe`. Resumo (ativas, em
+aprendizado, nunca em escala, cantadas em 3/6/12 meses) e listas que somem
+quando vazias: cantadas com muita frequência (4+ em 3 meses), há muito tempo
+sem cantar (já cantadas, nada em 12 meses), em aprendizado, sem tom definido,
+sem cifra nem gravação (sem `chordsUrl`/`youtubeUrl`/`spotifyUrl` e fora de
+hinário). As duas últimas vêm **ordenadas pelo que a equipe canta**. Cinco
+linhas e "Ver todas", que abre a lista inteira com rolagem preguiçosa.
+
+**O "faltando dados" mora aqui, e só aqui.** Ele foi filtro da lista do
+repertório e saiu por não combinar com o jeito da equipe trabalhar — não o
+recrie na tela principal.
+
+Fora desta rodada, decidido: planejado × realmente cantado, acompanhamento
+individual de aprendizado, "versão oficial" da equipe, IA para recomendações.
 
 ## Feature flags
 
@@ -1770,6 +1870,16 @@ Contas de teste no banco local, ambas da equipe "Ministerio de Louvor":
 `samuel@teste.com` / `senhaFinal789` (OWNER) e `maria@teste.com` /
 `mariaTeste2026` (MEMBER — serve para conferir os 403 sem depender de ler o
 código do guard).
+
+**Testar no ambiente local é liberado.** Assistentes de código têm
+autorização para entrar no app local (versão web em `localhost`, API em
+`localhost:3000`) com as contas acima e para testar as telas de ponta a ponta,
+sem pedir licença a cada vez. Também podem criar dados de teste no banco local
+(`louvor`), desde que **identificados** (ex.: título começando com `[Teste …]`)
+e com um script de limpeza em `backend/tmp/`. **Só o ambiente local** — nunca
+produção nem a cópia de produção. Para conferir a API sem passar pela tela, vale
+assinar um token de acesso curto com o `JWT_SECRET` dentro do container, do
+mesmo jeito que `ctx.tokenFor` faz na suíte.
 
 ## Testes do backend
 
@@ -1950,6 +2060,76 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
     `heightFactor: 1` continua sendo obrigatório pelo motivo de sempre — ver o
     comentário do widget e `test/app_content_width_test.dart`.
 
+
+## Deploy para produção — "Pronto pra producao, manda bala!"
+
+**Quando o usuário disser "Pronto pra producao, manda bala!", o assistente
+executa o fluxo inteiro abaixo** — commit, push, release do APK e variável do
+Railway —, sem pedir confirmação a cada passo. Essa frase é a autorização. Sem
+ela, commit e push só acontecem quando pedidos.
+
+`app/` e `backend/` são **repositórios Git separados**, os dois em `master`. O
+remote do app chama-se **`s`** (`simonscabello/escala-app`); o do backend é
+`origin` (`simonscabello/backend`). O `gh` **não está instalado**: Actions e
+Releases se consultam pela API pública do GitHub via `curl`.
+
+A ordem importa, e não se inverte:
+
+0. **Pré-voo** — parar no primeiro erro e relatar:
+   - backend: `docker compose exec api npx tsc --noEmit -p tsconfig.json` e
+     `docker compose exec api npm test`;
+   - app: `flutter analyze` ("No issues found!") e `flutter test`;
+   - `git status` nos dois, conferindo o que entra. Nunca `.env`, `tmp/`,
+     `android/key.properties` nem `build/`.
+1. **Backend: versão, commit e push para `origin master`.** Antes do commit,
+   subir o `version` do `backend/package.json` para o número do release
+   (`docker compose exec api npm version 0.15.0 --no-git-tag-version`, que
+   acerta o `package-lock.json` junto) — é a versão que `/health` e `/version`
+   anunciam, e ela não vem mais de variável de ambiente. O serviço `pauta-backend` do
+   projeto Railway `PAUTA` faz deploy a cada push, e o `preDeployCommand` roda
+   `npx prisma migrate deploy` — **migration em produção é consequência do
+   push**, não um passo à parte. A instância nova assumiu quando
+   `GET https://backend-production-b304.up.railway.app/health` responde com
+   `uptimeSeconds` pequeno; o `SUCCESS` do Railway aparece **antes** da troca, e
+   nesse intervalo o `/health` ainda responde pela instância antiga.
+2. **App: versão, commit, tag e push.**
+   - subir o `version:` do `pubspec.yaml`: *minor* para funcionalidade, *patch*
+     para correção, e o número depois do `+` sempre aumenta
+     (`0.14.0+17` → `0.15.0+18`);
+   - commit no padrão dos anteriores ("… — versão 0.15.0");
+   - `git push s master`, depois `git tag v0.15.0` e `git push s v0.15.0`.
+     **O push em `master` já publica a versão web**: o serviço
+     `pauta-frontend` do Railway faz deploy a cada push do app — mais um
+     motivo para o backend ir antes;
+   - a tag dispara `.github/workflows/release-apk.yml`: confere tag × pubspec,
+     roda analyze e test, compila assinado e publica o Release "Pauta 0.15.0".
+     Acompanhar até concluir
+     (`https://api.github.com/repos/simonscabello/escala-app/actions/runs?per_page=1`)
+     e conferir o Release em
+     `https://api.github.com/repos/simonscabello/escala-app/releases/latest`.
+3. **Por último, o Railway:** `APP_LATEST_VERSION = 0.15.0` no serviço
+   `pauta-backend` (pelo MCP do Railway ou pelo painel). **Nunca antes do
+   Release existir**: `releases/latest/download/louve.apk` só aponta para a
+   versão nova quando o Release sai, e avisar "Atualizar" cedo entrega o APK
+   antigo. Mudar a variável redeploya a API — conferir o `/health` de novo.
+   O `APP_APK_URL` não muda.
+
+Recortes e armadilhas:
+
+- **Só backend mudou:** passo 1. **Só app:** passos 2 e 3. Mudança só de
+  documentação não gera versão do APK.
+- **Backend sempre antes do app**: o APK novo pode depender de rota nova.
+- **Tirar campo de um DTO quebra o APK instalado**: o `ValidationPipe` usa
+  `forbidNonWhitelisted`, e o app antigo passa a receber
+  `400 property <campo> should not exist` no fluxo inteiro. Mudança
+  incompatível de request aceita o campo antigo como legado, ou a janela de
+  quebra é assumida com o usuário **antes** do push.
+- **Falhou no meio: parar e relatar.** Sem `push --force`, sem apagar tag ou
+  Release já publicado, sem pular etapa para "destravar" — o usuário decide.
+- Ao terminar, relatar: commits e hashes dos dois repos, versão publicada, link
+  do Release, `uptimeSeconds` do `/health` e o valor de `APP_LATEST_VERSION`.
+
+Detalhes de assinatura, segredos do Actions e publicação manual: `docs/DEPLOY.md`.
 
 ## Definição de pronto
 
