@@ -624,6 +624,96 @@ void main() {
       expect(text, isNot(contains('Outro')));
     });
 
+    test('músicas seguidas no mesmo momento dizem o momento uma vez só', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {
+              'songId': 's1',
+              'title': 'Abrigo Perfeito',
+              'hymnals': [hinario(319, 'CC')],
+              'moment': 'DIZIMOS_E_OFERTAS',
+            },
+            {
+              'songId': 's2',
+              'title': 'Ajuntamento',
+              'artist': 'Vencedores Por Cristo',
+              'moment': 'LOUVOR',
+            },
+            {
+              'songId': 's3',
+              'title': 'Falar Com Deus',
+              'artist': 'Novo Tom',
+              'moment': 'LOUVOR',
+            },
+            {
+              'songId': 's4',
+              'title': 'Bondade de Deus',
+              'artist': 'Ibab Celebração',
+              'moment': 'LOUVOR',
+            },
+          ],
+        ),
+      );
+
+      expect(
+        text,
+        contains(
+          '*Dízimos e Ofertas:* 319 CC - Abrigo Perfeito\n'
+          '\n'
+          '*Momento de Louvor:*\n'
+          '* Ajuntamento - Vencedores Por Cristo\n'
+          '* Falar Com Deus - Novo Tom\n'
+          '* Bondade de Deus - Ibab Celebração',
+        ),
+      );
+      expect('*Momento de Louvor:*'.allMatches(text), hasLength(1));
+    });
+
+    test('o mesmo momento separado por outro aparece de novo, na ordem', () {
+      final text = buildScheduleShareText(
+        sampleEvent(
+          songs: [
+            {'songId': 's1', 'title': 'Ajuntamento', 'moment': 'LOUVOR'},
+            {
+              'songId': 's2',
+              'title': 'Não Sei Por Que',
+              'hymnals': [hinario(377, 'CC')],
+              'moment': 'DIZIMOS_E_OFERTAS',
+            },
+            {'songId': 's3', 'title': 'Tremenda Graça', 'moment': 'LOUVOR'},
+            {
+              'songId': 's4',
+              'title': 'Em Memória de Mim',
+              'moment': 'OUTRO',
+              'momentLabel': 'Santa Ceia',
+            },
+            {
+              'songId': 's5',
+              'title': 'Porque Ele Vive',
+              'moment': 'OUTRO',
+              'momentLabel': 'Batismo',
+            },
+          ],
+        ),
+      );
+
+      expect(
+        text,
+        contains(
+          '*Momento de Louvor:* Ajuntamento\n'
+          '\n'
+          '*Dízimos e Ofertas:* 377 CC - Não Sei Por Que\n'
+          '\n'
+          '*Momento de Louvor:* Tremenda Graça\n'
+          '\n'
+          '*Santa Ceia:* Em Memória de Mim\n'
+          '\n'
+          '*Batismo:* Porque Ele Vive',
+        ),
+      );
+    });
+
     test('hinário, momento e "Nova" convivem na mesma linha', () {
       final text = buildScheduleShareText(
         sampleEvent(

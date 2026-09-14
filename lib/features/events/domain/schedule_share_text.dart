@@ -232,36 +232,55 @@ String _semRepertorio(bool naHora) =>
 
 /// O repertório de um culto em blocos, **na ordem em que vai ser tocado**.
 ///
-/// Música com momento marcado é um bloco de uma linha só, com o momento como
-/// rótulo: `*Abertura:* 208 HCC - Eu Não Posso Fugir do Teu Espírito`. É o
-/// que diz ao instrumentista em que ponto do culto ela entra, e à multimídia
-/// quando preparar a letra.
+/// Músicas **seguidas com o mesmo momento** formam um bloco só, e o momento é
+/// dito uma vez:
 ///
-/// As músicas sem momento que vêm em seguida formam uma lista com `* ` -- o
-/// marcador de lista do próprio WhatsApp -- e não numerada: com os momentos
-/// intercalados, "a 3ª" já não diz nada.
+/// ```
+/// *Dízimos e Ofertas:* 319 CC - Abrigo Perfeito
 ///
-/// A ordem é a da escala, e não "momentos primeiro": se a oferta é depois do
-/// louvor, a mensagem mostra a oferta depois do louvor.
+/// *Momento de Louvor:*
+/// * Ajuntamento - Vencedores Por Cristo
+/// * Falar Com Deus - Novo Tom
+/// ```
+///
+/// Com uma música só, o momento continua como rótulo na mesma linha. Com duas
+/// ou mais, ele vira título e as músicas uma lista embaixo: repetir "*Momento de
+/// Louvor:*" em cada linha era rótulo ocupando a tela para dizer a mesma coisa
+/// três vezes.
+///
+/// **Só as seguidas.** Se a oferta cai entre dois louvores, o louvor aparece
+/// duas vezes, porque a ordem da mensagem é a ordem do culto -- juntar os dois
+/// mandaria a oferta para o lugar errado. "Outro" com nomes diferentes ("Santa
+/// Ceia", "Batismo") são momentos diferentes.
+///
+/// As músicas sem momento seguem a mesma regra, sem título: uma lista com `* `
+/// -- o marcador do próprio WhatsApp -- e não numerada, porque com os momentos
+/// intercalados "a 3ª" já não diz nada.
 List<List<String>> _songBlocks(List<EventSong> songs) {
-  final blocos = <List<String>>[];
-  List<String>? lista;
+  final grupos = <({String? momento, List<EventSong> musicas})>[];
   for (final song in songs) {
     if (song.title.isEmpty) continue;
 
     final momento = song.momentText;
-    if (momento != null) {
-      blocos.add(['${_bold('$momento:')} ${_songLine(song)}']);
-      lista = null;
-      continue;
+    if (grupos.isNotEmpty && grupos.last.momento == momento) {
+      grupos.last.musicas.add(song);
+    } else {
+      grupos.add((momento: momento, musicas: [song]));
     }
-    if (lista == null) {
-      lista = <String>[];
-      blocos.add(lista);
-    }
-    lista.add('* ${_songLine(song)}');
   }
-  return blocos;
+
+  return [
+    for (final grupo in grupos)
+      if (grupo.momento == null)
+        [for (final song in grupo.musicas) '* ${_songLine(song)}']
+      else if (grupo.musicas.length == 1)
+        ['${_bold('${grupo.momento}:')} ${_songLine(grupo.musicas.single)}']
+      else
+        [
+          _bold('${grupo.momento}:'),
+          for (final song in grupo.musicas) '* ${_songLine(song)}',
+        ],
+  ];
 }
 
 /// `314 CC - Estou Seguro`, `Maravilhoso Senhor - Rafaela Pinho`.
