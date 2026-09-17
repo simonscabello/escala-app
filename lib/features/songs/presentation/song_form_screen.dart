@@ -11,9 +11,11 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/hymnal_models.dart';
+import '../domain/musical_keys.dart';
 import '../domain/song_models.dart';
 import '../domain/song_themes.dart';
 import 'hymnal_refs_field.dart';
+import 'musical_key_picker.dart';
 import 'song_theme_picker.dart';
 
 /// Edição de uma música, em duas camadas.
@@ -49,16 +51,18 @@ class SongFormScreen extends ConsumerStatefulWidget {
 
 class _SongFormScreenState extends ConsumerState<SongFormScreen> {
   final _title = TextEditingController();
-  final _key = TextEditingController();
   final _artist = TextEditingController();
   final _composer = TextEditingController();
-  final _originalKey = TextEditingController();
   final _lyrics = TextEditingController();
   final _lyricsUrl = TextEditingController();
   final _chordsUrl = TextEditingController();
   final _youtubeUrl = TextEditingController();
   final _spotifyUrl = TextEditingController();
 
+  /// Nulo é "sem tom". Pode ser anotação de antes da lista ("G (capo 2)"):
+  /// ela volta ao servidor intacta enquanto ninguém escolher outro tom.
+  String? _defaultKey;
+  String? _originalKey;
   String? _kind;
   String? _pace;
   Set<String> _themes = {};
@@ -76,10 +80,8 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
   void dispose() {
     for (final controller in [
       _title,
-      _key,
       _artist,
       _composer,
-      _originalKey,
       _lyrics,
       _lyricsUrl,
       _chordsUrl,
@@ -94,7 +96,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
   void _populate(Song song) {
     _populated = true;
     _title.text = song.title;
-    _key.text = song.defaultKey ?? '';
+    _defaultKey = _keyOrNull(song.defaultKey);
     _kind = song.kind;
     _pace = song.pace;
     _themes = {...song.themes};
@@ -102,12 +104,20 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     _isNew = song.isNew;
     _artist.text = song.artist ?? '';
     _composer.text = song.composer ?? '';
-    _originalKey.text = song.originalKey ?? '';
+    _originalKey = _keyOrNull(song.originalKey);
     _lyrics.text = song.lyrics ?? '';
     _lyricsUrl.text = song.lyricsUrl ?? '';
     _chordsUrl.text = song.chordsUrl ?? '';
     _youtubeUrl.text = song.youtubeUrl ?? '';
     _spotifyUrl.text = song.spotifyUrl ?? '';
+  }
+
+  /// A grafia da lista quando dá (`g` vira `G`); o texto como está quando não
+  /// dá; nulo quando não há nada.
+  static String? _keyOrNull(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return null;
+    return normalizeMusicalKey(value) ?? value;
   }
 
   Future<void> _save(Song song) async {
@@ -129,7 +139,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
         {
           'title': title,
           // String vazia vira null no backend: o campo volta a "não decidido".
-          'defaultKey': _key.text.trim(),
+          'defaultKey': _defaultKey ?? '',
           'kind': _kind,
           'pace': _pace,
           // Sempre enviado, inclusive vazio: `[]` é o que limpa a
@@ -143,7 +153,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           'hymnals': [for (final ref in _hymnals) ref.toJson()],
           'artist': _artist.text.trim(),
           'composer': _composer.text.trim(),
-          'originalKey': _originalKey.text.trim(),
+          'originalKey': _originalKey ?? '',
           'lyricsUrl': _lyricsUrl.text.trim(),
           'chordsUrl': _chordsUrl.text.trim(),
           'youtubeUrl': _youtubeUrl.text.trim(),
@@ -198,6 +208,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     }
 
     if (!_populated) _populate(song);
+    final recordingKey = normalizeMusicalKey(song.originalKey);
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Editar música')),
@@ -212,27 +223,27 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           decoration: const InputDecoration(labelText: 'Nome da música'),
         ),
         const SizedBox(height: AppSpacing.lg),
-        TextField(
-          controller: _key,
+        MusicalKeyField(
+          label: 'Nosso tom',
+          value: _defaultKey,
           enabled: !_saving,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: 'Nosso tom',
-            helperText: song.originalKey != null
-                ? 'A gravação está em ${song.originalKey}'
-                : 'Ex.: G, Bm, Eb — cabe também "G (capo 2)"',
-          ),
+          helperText: song.originalKey != null
+              ? 'A gravação está em ${song.originalKey}'
+              : null,
+          onChanged: (key) => setState(() => _defaultKey = key),
         ),
-        if (song.originalKey != null && _key.text.trim().isEmpty) ...[
+        // Só oferece o que a lista aceita: copiar uma anotação livre do tom da
+        // gravação traria de volta o texto livre por outra porta.
+        if (_defaultKey == null && recordingKey != null) ...[
           const SizedBox(height: AppSpacing.sm),
           Align(
             alignment: Alignment.centerLeft,
             child: ActionChip(
               avatar: const Icon(Icons.content_copy_rounded, size: 16),
-              label: Text('Usar ${song.originalKey}'),
+              label: Text('Usar $recordingKey'),
               onPressed: _saving
                   ? null
-                  : () => setState(() => _key.text = song.originalKey!),
+                  : () => setState(() => _defaultKey = recordingKey),
             ),
           ),
         ],
@@ -293,6 +304,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           artist: _artist,
           composer: _composer,
           originalKey: _originalKey,
+          onOriginalKeyChanged: (key) => setState(() => _originalKey = key),
           lyrics: _lyrics,
           lyricsUrl: _lyricsUrl,
           chordsUrl: _chordsUrl,
@@ -324,6 +336,7 @@ class _ExternalFields extends StatelessWidget {
     required this.artist,
     required this.composer,
     required this.originalKey,
+    required this.onOriginalKeyChanged,
     required this.lyrics,
     required this.lyricsUrl,
     required this.chordsUrl,
@@ -336,7 +349,8 @@ class _ExternalFields extends StatelessWidget {
   final VoidCallback onToggle;
   final TextEditingController artist;
   final TextEditingController composer;
-  final TextEditingController originalKey;
+  final String? originalKey;
+  final ValueChanged<String?> onOriginalKeyChanged;
   final TextEditingController lyrics;
   final TextEditingController lyricsUrl;
   final TextEditingController chordsUrl;
@@ -416,15 +430,13 @@ class _ExternalFields extends StatelessWidget {
             decoration: const InputDecoration(labelText: 'Compositor'),
           ),
           const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: originalKey,
+          MusicalKeyField(
+            label: 'Tom da gravação',
+            value: originalKey,
             enabled: enabled,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              labelText: 'Tom da gravação',
-              helperText: 'Sugestão para "Nosso tom" — não é o que a equipe '
-                  'canta',
-            ),
+            helperText: 'Sugestão para "Nosso tom" — não é o que a equipe '
+                'canta',
+            onChanged: onOriginalKeyChanged,
           ),
           const SizedBox(height: AppSpacing.lg),
           _LinkField(

@@ -893,6 +893,38 @@ Mudar artista ou título refaz `searchText` e passa pela regra 20 no servidor,
 que responde 409 `SONG_ALREADY_EXISTS` — agora é possível esbarrar nela pela
 tela, o que antes não acontecia.
 
+### Tom: lista fechada para escolher, texto para ler
+
+"Nosso tom" e "Tom da gravação" não têm mais teclado. `MusicalKeyField`
+(`musical_key_picker.dart`) abre uma folha (diálogo no monitor) com Maior/Menor
+e uma grade de 3×7: cada coluna é uma letra, sustenido em cima, natural no
+meio, bemol embaixo. Tocar escolhe e fecha; "Tirar tom" limpa.
+
+- A lista (`musical_keys.dart`) tem **34 tons**: as 7 naturais e as duas grafias
+  das 5 teclas pretas, em maior e menor. É o formato que já se gravava e o
+  mesmo `KEY_FORMAT` do CifraClub no backend, menos E#, B#, Fb e Cb.
+- **O backend continua aceitando texto livre, de propósito.** Trancar lá
+  quebraria a edição das músicas com "G (capo 2)" e o APK antigo. A anotação
+  antiga aparece como está, com aviso no campo, e volta intacta ao servidor
+  até alguém escolher outro tom. `normalizeMusicalKey` só conserta a caixa
+  (`g` → `G`).
+- O cadastro não pede tom (nunca pediu); o tom desta escala (`keyOverride`, em
+  `setlist_form_screen.dart`) continua texto livre — ficou fora deste passo.
+
+### Tela da música (`song_detail_screen.dart`)
+
+Ordem fixa: nome e artista, faixa Tom/Tipo/Andamento, temas, **Preparação**
+(Cifra, Letra, YouTube, Spotify em 2×2), prévia da letra e, por último, **Uso
+nas escalas** (só para quem lidera).
+
+- As quatro portas aparecem sempre; sem link, o ladrilho fica afundado e diz
+  "Sem link". A Letra abre a letra guardada (`SongLyricsScreen`, com o link do
+  site no topo quando existe); sem letra guardada, abre o link.
+- A faixa de fatos **não usa reticências**: os ícones só aparecem quando o
+  vocabulário inteiro cabe com eles (medido com a fonte do aparelho), e o texto
+  encolhe antes de ser cortado. `test/song_detail_screen_test.dart` passa por
+  320px, fonte 1.3x e tema escuro.
+
 ### Cadastrar música durante a montagem da escala
 
 O seletor do repertório tem "Cadastrar", que abre o `AddSongScreen` por
