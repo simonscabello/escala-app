@@ -129,7 +129,7 @@ class _SuggestionDetailScreenState
         context,
         title: 'Adicionar ao repertório?',
         message: '"${s.title}" ainda não está no repertório da equipe. '
-            'O cadastro abre com o que a sugestão trouxe — só falta conferir.',
+            'O cadastro já vem com o que a sugestão trouxe.',
         confirmLabel: 'Adicionar ao repertório',
       );
       if (!cadastrar || !mounted) return;
@@ -342,7 +342,7 @@ class _Body extends StatelessWidget {
             Text(s.title, style: theme.textTheme.headlineSmall),
             if (s.status == SuggestionStatus.accepted)
               const AppBadge(
-                label: 'Acolhida',
+                label: 'Aceita',
                 tone: AppTone.success,
                 icon: Icons.check_circle_outline_rounded,
               ),

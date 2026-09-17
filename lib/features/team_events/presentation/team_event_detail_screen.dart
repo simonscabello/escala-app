@@ -80,9 +80,8 @@ class _Corpo extends ConsumerWidget {
       // A frase diz o que o sistema NÃO faz. Prometer que "a equipe será
       // avisada" seria mentira: só a criação notifica, e quem já leu o aviso
       // vai continuar contando com o churrasco.
-      message: 'O evento sai da agenda de todo mundo. A equipe não recebe '
-          'aviso de cancelamento — quem já viu o evento precisa ser avisado '
-          'por você.',
+      message: 'O evento sai da agenda de todo mundo, mas a equipe não '
+          'recebe aviso. Avise quem precisar saber.',
       confirmLabel: 'Cancelar evento',
       destructive: true,
     );

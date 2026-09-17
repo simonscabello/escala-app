@@ -110,9 +110,8 @@ class SongDetailScreen extends ConsumerWidget {
       final confirmed = await showConfirmDialog(
         context,
         title: 'Arquivar ${song.title}?',
-        message: 'Ela sai do repertório e da busca do repertório da escala. '
-            'As escalas em que já foi tocada continuam como estão, e dá para '
-            'restaurar quando quiser.',
+        message: 'Ela sai do repertório, mas continua nas escalas em que já '
+            'foi tocada. Dá para restaurar depois.',
         confirmLabel: 'Arquivar',
       );
       if (!confirmed || !context.mounted) return;
@@ -297,15 +296,6 @@ class _Header extends StatelessWidget {
           Text(
             song.hymnals.map((ref) => '${ref.number} ${ref.name}').join(' · '),
             style: theme.textTheme.bodySmall?.copyWith(color: scheme.primary),
-          ),
-        ],
-        if (song.composer != null && song.composer != song.artist) ...[
-          const SizedBox(height: 2),
-          Text(
-            'Composição: ${song.composer}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
           ),
         ],
       ],
@@ -550,7 +540,7 @@ class _Preparation extends StatelessWidget {
           ? _PrepItem(
               icon: Icons.article_outlined,
               label: 'Letra',
-              status: 'Disponível no app',
+              status: 'Ler no app',
               onTap: () => _openLyrics(context, song),
             )
           : link(
@@ -569,7 +559,7 @@ class _Preparation extends StatelessWidget {
         icon: Icons.headphones_rounded,
         label: 'Spotify',
         url: song.spotifyUrl,
-        action: 'Abrir no Spotify',
+        action: 'Ouvir no Spotify',
       ),
     ];
 
@@ -580,8 +570,7 @@ class _Preparation extends StatelessWidget {
         // os títulos da tela alinham entre si.
         const SectionHeader(
           title: 'Preparação',
-          subtitle: 'Tudo que você precisa para ensaiar',
-          padding: EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.md),
+          padding: EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
         ),
         for (var row = 0; row < items.length; row += 2) ...[
           if (row > 0) const SizedBox(height: AppSpacing.sm),
@@ -869,7 +858,7 @@ class _SongHistorySection extends ConsumerWidget {
       child: AppGroup(
         title: 'Uso nas escalas',
         trailing: Tooltip(
-          message: 'Conta só as escalas publicadas que já aconteceram.',
+          message: 'Só escalas publicadas que já aconteceram.',
           triggerMode: TooltipTriggerMode.tap,
           child: Padding(
             padding: const EdgeInsets.all(2),

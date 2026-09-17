@@ -895,10 +895,11 @@ tela, o que antes não acontecia.
 
 ### Tom: lista fechada para escolher, texto para ler
 
-"Nosso tom" e "Tom da gravação" não têm mais teclado. `MusicalKeyField`
+"Nosso tom", "Tom da gravação" e o "Tom neste culto" da escala não têm mais
+teclado. `MusicalKeyField`
 (`musical_key_picker.dart`) abre uma folha (diálogo no monitor) com Maior/Menor
 e uma grade de 3×7: cada coluna é uma letra, sustenido em cima, natural no
-meio, bemol embaixo. Tocar escolhe e fecha; "Tirar tom" limpa.
+meio, bemol embaixo. Tocar escolhe e fecha; "Limpar" tira o tom.
 
 - A lista (`musical_keys.dart`) tem **34 tons**: as 7 naturais e as duas grafias
   das 5 teclas pretas, em maior e menor. É o formato que já se gravava e o
@@ -908,8 +909,8 @@ meio, bemol embaixo. Tocar escolhe e fecha; "Tirar tom" limpa.
   antiga aparece como está, com aviso no campo, e volta intacta ao servidor
   até alguém escolher outro tom. `normalizeMusicalKey` só conserta a caixa
   (`g` → `G`).
-- O cadastro não pede tom (nunca pediu); o tom desta escala (`keyOverride`, em
-  `setlist_form_screen.dart`) continua texto livre — ficou fora deste passo.
+- O cadastro não pede tom (nunca pediu). Na escala (`keyOverride`, no
+  `_SongSettingsDialog`), campo vazio continua valendo o tom da equipe.
 
 ### Tela da música (`song_detail_screen.dart`)
 
@@ -977,10 +978,10 @@ sugestão foi atendida". É a mesma armadilha que o `isNew` já pagou três veze
 líder pode ter posto a música por conta própria, ou ter acolhido a ideia e
 jogado para março.
 
-- **Acolher não cria música nem liga `isNew`.** O backend registra o
+- **Aceitar não cria música nem liga `isNew`.** O backend registra o
   acolhimento e o vínculo; quem cria a música é o líder, na tela de cadastro,
   com `isNew` marcado à mão (ela já nasce marcada ali).
-- **Pôr no culto não acolhe a sugestão.** São dois botões na faixa, de
+- **"Adicionar ao culto" não aceita a sugestão.** São dois botões na faixa, de
   propósito: o líder pode estar experimentando, e a escala ainda é rascunho.
 - **A data passar não muda status.** A sugestão continua `PENDING`; ela só sai
   da lista aberta, como a agenda separa próximas de passadas. Filtrar por data
@@ -1802,7 +1803,7 @@ Todos em `/teams/:teamId/reports`, restritos a OWNER/LEADER:
   chamada: última vez, contagem total e nos últimos 3/6/12 meses, e os
   momentos do culto em que ela entrou. Alimenta o seletor da escala e a seção
   "Histórico" da tela da música (só para quem lidera).
-- `GET .../repertoire-health` — Saúde do repertório (ver abaixo).
+- `GET .../repertoire-health` — Análise do repertório (ver abaixo).
 
 ## Inteligência do repertório
 
@@ -1867,7 +1868,7 @@ Regras em `moment-suggestions.ts` (`SUGGESTION_RULES`, num lugar só):
 - Sem IA e sem API externa. A música vem no formato da lista (`toPublicSong`),
   para entrar no culto sem outra requisição.
 
-### Saúde do repertório
+### Análise do repertório (antes "Saúde do repertório")
 
 `/equipe/musicas/saude`, em `Gerenciar equipe`. Resumo (ativas, em
 aprendizado, nunca em escala, cantadas em 3/6/12 meses) e listas que somem

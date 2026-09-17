@@ -98,7 +98,7 @@ void main() {
     await tester.tap(find.text('Alfa e Ômega'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    expect(find.text('Momento do culto'), findsOneWidget);
+    expect(find.text('Momento do culto (opcional)'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, 'Abertura'), findsOneWidget);
     expect(
       find.widgetWithText(ChoiceChip, 'Dízimos e Ofertas'),

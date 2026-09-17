@@ -158,7 +158,7 @@ void main() {
     await _abrir(tester, song: _musica(), size: const Size(390, 2000));
 
     expect(find.text('Abrir cifra'), findsOneWidget);
-    expect(find.text('Abrir no Spotify'), findsOneWidget);
+    expect(find.text('Ouvir no Spotify'), findsOneWidget);
     // Sem letra e sem link de letra, sem YouTube: continuam no lugar.
     expect(find.text('Letra'), findsOneWidget);
     expect(find.text('YouTube'), findsOneWidget);
@@ -187,7 +187,7 @@ void main() {
       size: const Size(390, 2000),
     );
 
-    expect(find.text('Disponível no app'), findsOneWidget);
+    expect(find.text('Ler no app'), findsOneWidget);
     expect(find.text('Ver completa'), findsOneWidget);
 
     await tester.tap(find.text('Ver completa'));
@@ -206,7 +206,7 @@ void main() {
       size: const Size(390, 2000),
     );
 
-    await tester.tap(find.text('Disponível no app'));
+    await tester.tap(find.text('Ler no app'));
     await tester.pumpAndSettle();
 
     expect(find.byType(SongLyricsScreen), findsOneWidget);

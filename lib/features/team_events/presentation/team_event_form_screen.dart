@@ -225,8 +225,8 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
         title: Text(widget.isEditing ? 'Editar evento' : 'Novo evento'),
       ),
       title: widget.isEditing ? 'Editar evento' : 'Novo evento',
-      subtitle: 'Reunião, ensaio geral, churrasco, treinamento — o que a '
-          'equipe marca e não é escala.',
+      subtitle: 'Reunião, ensaio geral, confraternização ou outro '
+          'compromisso da equipe.',
       children: [
         if (_error != null) FormErrorBanner(message: _error!),
         Form(

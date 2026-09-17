@@ -297,7 +297,7 @@ class _SongList extends ConsumerWidget {
                     SongFilter.arquivadas =>
                       'Nenhuma música arquivada com esses temas.',
                   },
-            actionLabel: 'Tirar os temas',
+            actionLabel: 'Limpar temas',
             onAction: onClearThemes,
           ),
         );

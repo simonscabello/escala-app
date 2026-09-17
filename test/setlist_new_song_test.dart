@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/presentation/musical_key_picker.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -94,5 +95,25 @@ void main() {
     expect(find.text('Tom neste culto'), findsOneWidget);
     expect(find.text('Recado'), findsOneWidget);
     expect(find.textContaining('Música nova'), findsNothing);
+  });
+
+  testWidgets('o tom desta escala se escolhe na mesma folha da música',
+      (tester) async {
+    await tester.pumpWidget(repertorio());
+
+    await tester.tap(find.text('Aclame ao Senhor'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // Sem teclado: o campo abre a grade de tons.
+    expect(find.byType(EditableText), findsNWidgets(1)); // só o recado
+    await tester.tap(find.byType(MusicalKeyField));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('D'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Aplicar'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Tom D'), findsOneWidget);
   });
 }

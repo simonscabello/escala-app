@@ -81,13 +81,13 @@ class ManageTeamScreen extends ConsumerWidget {
                   AppGroupRow(
                     icon: Icons.event_busy_rounded,
                     title: 'Quem não pode',
-                    subtitle: 'Calendário das indisponibilidades da equipe',
+                    subtitle: 'Quem avisou que não pode',
                     onTap: () => context.push('/equipe/indisponibilidade'),
                   ),
                   AppGroupRow(
                     icon: Icons.balance_rounded,
                     title: 'Participação',
-                    subtitle: 'Distribuição das escalas entre os integrantes',
+                    subtitle: 'Quantas vezes cada um foi escalado',
                     onTap: () => context.push('/equipe/participacao'),
                   ),
                   AppGroupRow(
@@ -97,10 +97,9 @@ class ManageTeamScreen extends ConsumerWidget {
                     onTap: () => context.push('/equipe/musicas/uso'),
                   ),
                   AppGroupRow(
-                    icon: Icons.monitor_heart_outlined,
-                    title: 'Saúde do repertório',
-                    subtitle: 'O que se repete, o que sumiu e o que falta '
-                        'cadastrar',
+                    icon: Icons.insights_rounded,
+                    title: 'Análise do repertório',
+                    subtitle: 'Músicas repetidas, esquecidas ou incompletas',
                     onTap: () => context.push('/equipe/musicas/saude'),
                   ),
                   AppGroupRow(

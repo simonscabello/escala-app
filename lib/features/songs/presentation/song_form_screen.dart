@@ -213,8 +213,7 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
     return FormScaffold(
       appBar: AppBar(title: const Text('Editar música')),
       title: song.title,
-      subtitle: 'Tom, tipo e andamento são decisão da equipe — nenhum '
-          'serviço de música responde por vocês.',
+      subtitle: song.subtitle,
       children: [
         TextField(
           controller: _title,
@@ -434,8 +433,7 @@ class _ExternalFields extends StatelessWidget {
             label: 'Tom da gravação',
             value: originalKey,
             enabled: enabled,
-            helperText: 'Sugestão para "Nosso tom" — não é o que a equipe '
-                'canta',
+            helperText: 'O tom da versão original',
             onChanged: onOriginalKeyChanged,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -475,8 +473,6 @@ class _ExternalFields extends StatelessWidget {
             decoration: const InputDecoration(
               labelText: 'Letra',
               alignLabelWithHint: true,
-              helperText: 'Guardada aqui, e não só o link: site de letra sai '
-                  'do ar e não abre no meio do culto.',
             ),
           ),
         ],
@@ -604,8 +600,7 @@ class _ThemeField extends StatelessWidget {
       children: [
         Text('Temas', style: theme.textTheme.titleSmall),
         Text(
-          'Sobre o que ela fala. É por aqui que o repertório se filtra na hora '
-          'de montar o culto.',
+          'Ajudam a encontrar a música na hora de montar o culto.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
           ),

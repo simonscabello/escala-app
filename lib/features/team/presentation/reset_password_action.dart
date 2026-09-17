@@ -36,10 +36,9 @@ Future<void> resetMemberPassword(
   final confirmed = await showConfirmDialog(
     context,
     title: 'Redefinir a senha de ${member.displayName}?',
-    message: 'Uma senha temporária é gerada agora e você a entrega em mãos. A '
-        'senha antiga para de valer na hora, e no próximo acesso o app exige '
-        'uma nova. Se ${member.displayName} estiver com o app aberto, aquela '
-        'sessão ainda responde por até uma hora.',
+    message: 'Vamos gerar uma senha temporária para você passar para '
+        '${member.displayName}. A senha atual deixa de funcionar, e no próximo '
+        'acesso o app pede uma nova.',
     confirmLabel: 'Redefinir',
   );
   if (!confirmed || !context.mounted) return;
@@ -96,9 +95,8 @@ class _TemporaryPasswordDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Entregue esta senha a ${member.displayName}. Ela aparece uma vez '
-            'só — depois de fechar, nem o app nem o servidor conseguem '
-            'mostrá-la de novo.',
+            'Passe esta senha para ${member.displayName}. Ela só aparece '
+            'agora: depois de fechar, não dá para ver de novo.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.lg),

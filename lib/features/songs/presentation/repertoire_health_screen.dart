@@ -16,7 +16,7 @@ import '../domain/song_history.dart';
 /// Quantas linhas cada lista mostra antes do "Ver todas".
 const _preview = 5;
 
-/// Saúde do repertório: o que se repete, o que sumiu e o que falta cadastrar.
+/// Análise do repertório: o que se repete, o que sumiu e o que falta cadastrar.
 ///
 /// **Tela de manutenção, aberta de propósito** — por isso fica em Gerenciar
 /// equipe, ao lado de "Uso do repertório", e não na lista do repertório. O
@@ -37,7 +37,7 @@ class RepertoireHealthScreen extends ConsumerWidget {
     final health = ref.watch(repertoireHealthProvider(teamId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Saúde do repertório')),
+      appBar: AppBar(title: const Text('Análise do repertório')),
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(
@@ -93,7 +93,7 @@ class _HealthBody extends StatelessWidget {
         ),
       if (health.learning.isNotEmpty)
         _HealthSection(
-          title: 'Estamos aprendendo',
+          title: 'Músicas novas',
           subtitle: 'As marcadas como novas no repertório',
           songs: health.learning,
           details: (song) => [

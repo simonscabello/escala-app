@@ -116,7 +116,7 @@ void main() {
 
     // Decidir de raspão numa lista é decidir sem ler o motivo, e o motivo é a
     // razão de o campo ser obrigatório.
-    expect(find.text('Acolher'), findsNothing);
+    expect(find.text('Aceitar'), findsNothing);
     expect(find.text('Aceitar sugestão'), findsNothing);
     expect(find.text('Por enquanto não'), findsNothing);
     expect(find.text('Recusar'), findsNothing);

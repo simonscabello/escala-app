@@ -168,8 +168,8 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text('${member.displayName} entrou na equipe'),
         content: const Text(
-          'Ainda falta a conta no app. Posso gerar o convite e deixar a '
-          'mensagem pronta para você colar no WhatsApp.',
+          'Ainda não tem conta no app. Quer mandar um convite pelo '
+          'WhatsApp?',
         ),
         actions: [
           TextButton(
@@ -513,7 +513,7 @@ class _LeaveField extends StatelessWidget {
             child: InputDecorator(
               decoration: InputDecoration(
                 labelText: 'Previsão de retorno (opcional)',
-                helperText: 'Só um aviso. Ninguém volta sozinho na data.',
+                helperText: 'Só para lembrar. O afastamento não termina sozinho.',
                 enabled: enabled,
                 suffixIcon: until != null
                     ? IconButton(
@@ -689,8 +689,8 @@ class _RoleField extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           _RoleOption(
             label: 'Líder',
-            description: 'Monta escalas, convida e cuida da equipe — como '
-                'quem criou.',
+            description: 'Monta escalas, convida pessoas e cuida da '
+                'equipe.',
             icon: Icons.shield_outlined,
             selected: value == 'LEADER',
             enabled: enabled,

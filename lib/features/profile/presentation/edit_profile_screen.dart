@@ -135,9 +135,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return FormScaffold(
       appBar: AppBar(title: const Text('Meus dados')),
       title: 'Meus dados',
-      subtitle: 'O nome aparece para a equipe e o e-mail é o que você usa '
-          'para entrar. A data de nascimento é o que faz a equipe lembrar de '
-          'parabenizar — só a própria pessoa pode preenchê-la.',
+      subtitle: 'Seu nome aparece para a equipe, e o e-mail é o que você '
+          'usa para entrar.',
       children: [
         Form(
           key: _formKey,
@@ -245,7 +244,7 @@ class _BirthDateField extends StatelessWidget {
           labelText: 'Data de nascimento',
           helperText: preenchida
               ? 'A equipe vê o dia e o mês, não o ano'
-              : 'Opcional — serve para a equipe saber quando parabenizar',
+              : 'Opcional. Assim a equipe lembra do seu aniversário',
           enabled: enabled,
           suffixIcon: preenchida
               ? IconButton(

@@ -20,6 +20,7 @@ import '../../songs/domain/song_models.dart';
 import '../../songs/domain/song_sections.dart';
 import '../../songs/domain/song_themes.dart';
 import '../../songs/presentation/add_song_screen.dart';
+import '../../songs/presentation/musical_key_picker.dart';
 import '../../songs/presentation/song_theme_picker.dart';
 import '../../suggestions/presentation/event_suggestions_band.dart';
 import '../data/event_repository.dart';
@@ -179,10 +180,10 @@ class _SetlistFormScreenState extends ConsumerState<SetlistFormScreen> {
 
   /// Põe no culto uma música vinda da faixa de sugestões.
   ///
-  /// **Isto não acolhe a sugestão**, de propósito: o líder pode estar
+  /// **Isto não aceita a sugestão**, de propósito: o líder pode estar
   /// experimentando, e a escala ainda é rascunho. Quem diz que a sugestão foi
-  /// acolhida é o botão "Acolher", ali do lado — deduzir o acolhimento de "a
-  /// música entrou" é a mesma armadilha do `isNew`.
+  /// aceita é o botão "Aceitar", ali do lado — deduzir o aceite de "a música
+  /// entrou" é a mesma armadilha do `isNew`.
   Future<void> _adicionarSugerida(String songId, EventService culto) async {
     try {
       // Busca a música inteira: a sugestão só carrega título e artista, e o
@@ -673,9 +674,11 @@ class _SongSettingsDialog extends StatefulWidget {
 }
 
 class _SongSettingsDialogState extends State<_SongSettingsDialog> {
-  late final TextEditingController _key = TextEditingController(
-    text: widget.song.keyOverride ?? '',
-  );
+  /// Nulo é "vale o tom da equipe". Um tom anotado antes da lista volta como
+  /// está, como na edição da música.
+  late String? _keyOverride = (widget.song.keyOverride ?? '').trim().isEmpty
+      ? null
+      : widget.song.keyOverride!.trim();
   late final TextEditingController _note = TextEditingController(
     text: widget.song.note ?? '',
   );
@@ -687,21 +690,19 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
 
   @override
   void dispose() {
-    _key.dispose();
     _note.dispose();
     _momentLabel.dispose();
     super.dispose();
   }
 
   void _aplicar() {
-    final tom = _key.text.trim();
     final recado = _note.text.trim();
     final rotulo = _momentLabel.text.trim();
 
     Navigator.pop(
       context,
       _SongSettings(
-        keyOverride: tom.isEmpty ? null : tom,
+        keyOverride: _keyOverride,
         note: recado.isEmpty ? null : recado,
         moment: _moment,
         // Só em "Outro", como no servidor: guardar "Santa Ceia" preso a
@@ -725,23 +726,18 @@ class _SongSettingsDialogState extends State<_SongSettingsDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _key,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: 'Tom neste culto',
-                helperText: widget.song.defaultKey != null
-                    ? 'A equipe canta em ${widget.song.defaultKey}'
-                    : 'Deixe vazio para usar o tom da equipe',
-              ),
+            MusicalKeyField(
+              label: 'Tom neste culto',
+              value: _keyOverride,
+              helperText: widget.song.defaultKey != null
+                  ? 'Sem escolher, fica ${widget.song.defaultKey}'
+                  : null,
+              onChanged: (key) => setState(() => _keyOverride = key),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text('Momento do culto', style: theme.textTheme.titleSmall),
             Text(
-              'Opcional. É o que diz à equipe em que ponto do culto ela entra.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              'Momento do culto (opcional)',
+              style: theme.textTheme.titleSmall,
             ),
             if (widget.usualMoments != null) ...[
               const SizedBox(height: AppSpacing.xs),
@@ -895,8 +891,7 @@ class _PickerEmpty extends StatelessWidget {
       return AppEmptyState(
         icon: Icons.search_off_rounded,
         title: 'Nenhuma música com esse nome',
-        message: 'Procure nas outras abas, ou cadastre agora — sem perder o '
-            'que você já montou aqui.',
+        message: 'Procure nas outras abas ou cadastre a música agora.',
         actionLabel: 'Cadastrar música',
         onAction: onCadastrar,
       );
@@ -916,7 +911,7 @@ class _PickerEmpty extends StatelessWidget {
           SongFilter.arquivadas =>
             'Nenhuma música arquivada com esses temas.',
         },
-        actionLabel: 'Tirar os temas',
+        actionLabel: 'Limpar temas',
         onAction: onClearThemes,
       );
     }

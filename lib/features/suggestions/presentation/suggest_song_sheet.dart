@@ -578,9 +578,9 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
           onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(
             hintText: 'A igreja já canta essa nos cultos de oração...',
-            // Obrigatório, e a tela diz por quê: é o que o líder lê para
-            // decidir, e é o que faz uma recusa ser resposta a um argumento.
-            helperText: 'Obrigatório — é o que o líder lê para decidir',
+            // Obrigatório: é o que o líder lê para decidir, e é o que faz uma
+            // recusa ser resposta a um argumento.
+            helperText: 'Obrigatório',
             helperMaxLines: 2,
           ),
         ),

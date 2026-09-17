@@ -135,7 +135,7 @@ void main() {
     final repositorio = await _abrir(tester, defaultKey: 'G (capo 2)');
 
     expect(find.text('G (capo 2)'), findsOneWidget);
-    expect(find.textContaining('Anotado antes da lista'), findsOneWidget);
+    expect(find.textContaining('Tom salvo antes da lista'), findsOneWidget);
 
     await _salvar(tester);
     expect(repositorio.enviado!['defaultKey'], 'G (capo 2)');
@@ -167,7 +167,7 @@ void main() {
 
     await tester.tap(_campo('Nosso tom'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Tirar tom'));
+    await tester.tap(find.text('Limpar'));
     await tester.pumpAndSettle();
 
     await _salvar(tester);
@@ -190,7 +190,7 @@ void main() {
       (tester) async {
     final repositorio = await _abrir(tester, defaultKey: 'bm');
 
-    expect(find.textContaining('Anotado antes da lista'), findsNothing);
+    expect(find.textContaining('Tom salvo antes da lista'), findsNothing);
 
     await _salvar(tester);
     expect(repositorio.enviado!['defaultKey'], 'Bm');

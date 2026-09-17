@@ -326,7 +326,7 @@ class _HomeNotices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppGroup(
-      title: 'Fique de olho',
+      title: 'Avisos',
       children: [
         for (final notice in notices)
           _noticeRow(context, notice),

@@ -705,7 +705,7 @@ Widget _emptyDayRow({
   if (dayHasAny) {
     return const AppGroupRow(
       title: 'Você não está escalado neste dia.',
-      subtitle: 'A equipe tem escala aqui — veja em "Todas".',
+      subtitle: 'A equipe tem escala neste dia. Veja em "Todas".',
       showChevron: false,
     );
   }

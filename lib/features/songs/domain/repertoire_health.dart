@@ -52,7 +52,7 @@ class RepertoireHealthSong {
   String get displayTitle => hymnRef == null ? title : '$hymnRef · $title';
 }
 
-/// Saúde do repertório: resumo e listas em que dá para agir.
+/// Análise do repertório: resumo e listas em que dá para agir.
 ///
 /// **É aqui que mora o "faltando dados"**, e não na lista do repertório — o
 /// filtro já existiu lá e saiu, porque cobrar tom de centenas de músicas no

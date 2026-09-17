@@ -140,8 +140,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     return AppEmptyState(
       icon: Icons.lightbulb_outline_rounded,
       title: 'Nenhuma sugestão por enquanto',
-      message: 'Qualquer pessoa da equipe pode sugerir uma música — para o '
-          'repertório, ou para um domingo específico.',
+      message: 'Qualquer pessoa da equipe pode sugerir uma música para o '
+          'repertório ou para um domingo.',
       actionLabel: 'Sugerir uma música',
       onAction: () => showSuggestSongSheet(context, teamId: widget.teamId),
     );
@@ -274,7 +274,7 @@ class SuggestionCard extends StatelessWidget {
   /// equipe. O selo diz o quê, não quem.
   Widget _selo() => switch (suggestion.status) {
         SuggestionStatus.accepted => const AppBadge(
-            label: 'Acolhida',
+            label: 'Aceita',
             tone: AppTone.success,
             icon: Icons.check_circle_outline_rounded,
           ),

@@ -4,7 +4,11 @@ import '../../core/theme/app_spacing.dart';
 
 /// Saudação por horário. Detalhe pequeno, mas é o que separa uma tela de
 /// listagem de um app que parece ter sido feito para aquela pessoa.
+///
+/// Da meia-noite às 5h é madrugada: "Bom dia" à 00h09 soava como relógio
+/// quebrado.
 String greetingForHour(int hour) {
+  if (hour < 5) return 'Boa madrugada';
   if (hour < 12) return 'Bom dia';
   if (hour < 18) return 'Boa tarde';
   return 'Boa noite';

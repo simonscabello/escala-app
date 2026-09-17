@@ -6,7 +6,7 @@ import '../../../shared/widgets/app_choice_bar.dart';
 import '../domain/musical_keys.dart';
 
 /// O que o seletor devolveu. Nulo é "fechou sem escolher"; `(key: null)` é
-/// "tirou o tom" — sem o registro, as duas coisas chegariam iguais.
+/// "limpou o tom" — sem o registro, as duas coisas chegariam iguais.
 typedef MusicalKeyChoice = ({String? key});
 
 /// Escolher um tom: uma folha curta, e não uma lista de 34 linhas.
@@ -48,7 +48,7 @@ class _MusicalKeyPicker extends StatefulWidget {
   final String title;
 
   /// Já na grafia da lista. Nulo também quando o valor atual é anotação
-  /// antiga — nada na grade fica marcado, mas "Tirar tom" continua valendo.
+  /// antiga — nada na grade fica marcado, mas "Limpar" continua valendo.
   final String? selected;
   final bool canClear;
 
@@ -88,7 +88,7 @@ class _MusicalKeyPickerState extends State<_MusicalKeyPicker> {
                       context,
                       (key: null),
                     ),
-                    child: const Text('Tirar tom'),
+                    child: const Text('Limpar'),
                   ),
               ],
             ),
@@ -233,8 +233,7 @@ class MusicalKeyField extends StatelessWidget {
             labelText: label,
             enabled: enabled,
             helperText: legacy
-                ? 'Anotado antes da lista de tons. Fica assim até você '
-                    'escolher outro.'
+                ? 'Tom salvo antes da lista. Toque para trocar.'
                 : helperText,
             helperMaxLines: 2,
             suffixIcon: const Icon(Icons.unfold_more_rounded),

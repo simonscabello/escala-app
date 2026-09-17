@@ -65,9 +65,9 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
     ref.invalidate(openSuggestionCountProvider);
   }
 
-  /// Acolher: o líder diz que a ideia foi aceita.
+  /// Aceitar: o líder diz que a ideia foi aceita.
   ///
-  /// Botão à parte de "Pôr no culto", de propósito — são duas decisões
+  /// Botão à parte de "Adicionar ao culto", de propósito — são duas decisões
   /// diferentes, e a escala ainda pode ser rascunho que ninguém viu.
   Future<void> _accept(SongSuggestion s, {String? songId}) async {
     setState(() => _busyId = s.id);
@@ -77,7 +77,7 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
           .accept(widget.teamId, s.id, songId: songId ?? s.songId);
       _invalidate();
       if (mounted) {
-        showAppSnackBar(context, 'Sugestão acolhida.', tone: AppTone.success);
+        showAppSnackBar(context, 'Sugestão aceita.', tone: AppTone.success);
       }
     } on ApiException catch (error) {
       if (mounted) {
@@ -241,7 +241,7 @@ class _EventSuggestionsBandState extends ConsumerState<EventSuggestionsBand> {
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: Text(
-                  'Sem data — para o repertório',
+                  'Para o repertório',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -318,7 +318,7 @@ class _SuggestionRow extends StatelessWidget {
             runSpacing: AppSpacing.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              TextButton(onPressed: onAccept, child: const Text('Acolher')),
+              TextButton(onPressed: onAccept, child: const Text('Aceitar')),
               if (!s.canGoToSetlist)
                 FilledButton.tonalIcon(
                   onPressed: onRegister,
@@ -336,7 +336,7 @@ class _SuggestionRow extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: onAdd,
                   icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                  label: const Text('Pôr no culto'),
+                  label: const Text('Adicionar ao culto'),
                 ),
             ],
           ),
