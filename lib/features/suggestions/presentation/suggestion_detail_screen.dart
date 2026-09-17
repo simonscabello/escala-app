@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_detail_header.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/section_header.dart';
@@ -16,6 +19,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/presentation/add_song_screen.dart';
+import '../../songs/presentation/song_resources.dart';
 import '../data/suggestion_repository.dart';
 import '../domain/song_suggestion.dart';
 import 'suggestions_screen.dart' show suggestionMaterialIcon;
@@ -167,59 +171,24 @@ class _SuggestionDetailScreenState
   /// um líder escreve achando que é nota interna e o app entrega na cara da
   /// pessoa.
   Future<void> _decline(SongSuggestion s) async {
-    final controller = TextEditingController();
-    final confirmou = await showDialog<bool>(
+    // Folha, e não diálogo: é um formulário curto, e os formulários curtos do
+    // app sobem do rodapé.
+    final motivo = await showAdaptiveSheet<String>(
       context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Recusar sugestão'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('"${s.title}" vai para as encerradas.'),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              maxLines: 3,
-              maxLength: 500,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Motivo (opcional)',
-                helperText: 'Quem sugeriu vai ler. Pode deixar em branco e '
-                    'conversar pessoalmente.',
-                helperMaxLines: 3,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialog).pop(false),
-            child: const Text('Voltar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialog).pop(true),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
+      maxWidth: 480,
+      builder: (_) => _DeclineSheet(title: s.title),
     );
-
-    final motivo = controller.text.trim();
-    controller.dispose();
-    if (confirmou != true) return;
+    if (motivo == null) return;
 
     await _run(
       () => ref
           .read(suggestionRepositoryProvider)
           .decline(widget.teamId, s.id, reason: motivo)
           .then((_) {}),
-      'Respondido.',
+      'Sugestão recusada.',
     );
   }
 
-  /// Desfaz a resolução, para o toque errado não virar beco sem saída. Aqui a
-  /// tela **fica aberta**: reabrir não é uma resposta, é voltar ao começo.
   Future<void> _reopen(SongSuggestion s) => _run(
         () => ref
             .read(suggestionRepositoryProvider)
@@ -278,11 +247,24 @@ class _SuggestionDetailScreenState
       appBar: AppBar(
         title: const Text('Sugestão'),
         actions: [
+          // No menu, e não uma lixeira ao lado do título: é uma ação rara e
+          // sem volta, e o ícone solto no topo pesava como a ação da tela.
           if (isMine || canManage)
-            IconButton(
-              tooltip: 'Excluir',
-              icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: _busy ? null : () => _remove(s),
+            PopupMenuButton<String>(
+              tooltip: 'Mais opções',
+              enabled: !_busy,
+              onSelected: (_) => _remove(s),
+              itemBuilder: (menuContext) => [
+                PopupMenuItem(
+                  value: 'remove',
+                  child: Text(
+                    'Excluir sugestão',
+                    style: TextStyle(
+                      color: Theme.of(menuContext).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
@@ -334,12 +316,11 @@ class _Body extends StatelessWidget {
       children: [
         // `Wrap` e não `Row`, como na tela da música: título longo ocupa duas
         // linhas e a etiqueta desce inteira em vez de espremer o nome.
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            Text(s.title, style: theme.textTheme.headlineSmall),
+        // O cabeçalho da tela da música: é a mesma pergunta — que música é
+        // esta, e onde encontrá-la.
+        AppDetailHeader(
+          title: s.title,
+          badges: [
             if (s.status == SuggestionStatus.accepted)
               const AppBadge(
                 label: 'Aceita',
@@ -349,42 +330,40 @@ class _Body extends StatelessWidget {
             if (s.status == SuggestionStatus.declined)
               const AppBadge(label: 'Recusada', tone: AppTone.neutral),
           ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          (s.artist ?? '').isEmpty ? 'Sem artista' : s.artist!,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-
-        // Para quando, e se já existe cadastro. Os dois mudam o que o líder
-        // faz a seguir: só programar, ou cadastrar antes.
-        Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          children: [
-            AppBadge(
-              label: s.isForRepertoire
-                  ? 'Para o repertório'
-                  : 'Para ${_dataLonga(s.targetDate!)}',
+          overline: s.artist,
+          lines: [
+            DetailMetaLine(
               icon: s.isForRepertoire
                   ? Icons.library_music_outlined
                   : Icons.event_rounded,
-              tone: s.isForRepertoire ? AppTone.neutral : AppTone.primary,
+              text: s.isForRepertoire
+                  ? 'Para o repertório'
+                  : 'Para ${_dataLonga(s.targetDate!)}',
             ),
             if (s.inRepertoire)
-              const AppBadge(
-                label: 'Já está no repertório',
+              const DetailMetaLine(
                 icon: Icons.check_rounded,
-                tone: AppTone.neutral,
+                text: 'Já está no repertório',
               ),
           ],
         ),
-
-        const SizedBox(height: AppSpacing.lg),
-        _Materials(materials: s.materials),
+        if (s.materials.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          // Os mesmos ladrilhos de recurso da música, só com o que a sugestão
+          // trouxe: link que ninguém mandou não vira ladrilho apagado aqui,
+          // porque não há ninguém a quem cobrar.
+          SongResourceRow(
+            resources: [
+              for (final material in s.materials)
+                SongResource(
+                  icon: suggestionMaterialIcon(material.kind),
+                  label: material.label,
+                  status: 'Abrir link',
+                  onTap: () => openResourceLink(context, material.url),
+                ),
+            ],
+          ),
+        ],
 
         const SizedBox(height: AppSpacing.xl),
         const SectionHeader(
@@ -469,11 +448,25 @@ class _Body extends StatelessWidget {
     }
 
     if (suggestion.status.isResolved) {
+      // Botão de texto: reabrir é a saída para o toque errado, e não a ação
+      // principal de uma sugestão já resolvida.
       return [
-        OutlinedButton.icon(
-          onPressed: onReopen,
-          icon: const Icon(Icons.undo_rounded),
-          label: const Text('Reabrir'),
+        Align(
+          child: TextButton.icon(
+            onPressed: onReopen,
+            icon: const Icon(Icons.undo_rounded),
+            label: const Text('Reabrir'),
+          ),
+        ),
+      ];
+    }
+
+    // Venceu sem resposta: aceitar poria a música num domingo que já foi.
+    if (suggestion.isExpiredOn(today())) {
+      return const [
+        AppNotice(
+          icon: Icons.event_busy_rounded,
+          message: 'O dia desta sugestão já passou, e ela ficou sem resposta.',
         ),
       ];
     }
@@ -513,53 +506,107 @@ class _Body extends StatelessWidget {
 /// uma promessa falsa, e a seção inteira some quando não há nada — o que só
 /// acontece em sugestão antiga, já que hoje o servidor exige a letra ou a
 /// cifra de toda música que ainda não está no repertório.
-class _Materials extends StatelessWidget {
-  const _Materials({required this.materials});
+/// Recusar, com o motivo opcional.
+///
+/// O campo avisa que **quem sugeriu vai ler**: sem isso um líder escreve
+/// "letra com teologia duvidosa" achando que é nota interna. E pode ficar em
+/// branco — às vezes o motivo certo é uma conversa pessoal.
+class _DeclineSheet extends StatefulWidget {
+  const _DeclineSheet({required this.title});
 
-  final List<SuggestionMaterial> materials;
+  final String title;
 
-  Future<void> _open(BuildContext context, String url) async {
-    // `Uri.tryParse` e não `parse`: o link vem digitado por alguém, e uma
-    // exceção aqui derrubaria a tela inteira por causa de um espaço a mais.
-    final uri = Uri.tryParse(url.trim());
-    final ok = uri == null
-        ? false
-        : await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && context.mounted) {
-      showAppSnackBar(
-        context,
-        'Não foi possível abrir o link.',
-        tone: AppTone.danger,
-      );
-    }
+  @override
+  State<_DeclineSheet> createState() => _DeclineSheetState();
+}
+
+class _DeclineSheetState extends State<_DeclineSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (materials.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
 
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        for (final material in materials)
-          ActionChip(
-            avatar: Icon(suggestionMaterialIcon(material.kind), size: 18),
-            label: Text(material.label),
-            onPressed: () => _open(context, material.url),
-          ),
-      ],
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Recusar sugestão', style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '"${widget.title}" vai para as encerradas.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _controller,
+              maxLines: 3,
+              maxLength: 500,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Motivo (opcional)',
+                helperText: 'Quem sugeriu vai ler. Pode deixar em branco e '
+                    'conversar pessoalmente.',
+                helperMaxLines: 3,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(_controller.text.trim()),
+              child: const Text('Recusar'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Voltar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 const _meses = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
 ];
 
 const _diasDaSemana = [
-  'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo',
+  'segunda',
+  'terça',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sábado',
+  'domingo',
 ];
 
 String _dataLonga(DateTime date) {

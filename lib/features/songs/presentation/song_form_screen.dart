@@ -212,8 +212,17 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Editar música')),
+      // O nome da música no corpo acrescenta o que a barra não diz: qual
+      // música está sendo editada.
       title: song.title,
       subtitle: song.subtitle,
+      // Preso embaixo: com "Dados da música" aberto (quatro links e a letra),
+      // o botão ficava duas telas abaixo de onde a pessoa mexeu.
+      bottomAction: AppSubmitButton(
+        label: 'Salvar',
+        loading: _saving,
+        onPressed: () => _save(song),
+      ),
       children: [
         TextField(
           controller: _title,
@@ -310,13 +319,10 @@ class _SongFormScreenState extends ConsumerState<SongFormScreen> {
           youtubeUrl: _youtubeUrl,
           spotifyUrl: _spotifyUrl,
         ),
-        const SizedBox(height: AppSpacing.xxl),
-        if (_error != null) FormErrorBanner(message: _error!),
-        AppSubmitButton(
-          label: 'Salvar',
-          loading: _saving,
-          onPressed: () => _save(song),
-        ),
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.xl),
+          FormErrorBanner(message: _error!),
+        ],
       ],
     );
   }

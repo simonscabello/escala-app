@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../domain/musical_keys.dart';
 
 /// O que o seletor devolveu. Nulo é "fechou sem escolher"; `(key: null)` é
@@ -115,8 +116,8 @@ class _MusicalKeyPickerState extends State<_MusicalKeyPicker> {
                         null => const SizedBox.shrink(),
                         final root => _KeyCell(
                             musicalKey: _minor ? '${root}m' : root,
-                            selected: widget.selected ==
-                                (_minor ? '${root}m' : root),
+                            selected:
+                                widget.selected == (_minor ? '${root}m' : root),
                           ),
                       },
                     ),
@@ -218,34 +219,16 @@ class MusicalKeyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final current = (value ?? '').trim();
     final legacy = current.isNotEmpty && normalizeMusicalKey(current) == null;
 
-    return Semantics(
-      button: enabled,
-      child: InkWell(
-        onTap: enabled ? () => _open(context) : null,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        child: InputDecorator(
-          isEmpty: current.isEmpty,
-          decoration: InputDecoration(
-            labelText: label,
-            enabled: enabled,
-            helperText: legacy
-                ? 'Tom salvo antes da lista. Toque para trocar.'
-                : helperText,
-            helperMaxLines: 2,
-            suffixIcon: const Icon(Icons.unfold_more_rounded),
-          ),
-          child: Text(
-            current,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyLarge,
-          ),
-        ),
-      ),
+    return AppPickerField(
+      label: label,
+      value: current.isEmpty ? null : current,
+      enabled: enabled,
+      helperText:
+          legacy ? 'Tom salvo antes da lista. Toque para trocar.' : helperText,
+      onTap: () => _open(context),
     );
   }
 }

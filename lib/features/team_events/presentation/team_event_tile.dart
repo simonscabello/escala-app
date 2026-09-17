@@ -30,10 +30,15 @@ class TeamEventTile extends StatelessWidget {
     super.key,
     required this.event,
     this.wide = false,
+    this.showBadge = true,
   });
 
   final TeamEvent event;
   final bool wide;
+
+  /// O selo "Evento". Sai onde o título do bloco já diz que é evento (o
+  /// "Próximo evento" da Home) — ali ele repetia o cabeçalho logo acima.
+  final bool showBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +60,7 @@ class TeamEventTile extends StatelessWidget {
 
     final quando = Text(
       [
-        formatEventWeekdayDate(event.startsAt, timezone),
+        formatEventDayMonth(event.startsAt, timezone),
         teamEventHours(event),
         if (event.hasLocation) event.location!,
       ].join(' · '),
@@ -97,7 +102,7 @@ class TeamEventTile extends StatelessWidget {
                   const SizedBox(width: AppSpacing.lg),
                   Expanded(child: quando),
                   const SizedBox(width: AppSpacing.lg),
-                  selo,
+                  if (showBadge) selo,
                   chevron,
                 ],
               )
@@ -113,11 +118,13 @@ class TeamEventTile extends StatelessWidget {
                         // Alinhado à esquerda e sem esticar: o selo tem a
                         // largura do que diz. Numa `Column` `stretch` ele
                         // atravessaria a linha e viraria uma faixa.
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: selo,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
+                        if (showBadge) ...[
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: selo,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
                         title,
                         const SizedBox(height: 3),
                         quando,

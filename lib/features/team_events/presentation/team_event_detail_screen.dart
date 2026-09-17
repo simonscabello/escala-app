@@ -6,6 +6,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_detail_header.dart';
+import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -20,8 +22,12 @@ import 'team_event_tile.dart';
 ///
 /// **Tela de leitura, e curta.** Não há escalação para montar nem repertório
 /// para conferir — o que a pessoa veio ver é se precisa levar alguma coisa e a
-/// que horas chegar. Quem lidera ganha os dois botões de administrar no fim,
-/// que é onde eles não competem com o conteúdo.
+/// que horas chegar.
+///
+/// **No modelo das outras telas de detalhe**: o nome como manchete, a faixa
+/// Data · Horário logo abaixo (como Tom · Tipo · Andamento na música),
+/// editar na barra e cancelar no ⋮. Antes eram dois botões no fim do corpo,
+/// e o de cancelar ficava a um polegar do de editar.
 class TeamEventDetailScreen extends ConsumerWidget {
   const TeamEventDetailScreen({super.key, required this.eventId});
 
@@ -32,14 +38,34 @@ class TeamEventDetailScreen extends ConsumerWidget {
     final evento = ref.watch(teamEventProvider(eventId));
     final teamId = ref.watch(activeTeamIdProvider);
     final auth = ref.watch(authControllerProvider);
-    final canManage = auth.teams
-            .where((t) => t.teamId == teamId)
-            .firstOrNull
-            ?.canManage ??
-        false;
+    final canManage =
+        auth.teams.where((t) => t.teamId == teamId).firstOrNull?.canManage ??
+            false;
+    final loaded = evento.valueOrNull;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Evento')),
+      appBar: AppBar(
+        title: const Text('Evento'),
+        actions: [
+          if (canManage && loaded != null) ...[
+            IconButton(
+              tooltip: 'Editar evento',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => context.push('/eventos/${loaded.id}/editar'),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Mais opções deste evento',
+              onSelected: (_) => _cancelar(context, ref, loaded, teamId),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'cancelar',
+                  child: Text('Cancelar evento'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
       body: SafeArea(
         child: AppContentWidth.reading(
           child: evento.when(
@@ -50,30 +76,19 @@ class TeamEventDetailScreen extends ConsumerWidget {
                   : 'Não foi possível carregar o evento.',
               onRetry: () => ref.invalidate(teamEventProvider(eventId)),
             ),
-            data: (data) => _Corpo(
-              event: data,
-              canManage: canManage,
-              teamId: teamId,
-            ),
+            data: (data) => _Corpo(event: data),
           ),
         ),
       ),
     );
   }
-}
 
-class _Corpo extends ConsumerWidget {
-  const _Corpo({
-    required this.event,
-    required this.canManage,
-    required this.teamId,
-  });
-
-  final TeamEvent event;
-  final bool canManage;
-  final String? teamId;
-
-  Future<void> _excluir(BuildContext context, WidgetRef ref) async {
+  Future<void> _cancelar(
+    BuildContext context,
+    WidgetRef ref,
+    TeamEvent event,
+    String? teamId,
+  ) async {
     final confirmado = await showConfirmDialog(
       context,
       title: 'Cancelar este evento?',
@@ -83,6 +98,7 @@ class _Corpo extends ConsumerWidget {
       message: 'O evento sai da agenda de todo mundo, mas a equipe não '
           'recebe aviso. Avise quem precisar saber.',
       confirmLabel: 'Cancelar evento',
+      cancelLabel: 'Voltar',
       destructive: true,
     );
     if (!confirmado || !context.mounted) return;
@@ -91,7 +107,7 @@ class _Corpo extends ConsumerWidget {
       await ref.read(teamEventRepositoryProvider).remove(event.id);
       if (teamId != null) {
         for (final scope in ['upcoming', 'past']) {
-          ref.invalidate(teamEventsProvider((teamId!, scope)));
+          ref.invalidate(teamEventsProvider((teamId, scope)));
         }
       }
       if (!context.mounted) return;
@@ -103,38 +119,57 @@ class _Corpo extends ConsumerWidget {
       }
     }
   }
+}
+
+class _Corpo extends StatelessWidget {
+  const _Corpo({required this.event});
+
+  final TeamEvent event;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
+        AppSpacing.screenPadding,
         AppSpacing.lg,
-        AppSpacing.xl,
+        AppSpacing.screenPadding,
         AppSpacing.xxl,
       ),
       children: [
-        Text(event.title, style: theme.textTheme.headlineSmall),
-        const SizedBox(height: AppSpacing.xl),
-        AppGroup(
-          children: [
-            AppGroupRow(
-              icon: Icons.event_rounded,
-              title: capitalizeWeekday(
-                formatEventWeekdayDate(event.startsAt, event.timezone),
-              ),
-              subtitle: teamEventHours(event),
-              showChevron: false,
-            ),
+        // O local numa linha do cabeçalho, como na escala, e não na faixa: um
+        // endereço tem comprimento livre, e numa coluna de um terço da largura
+        // saía cortado ("Salão principal da igreja, 2º a…").
+        AppDetailHeader(
+          title: event.title,
+          lines: [
             if (event.hasLocation)
-              AppGroupRow(
-                icon: Icons.place_rounded,
-                title: event.location!,
-                showChevron: false,
+              DetailMetaLine(
+                icon: Icons.location_on_outlined,
+                text: event.location!,
+                maxLines: 2,
               ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppFactsStrip(
+          facts: [
+            AppFact(
+              icon: Icons.event_rounded,
+              label: 'Data',
+              value: formatEventDayMonth(event.startsAt, event.timezone),
+              hint: capitalizeWeekday(
+                formatEventWeekdayName(event.startsAt, event.timezone),
+              ),
+              wrapValue: true,
+            ),
+            AppFact(
+              icon: Icons.schedule_rounded,
+              label: 'Horário',
+              value: teamEventHours(event),
+              wrapValue: true,
+            ),
           ],
         ),
         if (event.hasNotes) ...[
@@ -150,21 +185,6 @@ class _Corpo extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-        ],
-        if (canManage) ...[
-          const SizedBox(height: AppSpacing.xxl),
-          OutlinedButton.icon(
-            onPressed: () => context.push('/eventos/${event.id}/editar'),
-            icon: const Icon(Icons.edit_rounded, size: 18),
-            label: const Text('Editar evento'),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextButton.icon(
-            onPressed: () => _excluir(context, ref),
-            icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            label: const Text('Cancelar evento'),
-            style: TextButton.styleFrom(foregroundColor: scheme.error),
           ),
         ],
       ],

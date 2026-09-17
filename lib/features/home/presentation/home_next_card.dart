@@ -11,6 +11,21 @@ import '../../events/domain/event_models.dart';
 import '../../events/presentation/event_schedule_facts.dart';
 import '../domain/home_summary.dart';
 
+/// A sobrancelha da manchete: "HOJE · MINHA PRÓXIMA ESCALA".
+///
+/// Rascunho só chega aqui para quem gerencia — a equipe não recebe escala não
+/// publicada. Dizer isso na sobrancelha evita que quem monta a escala leia o
+/// próprio rascunho como compromisso firmado.
+String heroEyebrow({required int? daysAway, required bool isDraft}) {
+  final parts = [
+    if (daysAway == 0) 'HOJE',
+    if (daysAway == 1) 'AMANHÃ',
+    'MINHA PRÓXIMA ESCALA',
+    if (isDraft) 'RASCUNHO',
+  ];
+  return parts.join(' · ');
+}
+
 /// A manchete da Home: **a sua** próxima escala.
 ///
 /// A agenda destaca a próxima escala da equipe; esta destaca a próxima em que
@@ -32,9 +47,15 @@ class MyNextScheduleCard extends StatelessWidget {
     required this.event,
     required this.positions,
     this.following,
+    this.daysAway,
   });
 
   final Event event;
+
+  /// Dias civis até a escala (0 hoje, 1 amanhã). Vira o começo da sobrancelha
+  /// — "HOJE · MINHA PRÓXIMA ESCALA" — no lugar do aviso que repetia a
+  /// manchete logo abaixo dela.
+  final int? daysAway;
 
   /// As funções em que a pessoa está escalada nesta escala. Nunca vazio: sem
   /// função não haveria escala minha para mostrar.
@@ -63,16 +84,26 @@ class MyNextScheduleCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            // Rascunho só chega aqui para quem gerencia — a equipe não recebe
-            // escala não publicada. Dizer isso na sobrancelha evita que quem
-            // monta a escala leia o próprio rascunho como compromisso firmado.
-            event.isDraft
-                ? 'MINHA PRÓXIMA ESCALA · RASCUNHO'
-                : 'MINHA PRÓXIMA ESCALA',
-            style: AppTypography.eyebrow(context).copyWith(
-              color: AppColors.onHeroVariant,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  heroEyebrow(daysAway: daysAway, isDraft: event.isDraft),
+                  style: AppTypography.eyebrow(context).copyWith(
+                    color: AppColors.onHeroVariant,
+                  ),
+                ),
+              ),
+              // A seta diz que o cartão abre a escala. Era um botão "Ver
+              // escala" no pé da manchete: uma segunda porta para o mesmo
+              // lugar, com ~68px de altura, num cartão que já é todo tocável.
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: AppColors.onHeroVariant,
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -121,14 +152,6 @@ class MyNextScheduleCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             _AfterThis(event: following!),
           ],
-          const SizedBox(height: AppSpacing.xl),
-          Align(
-            alignment: Alignment.centerRight,
-            child: HeroActionButton(
-              label: 'Ver escala',
-              onPressed: () => context.push('/agenda/${event.id}'),
-            ),
-          ),
         ],
       ),
     );

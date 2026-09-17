@@ -3,14 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_date_badge.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../../shared/widgets/app_submit_button.dart';
 import '../../events/domain/event_datetime.dart';
+import '../../team/data/team_repository.dart';
 import '../data/unavailability_repository.dart';
 import '../domain/unavailability_models.dart';
 import 'multi_date_picker.dart';
@@ -43,24 +49,29 @@ class _MyUnavailabilityScreenState
         if (!item.date.isBefore(_today)) item.date: item.id,
     };
 
+    // A grade da igreja, se ela já chegou: marca no calendário os dias em que
+    // há culto. Sem ela o calendário funciona igual, só sem a marca.
+    final templates =
+        ref.read(serviceTemplatesProvider(widget.teamId)).valueOrNull;
+
     final result = await showMultiDatePicker(
       context: context,
       initialSelection: existing.keys.toSet(),
+      isServiceDay: templates == null || templates.isEmpty
+          ? null
+          : (day) => templates.any((t) => t.matchesDate(day)),
     );
 
     if (result == null || !mounted) return;
 
-    final added = result.difference(existing.keys.toSet()).toList()..sort();
+    final added = result.dates.difference(existing.keys.toSet()).toList()
+      ..sort();
     final removedIds = [
       for (final entry in existing.entries)
-        if (!result.contains(entry.key)) entry.value,
+        if (!result.dates.contains(entry.key)) entry.value,
     ];
 
     if (added.isEmpty && removedIds.isEmpty) return;
-
-    // Motivo só faz sentido quando há dias novos.
-    final reason = added.isEmpty ? null : await _askReason();
-    if (!mounted) return;
 
     setState(() => _saving = true);
     try {
@@ -70,14 +81,15 @@ class _MyUnavailabilityScreenState
         await repository.remove(widget.teamId, id);
       }
       if (added.isNotEmpty) {
-        await repository.add(widget.teamId, dates: added, reason: reason);
+        await repository.add(
+          widget.teamId,
+          dates: added,
+          reason: result.reason,
+        );
       }
 
       ref.invalidate(myUnavailabilityProvider(widget.teamId));
 
-      // Antes o calendário fechava e a tela simplesmente aparecia diferente.
-      // Quem marca uma ausência precisa saber que o aviso chegou -- é a única
-      // forma de a equipe descobrir que a pessoa não pode.
       if (mounted) {
         showAppSnackBar(
           context,
@@ -98,57 +110,14 @@ class _MyUnavailabilityScreenState
     }
   }
 
-  /// A caixa do motivo, nas duas entradas: ao marcar dias novos e ao corrigir
-  /// um dia que já estava marcado.
-  ///
-  /// Devolve `null` quando a pessoa desistiu e a string quando confirmou --
-  /// **vazia inclusive**, que é como se apaga um motivo. A diferença só
-  /// importa ao corrigir: desistir não pode limpar o que estava escrito.
-  Future<String?> _askReason({String? initial, bool editing = false}) {
-    final controller = TextEditingController(text: initial ?? '');
-
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(editing ? 'Motivo desse dia' : 'Quer dizer o motivo?'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          // O mesmo teto do servidor: cortar aqui poupa a ida de rede que
-          // voltaria com o texto recusado depois de escrito.
-          maxLength: 120,
-          decoration: const InputDecoration(
-            hintText: 'Viagem, trabalho... (opcional)',
-          ),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
-        ),
-        actions: [
-          TextButton(
-            // Ao marcar, "Pular" segue com os dias e sem motivo; ao corrigir,
-            // desistir tem de deixar o motivo como estava.
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(editing ? null : ''),
-            child: Text(editing ? 'Cancelar' : 'Pular'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Corrigir o motivo de **um** dia.
-  ///
-  /// O motivo nasce por lote -- uma viagem cobre cinco domingos --, e depois
-  /// um deles vira outra coisa. Sem isto a saída era desmarcar o dia e marcar
-  /// de novo, que chega para quem lidera como uma ausência nova. O dia em si
-  /// não se edita aqui: trocar de domingo é apagar um aviso e dar outro, e
-  /// isso já é o que o calendário faz.
+  /// Corrige o motivo de **um** dia. Folha, e não diálogo: é um formulário
+  /// curto, e os formulários curtos do app sobem do rodapé.
   Future<void> _editReason(Unavailability item) async {
-    final reason = await _askReason(initial: item.reason, editing: true);
+    final reason = await showAdaptiveSheet<String>(
+      context: context,
+      maxWidth: 440,
+      builder: (_) => _ReasonSheet(initial: item.reason ?? ''),
+    );
     if (reason == null || !mounted) return;
     if (reason == (item.reason ?? '')) return;
 
@@ -162,9 +131,6 @@ class _MyUnavailabilityScreenState
       if (mounted) {
         showAppSnackBar(
           context,
-          // Apagar o motivo não é desmarcar o dia, e a frase diz isso: quem
-          // toca em "Salvar" com o campo vazio precisa saber que continua
-          // indisponível.
           reason.isEmpty
               ? 'Motivo apagado. O dia continua marcado.'
               : 'Motivo atualizado. A equipe já vê.',
@@ -178,17 +144,39 @@ class _MyUnavailabilityScreenState
     }
   }
 
+  /// Tirar um dia, com volta. O toque é pequeno e fica ao lado da linha que
+  /// abre o motivo: errar o alvo apagava o aviso sem jeito de desfazer.
   Future<void> _remove(Unavailability item) async {
+    final repository = ref.read(unavailabilityRepositoryProvider);
     try {
-      await ref
-          .read(unavailabilityRepositoryProvider)
-          .remove(widget.teamId, item.id);
+      await repository.remove(widget.teamId, item.id);
       ref.invalidate(myUnavailabilityProvider(widget.teamId));
       if (mounted) {
         showAppSnackBar(
           context,
           'Você voltou a ficar disponível nesse dia.',
           tone: AppTone.success,
+          action: SnackBarAction(
+            label: 'Desfazer',
+            onPressed: () async {
+              try {
+                await repository.add(
+                  widget.teamId,
+                  dates: [item.date],
+                  reason: item.reason,
+                );
+                ref.invalidate(myUnavailabilityProvider(widget.teamId));
+              } on ApiException catch (error) {
+                if (mounted) {
+                  showAppSnackBar(
+                    context,
+                    error.message,
+                    tone: AppTone.danger,
+                  );
+                }
+              }
+            },
+          ),
         );
       }
     } on ApiException catch (error) {
@@ -203,24 +191,35 @@ class _MyUnavailabilityScreenState
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final items = ref.watch(myUnavailabilityProvider(widget.teamId));
+    // Observada aqui para já ter chegado quando a pessoa abrir o calendário.
+    ref.watch(serviceTemplatesProvider(widget.teamId));
+
+    final upcoming = items.valueOrNull
+            ?.where((i) => !i.date.isBefore(_today))
+            .toList(growable: false) ??
+        const <Unavailability>[];
+
+    void openPicker() => _editDays(
+          ref.read(myUnavailabilityProvider(widget.teamId)).value ?? const [],
+        );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Minha disponibilidade')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _saving
-            ? null
-            : () => _editDays(
-                  ref.read(myUnavailabilityProvider(widget.teamId)).value ??
-                      const [],
-                ),
-        icon: const Icon(Icons.edit_calendar_rounded),
-        label: const Text('Escolher dias'),
-      ),
+      // Sem dia marcado, a ação mora no próprio vazio: dois botões para a
+      // mesma coisa na mesma tela seria um a mais.
+      floatingActionButton: items.hasValue && upcoming.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: _saving ? null : openPicker,
+              icon: const Icon(Icons.edit_calendar_rounded),
+              label: const Text('Escolher dias'),
+            )
+          : null,
       body: SafeArea(
         top: false,
         child: AppContentWidth.reading(
           child: items.when(
-            loading: () => const AppListSkeleton(itemCount: 3, leadingBlock: true),
+            loading: () =>
+                const AppListSkeleton(itemCount: 3, leadingBlock: true),
             error: (error, _) => AppErrorState(
               message: error is ApiException
                   ? error.message
@@ -228,78 +227,81 @@ class _MyUnavailabilityScreenState
               onRetry: () =>
                   ref.invalidate(myUnavailabilityProvider(widget.teamId)),
             ),
-            data: (list) {
-              final upcoming = list
-                  .where((i) => !i.date.isBefore(_today))
-                  .toList(growable: false);
-
-              return RefreshIndicator(
-                onRefresh: () async =>
-                    ref.invalidate(myUnavailabilityProvider(widget.teamId)),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                    AppSpacing.xxxl * 2,
-                  ),
-                  children: [
-                    Text(
-                      'Marque os dias em que você não pode ser escalado. Quem '
-                      'monta a escala vê esse aviso na hora de escalar.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+            data: (_) => RefreshIndicator(
+              onRefresh: () async =>
+                  ref.invalidate(myUnavailabilityProvider(widget.teamId)),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenPadding,
+                  AppSpacing.lg,
+                  AppSpacing.screenPadding,
+                  AppSpacing.fabClearance,
+                ),
+                children: [
+                  Text(
+                    'Marque os dias em que você não pode ser escalado. Quem '
+                    'monta a escala vê esse aviso na hora de escalar.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (upcoming.isEmpty)
-                      // Dentro do fluxo, e não ocupando a tela por uma altura
-                      // chutada em porcentagem: acima dele há a explicação, que
-                      // é conteúdo, e um vazio de tela cheia a empurrava para
-                      // fora da vista.
-                      AppCard(
-                        surface: CardSurface.sunken,
-                        padding: const EdgeInsets.all(AppSpacing.xl),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.event_available_outlined,
-                              size: 32,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  if (upcoming.isEmpty)
+                    AppCard(
+                      surface: CardSurface.sunken,
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.event_available_outlined,
+                            size: 32,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            'Disponível em todos os dias',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            'Você não marcou nenhum dia.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              'Disponível em todos os dias',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : openPicker,
+                            icon: const Icon(
+                              Icons.edit_calendar_rounded,
+                              size: 18,
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              'Você não marcou nenhum dia. Toque em "Escolher '
-                              'dias" se precisar avisar sobre alguma ausência.',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      for (final item in upcoming)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: _UnavailabilityTile(
+                            label: const Text('Escolher dias'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    // Uma superfície para os dias, com o bloco de data da
+                    // agenda: era um cartão com borda por dia, uma pilha de
+                    // caixinhas para uma lista só.
+                    AppGroup(
+                      dividerIndent: AppSpacing.lg + 54 + AppSpacing.md,
+                      children: [
+                        for (final item in upcoming)
+                          _UnavailabilityRow(
                             item: item,
                             onEditReason: () => _editReason(item),
                             onRemove: () => _remove(item),
                           ),
-                        ),
-                  ],
-                ),
-              );
-            },
+                      ],
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -312,15 +314,8 @@ class _MyUnavailabilityScreenState
   }
 }
 
-/// Um dia marcado, com o motivo logo abaixo da data.
-///
-/// **O cartão inteiro abre o motivo.** O motivo entra por lote no momento de
-/// marcar os dias, e aí ele é um chute sobre vários domingos de uma vez;
-/// corrigir um deles era desmarcar e marcar de novo. O toque fica no cartão e
-/// não num lápis ao lado do X: dois ícones minúsculos e vizinhos, um deles
-/// destrutivo, é como se toca no errado.
-class _UnavailabilityTile extends StatelessWidget {
-  const _UnavailabilityTile({
+class _UnavailabilityRow extends StatelessWidget {
+  const _UnavailabilityRow({
     required this.item,
     required this.onEditReason,
     required this.onRemove,
@@ -334,58 +329,113 @@ class _UnavailabilityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final label = capitalizeWeekday(
-      DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(item.date),
-    );
+    final now = DateTime.now();
+    final pattern =
+        item.date.year == now.year ? "d 'de' MMMM" : "d 'de' MMMM 'de' y";
+    final label = DateFormat(pattern, 'pt_BR').format(item.date);
+    final weekday = DateFormat('EEE', 'pt_BR')
+        .format(item.date)
+        .replaceAll('.', '')
+        .toUpperCase();
     final reason = item.reason?.isNotEmpty ?? false ? item.reason! : null;
 
-    return AppCard(
+    return AppPressable(
       onTap: onEditReason,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          // O ícone perdeu o ladrilho tingido atrás dele — o mesmo enfeite que
-          // saiu das linhas de navegação. Aqui ele custava ainda mais: pintado
-          // de azul, dizia "isto está certo" numa lista de "não posso neste
-          // dia"; e vermelho seria alarme para uma coisa normal de avisar.
-          // Sem tinta nenhuma, a linha volta a dizer só o que é.
-          Icon(
-            Icons.event_busy_outlined,
-            size: 22,
-            color: AppStatusColors.of(context).info.foreground,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: theme.textTheme.titleSmall),
-                // Sem motivo, a segunda linha convida em vez de sumir: é o
-                // que diz que o cartão abre alguma coisa. O motivo escrito
-                // dispensa o convite -- quem já escreveu sabe que dá para
-                // mexer, e "toque para editar" embaixo de cada dia viraria
-                // ruído na lista inteira.
-                Text(
-                  reason ?? 'Toque para dizer o motivo',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontStyle: reason == null ? FontStyle.italic : null,
-                  ),
-                ),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.xs,
+          AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            AppDateBadge(
+              weekday: weekday,
+              day: '${item.date.day}',
+              semanticsLabel: capitalizeWeekday(
+                DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(item.date),
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: 'Remover',
-            icon: const Icon(Icons.close_rounded),
-            onPressed: onRemove,
-          ),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.titleSmall),
+                  Text(
+                    reason ?? 'Toque para dizer o motivo',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontStyle: reason == null ? FontStyle.italic : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Remover',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: onRemove,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// O motivo de um dia já marcado, com os mesmos chips do calendário.
+class _ReasonSheet extends StatefulWidget {
+  const _ReasonSheet({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_ReasonSheet> createState() => _ReasonSheetState();
+}
+
+class _ReasonSheetState extends State<_ReasonSheet> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Motivo desse dia', style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.lg),
+            UnavailabilityReasonField(controller: _controller, autofocus: true),
+            const SizedBox(height: AppSpacing.lg),
+            AppSubmitButton(
+              label: 'Salvar',
+              onPressed: () =>
+                  Navigator.of(context).pop(_controller.text.trim()),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
       ),
     );
   }

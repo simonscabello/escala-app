@@ -129,4 +129,17 @@ void main() {
 
     expect(s.alsoSuggestedBy, ['Samuel', 'João']);
   });
+
+  test('venceu: pendente e com o dia antes de hoje', () {
+    final hoje = DateTime(2026, 9, 17);
+    expect(
+      SongSuggestion.fromJson(json(targetDate: '2026-09-13')).isExpiredOn(hoje),
+      isTrue,
+    );
+    expect(
+      SongSuggestion.fromJson(json(targetDate: '2026-09-17')).isExpiredOn(hoje),
+      isFalse,
+    );
+    expect(SongSuggestion.fromJson(json()).isExpiredOn(hoje), isFalse);
+  });
 }

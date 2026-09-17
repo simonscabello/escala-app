@@ -7,6 +7,7 @@ import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
@@ -224,9 +225,12 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Editar evento' : 'Novo evento'),
       ),
-      title: widget.isEditing ? 'Editar evento' : 'Novo evento',
-      subtitle: 'Reunião, ensaio geral, confraternização ou outro '
-          'compromisso da equipe.',
+      // Sem repetir "Novo evento" no corpo: a barra já diz. A frase de apoio
+      // fica só ao criar, quando ainda explica o que cabe aqui.
+      subtitle: widget.isEditing
+          ? null
+          : 'Reunião, ensaio geral, confraternização ou outro compromisso da '
+              'equipe.',
       children: [
         if (_error != null) FormErrorBanner(message: _error!),
         Form(
@@ -248,7 +252,10 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
                     : null,
               ),
               const SizedBox(height: AppSpacing.lg),
-              _Campo(
+              // Campos inteiros tocáveis (o campo de escolha do app): antes só
+              // o texto do valor abria o seletor, e a borda e o ícone não
+              // respondiam.
+              AppPickerField(
                 icon: Icons.event_rounded,
                 label: 'Data',
                 value: capitalizeWeekday(
@@ -256,24 +263,25 @@ class _TeamEventFormScreenState extends ConsumerState<TeamEventFormScreen> {
                 ),
                 onTap: _escolherData,
               ),
-              const SizedBox(height: AppSpacing.md),
-              _Campo(
+              const SizedBox(height: AppSpacing.lg),
+              AppPickerField(
                 icon: Icons.schedule_rounded,
                 label: 'Começa às',
                 value: _hhmm(_startsAt),
                 onTap: () => _escolherHora(inicio: true),
               ),
-              const SizedBox(height: AppSpacing.md),
-              _Campo(
+              const SizedBox(height: AppSpacing.lg),
+              AppPickerField(
                 icon: Icons.schedule_outlined,
                 label: 'Termina às',
                 // A ausência é dita, e não deixada em branco: churrasco sem
                 // hora para acabar é o normal, e um campo vazio pareceria
                 // esquecimento.
-                value: _endsAt == null ? 'Sem hora definida' : _hhmm(_endsAt!),
+                value: _endsAt == null ? null : _hhmm(_endsAt!),
+                placeholder: 'Sem hora definida',
                 onTap: () => _escolherHora(inicio: false),
-                onClear:
-                    _endsAt == null ? null : () => setState(() => _endsAt = null),
+                onClear: () => setState(() => _endsAt = null),
+                clearTooltip: 'Tirar a hora de término',
               ),
               const SizedBox(height: AppSpacing.lg),
               TextFormField(
@@ -351,46 +359,3 @@ const _meses = [
 
 String _diaDaSemana(DateTime date) => _semana[date.weekday - 1];
 String _mes(DateTime date) => _meses[date.month - 1];
-
-/// Um campo que abre um seletor, com o valor escolhido à mostra.
-class _Campo extends StatelessWidget {
-  const _Campo({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-    this.onClear,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  /// Só existe onde o vazio é uma resposta legítima — hoje, a hora de término.
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return InputDecorator(
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20),
-        suffixIcon: onClear == null
-            ? const Icon(Icons.expand_more_rounded)
-            : IconButton(
-                tooltip: 'Tirar a hora de término',
-                onPressed: onClear,
-                icon: const Icon(Icons.close_rounded, size: 20),
-              ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Text(value, style: Theme.of(context).textTheme.bodyLarge),
-        ),
-      ),
-    );
-  }
-}

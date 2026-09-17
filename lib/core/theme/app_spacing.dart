@@ -48,8 +48,24 @@ class AppSpacing {
   /// Pilulas: o destaque "VOCÊ", os segmentos de escolha.
   static const double radiusPill = 999;
 
+  /// **A margem lateral de toda página.** Listas, formulários e detalhes usam
+  /// o mesmo valor: telas vizinhas com 16 e 24 pareciam desalinhadas ao trocar
+  /// de aba, sem que ninguém soubesse dizer por quê.
   static const double screenPadding = 24;
-  static const double listPadding = 16;
+
+  /// Folga no fim de uma lista coberta por botão flutuante.
+  ///
+  /// Um valor só (o botão estendido tem 56px, mais a margem dele): antes cada
+  /// tela chutava o seu — 64, 80 ou 96 — e em algumas a última linha ficava
+  /// por baixo do botão.
+  static const double fabClearance = 96;
+
+  /// Altura de botão **dentro** de uma linha ou cartão.
+  ///
+  /// O botão principal de formulário tem 52 ([buttonHeight]); numa lista, essa
+  /// altura faz cada ação de linha pesar como a ação da tela. A área de toque
+  /// continua com 48, que o Material acrescenta em volta.
+  static const double compactButtonHeight = 40;
 
   /// Largura máxima de uma coluna de leitura.
   ///

@@ -83,7 +83,9 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
           ? null
           : AppBar(title: const Text('Alterar senha')),
       showBrand: widget.forced,
-      title: widget.forced ? 'Defina uma nova senha' : 'Alterar senha',
+      // Com barra, o título já está nela. Na troca obrigatória não há barra,
+      // e o título é quem explica a tela.
+      title: widget.forced ? 'Defina uma nova senha' : null,
       subtitle: widget.forced
           ? 'Sua senha foi redefinida pelo líder da equipe. Escolha uma nova '
               'para continuar.'

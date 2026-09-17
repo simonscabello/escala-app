@@ -37,9 +37,9 @@ class TeamOnboarding extends ConsumerWidget {
                 ref.read(authControllerProvider.notifier).reloadTeams(),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenPadding,
                 AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
+                AppSpacing.screenPadding,
                 AppSpacing.xxl,
               ),
               children: [
@@ -57,26 +57,32 @@ class TeamOnboarding extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
-                // Lado a lado onde cabe: são duas escolhas do mesmo peso, e
-                // empilhadas num monitor a segunda cai abaixo da dobra.
+                // Lado a lado onde cabe; empilhadas num monitor a segunda
+                // cairia abaixo da dobra.
+                //
+                // **O convite vem primeiro e com o botão cheio.** Uma equipe
+                // tem um líder e vários integrantes: quem chega aqui sem equipe
+                // quase sempre veio por um código no WhatsApp. "Criar equipe"
+                // estava em destaque e empurrava essa maioria para o caminho
+                // de quem lidera.
                 _OnboardingChoices(
                   cards: [
+                    _OnboardingCard(
+                      icon: Icons.link_rounded,
+                      title: 'Recebi um convite',
+                      message: 'Cole o código que o líder da equipe enviou.',
+                      actionLabel: 'Entrar com código',
+                      filled: true,
+                      onAction: () => context.push('/convite'),
+                    ),
                     _OnboardingCard(
                       icon: Icons.groups_rounded,
                       title: 'Sou o líder da equipe',
                       message: 'Crie a equipe e cadastre os integrantes. '
                           'Ninguém precisa ter conta ainda.',
                       actionLabel: 'Criar equipe',
-                      filled: true,
-                      onAction: () => context.push('/equipe/nova'),
-                    ),
-                    _OnboardingCard(
-                      icon: Icons.link_rounded,
-                      title: 'Recebi um convite',
-                      message: 'Cole o código que o líder da equipe enviou.',
-                      actionLabel: 'Entrar com código',
                       filled: false,
-                      onAction: () => context.push('/convite'),
+                      onAction: () => context.push('/equipe/nova'),
                     ),
                   ],
                 ),

@@ -152,7 +152,7 @@ número de largura à mão.**
 
 | Faixa | Largura | Navegação | Conteúdo |
 | --- | --- | --- | --- |
-| `mobile` | < 600 | barra inferior de três abas | uma coluna, botão flutuante |
+| `mobile` | < 600 | barra inferior de quatro abas | uma coluna, botão flutuante |
 | `tablet` | 600–1024 | barra lateral recolhida (só ícones) | uma coluna com folga |
 | `desktop` | > 1024 | barra lateral aberta | colunas, tabelas, painel lateral |
 
@@ -215,8 +215,10 @@ emprestado.
   qual é a minha próxima escala, qual é a **minha** seguinte, quantas músicas a
   escala tem (`scheduleSongCount` cala quando não sabe) e quais avisos nascem.
   `test/home_summary_test.dart` trava isso sem widget nenhum.
-- **Ordem fixa:** cabeçalho, minha próxima escala, acessos rápidos, próximo
-  evento, avisos. Um bloco pode não existir; nenhum troca de lugar.
+- **Ordem fixa:** cabeçalho (`TabHeader`), minha próxima escala, avisos,
+  acessos rápidos, próximo evento. Os avisos vêm logo abaixo da manchete
+  porque, no fim, ficavam fora da primeira dobra. Um bloco pode não
+  existir; nenhum troca de lugar.
 - **A Home não lista músicas.** Ela teve um cartão "Estamos aprendendo" com as
   músicas marcadas como novas, e ele saiu a pedido do produto. O que sobrou é o
   atalho **"Músicas novas"** em Acessos rápidos: diz quantas há para estudar
@@ -234,12 +236,13 @@ emprestado.
   da manchete (`HomeSummary.myFollowing`). **É a minha seguinte, não a da
   equipe**: a manchete abriu o fio de "quando eu toco", e continuar esse fio com
   a escala de outra pessoa é o mesmo erro que deu origem à Home.
-- **Três acessos rápidos**, e a arrumação muda com a largura: três ladrilhos
-  lado a lado só cabem acima de 520px; abaixo disso os dois primeiros dividem a
-  linha e **Minha disponibilidade** vira uma faixa deitada — o mesmo cartão,
-  virado, e não um segundo componente. Ela entrou porque era o destino mais
-  escondido do app no celular (só pelo Perfil) e é o que tem prazo: avisar que
-  não pode depois da escala montada já é tarde.
+- **Quatro acessos rápidos** — Repertório, Músicas novas, Sugestões e
+  Minha disponibilidade —, em linha a partir de 640px do espaço recebido
+  e em 2×2 abaixo disso (o esqueleto de carregamento tem o mesmo
+  formato). Só "Músicas novas" tem linha de apoio, porque só ela muda
+  ("3 para estudar"); Sugestões mostra o número de pendentes num selo.
+  Minha disponibilidade está aqui porque era o destino mais escondido do
+  app no celular e é o que tem prazo.
 - A manchete usa `AppHeroCard` (`shared/widgets/app_hero_card.dart`), a casca
   violeta. `GreetingHeader` e `TeamOnboarding` saíram de dentro de
   `agenda_screen.dart` quando a Home nasceu, e hoje só a Home usa as três — a
@@ -1435,10 +1438,11 @@ Outros pontos do tema (`app_theme.dart`):
 - **48dp de alvo de toque** em `IconButton` e em linha de lista
   (`minTileHeight`): uma `ListTile` `dense` chegava a ~40 e escapava do dedo de
   quem está com o instrumento na mão.
-- **Um raio por papel**: `radiusMd` (12) para controles, `radiusLg` (16) para
-  cartões, `radiusPill` para etiquetas. `radiusXl` e `radiusHero` saíram — o
-  segundo nunca foi usado e o primeiro dava ao app três raios de cartão
-  diferentes conforme a tela.
+- **Um raio por papel**, e o de dentro é sempre menor: `radiusXs` (8)
+  para selos, `radiusSm` (12) para campos e chips, `radiusMd` (14) para
+  botões e controles, `radiusLg` (20) para cartões e grupos, `radiusXl`
+  (28) só para folhas e diálogos, `radiusPill` para pílulas. Os valores e
+  o porquê estão em `core/theme/app_spacing.dart`.
 - A **sombra do `AppCard` não é o que faz o cartão existir**; é a cor. A sombra
   só arredonda a transição, e por isso o cartão continua legível com "reduzir
   animações" ligado.
@@ -1472,28 +1476,29 @@ escala de fonte 1,0–1,6.
 
 ## Os horários da escala na tela
 
-`EventTimesList` (`features/events/presentation/event_times.dart`) desenha os
-horários no cartão do detalhe **e** no cartão destacado da agenda: uma linha por
-culto mais o ensaio, com o rótulo à esquerda e a hora à direita. Abrir a escala
-não deve reapresentar a mesma informação num formato diferente.
+O detalhe da escala abre com `AppDetailHeader` (a data como título, o nome e o
+local embaixo) e uma **faixa de fatos**, `AppFactsStrip`
+(`shared/widgets/app_facts_strip.dart`): **Culto(s) · Ensaio · Sua função**.
+É a mesma peça de Tom · Tipo · Andamento na tela da música e de Data · Horário no evento da equipe (lá o local fica numa linha do
+cabeçalho, como na escala) — o `EventTimesList` (`event_times.dart`) saiu com
+a revisão de UI de setembro/2026.
 
 - **Não volte às etiquetas coloridas.** Eram um `Wrap` de pílulas com
-  `primaryContainer` de fundo, e saíram por dois motivos: o texto do ensaio
-  estourava a largura, e aquele violeta é **a mesma cor** da faixa de "alguém
-  avisou que não pode" logo abaixo — três linhas de informação corriqueira com
-  o peso visual de um alerta. A cor sobrou só no ícone do culto.
-- Em coluna as horas caem na mesma vertical e ficam comparáveis de relance, que
-  é a pergunta de quem abre a escala. Por isso `FontFeature.tabularFigures()`:
-  sem ele os dois-pontos de "08:30" e "19:00" desalinham.
+  `primaryContainer` de fundo: o texto do ensaio estourava a largura, e aquele
+  violeta é **a mesma cor** da faixa de "alguém avisou que não pode" — três
+  linhas de informação corriqueira com o peso de um alerta.
+- Dois ou mais cultos viram **uma linha por culto** dentro da coluna "Cultos",
+  com a hora alinhada (`wrapValue`), porque comparar 08:30 com 19:00 é a
+  pergunta de quem abre a escala.
 - **O ensaio usa `formatRehearsalTime`**, que dá `19:00` no mesmo dia da escala
   e `sáb 19:00` em outro. A data por extenso ("Ensaio Segunda-feira, 10 de
   agosto 00:30") era o que quebrava o layout. Há teste travando o formato.
 - Esse rótulo já esteve duplicado em três lugares com formatos diferentes, e a
   listagem tinha um bug por isso: mostrava só a hora, então ensaio de sábado
-  parecia ser no dia do culto. **Um formatador só, os três chamam.**
+  parecia ser no dia do culto. **Um formatador só, todos chamam.**
 - No **item** da lista os horários seguem em linha corrida
   (`Manhã 08:30 · Noite 19:00 · Ensaio sáb 19:00`): ali a pergunta é "qual
-  escala é esta?", e a coluna alinhada gastaria três linhas por item.
+  escala é esta?", e uma coluna alinhada gastaria três linhas por item.
 
 ## A escala escrita: integrantes recolhidos e com foto
 
@@ -1798,7 +1803,7 @@ Todos em `/teams/:teamId/reports`, restritos a OWNER/LEADER:
   tons. Só escala **publicada e já passada**: rascunho é plano, e plano não é
   histórico. As não cantadas viram um número (`neverPlayedCount`), não uma
   lista — com os 581 hinos do Cantor Cristão importados de uma vez, a lista
-  seria ruído. Tela: `Gerenciar equipe → Uso do repertório`.
+  seria ruído. Tela: `Gerenciar equipe → Relatórios do repertório`, aba Uso.
 - `GET .../song-context` — o histórico de **toda** música já cantada, numa
   chamada: última vez, contagem total e nos últimos 3/6/12 meses, e os
   momentos do culto em que ela entrou. Alimenta o seletor da escala e a seção
@@ -1870,7 +1875,8 @@ Regras em `moment-suggestions.ts` (`SUGGESTION_RULES`, num lugar só):
 
 ### Análise do repertório (antes "Saúde do repertório")
 
-`/equipe/musicas/saude`, em `Gerenciar equipe`. Resumo (ativas, em
+`/equipe/musicas/saude`, aba **Análise** de `Gerenciar equipe →
+Relatórios do repertório` (`/equipe/musicas/uso` abre a aba Uso). Resumo (ativas, em
 aprendizado, nunca em escala, cantadas em 3/6/12 meses) e listas que somem
 quando vazias: cantadas com muita frequência (4+ em 3 meses), há muito tempo
 sem cantar (já cantadas, nada em 12 meses), em aprendizado, sem tom definido,
@@ -1990,6 +1996,59 @@ O app usa `code` para reagir e `message` para exibir.
 campo desconhecido no corpo vira 400. DTOs com `class-validator`, mensagens em
 português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
 
+## Padrões de tela (revisão de UI de setembro/2026)
+
+A tela da música é o modelo visual. A revisão aplicou os padrões abaixo ao app
+inteiro; **tela nova segue estes padrões**, e o componente compartilhado vem
+antes de um widget privado parecido.
+
+**Peças compartilhadas** (`shared/widgets/`):
+
+- `AppNotice` — aviso dentro do fluxo (erro de formulário, "não carregou tudo",
+  "todo mundo já tem conta"). `FormErrorBanner` é um `AppNotice` de perigo.
+- `AppBottomActionBar` — o botão principal preso ao rodapé em formulário longo
+  (`FormScaffold.bottomAction`, repertório e escalação da escala, publicar).
+- `AppPickerField` — campo que abre um seletor (data, hora, tom, gênero). O
+  campo **inteiro** é o alvo; o "x" limpa quando o vazio é uma resposta.
+- `showAppOptionsSheet` — "escolha uma destas" quando não cabe em
+  `AppChoiceBar`. Devolve um registro, para `null` poder ser opção.
+- `AppDetailHeader` + `AppFactsStrip` — o cabeçalho das telas de detalhe
+  (música, escala, sugestão, evento da equipe).
+- `AppMonthGrid` — a grade mensal única (agenda, "Quem não pode", seletor de
+  datas da indisponibilidade).
+- `TabHeader` (`greeting_header.dart`) — título das abas com o seletor de
+  equipe; `showTeamPicker` é o mesmo seletor no Perfil.
+- `AppButtonStyles.compact` / `compactText` — botão **dentro** de linha ou
+  cartão (`AppSpacing.compactButtonHeight`, 40).
+- `song_resources.dart` — Cifra, Letra, Gravação e Spotify em grade ou linha,
+  na música e na sugestão.
+
+**Regras:**
+
+- **Listas numa superfície só.** Lista curta → um `AppGroup`; lista longa e
+  filtrável → linhas na página; cartão só para objeto isolado com ações
+  próprias (o convite geral é cartão; os individuais são linhas).
+- **Formulário com barra não repete o título no corpo.** Subtítulo só quando
+  acrescenta algo.
+- **Um botão cheio por tela.** Ações secundárias são botão de texto
+  ("Reabrir", "Gerar outro código"); ações raras e destrutivas vão para o ⋮
+  ou para dentro da folha de edição (remover culto, desativar função, cancelar
+  convite ou evento), e não para um ícone em toda linha.
+- **Folha para formulário curto, diálogo só para confirmação** — sempre por
+  `showAdaptiveSheet`. Hora é sempre `showQuarterHourPicker` (passo de 15 min).
+- **Cabeçalho de grupo em cinza** (`onSurfaceVariant`); o violeta fica para o
+  que se toca e para o que é sobre você.
+- Margem lateral `AppSpacing.screenPadding` (24) em toda página; fim de lista
+  com botão flutuante usa `AppSpacing.fabClearance` (96).
+- Botões de diálogo dizem o que acontece ("Manter como estão" / "Atualizar 3
+  escalas"), nunca "Confirmar".
+- **Relatórios do repertório** (`RepertoireReportsScreen`) juntam Análise e Uso
+  em abas; `/equipe/musicas/saude` e `/equipe/musicas/uso` abrem cada uma.
+- Gerenciar equipe tem dois grupos: **Equipe** (Dados, Cultos, Funções,
+  Convites) e **Acompanhamento** (Quem não pode, Participação, Relatórios).
+- Sem equipe, "Recebi um convite" vem primeiro e com o botão cheio: quem chega
+  sem equipe quase sempre veio por código.
+
 ## Convenções do app
 
 - Feature-first: `lib/features/<nome>/{data,domain,presentation}`, mais
@@ -2001,7 +2060,8 @@ português, `@Transform` para `trim`/lowercase. Use `ParseUUIDPipe` nos params.
 - Repositórios envolvem chamadas em `_guard` e lançam `ApiException`
   (`core/network/api_exception.dart`). Telas capturam e exibem.
 - Formulários usam `FormScaffold` e `FormErrorBanner`
-  (`shared/widgets/form_scaffold.dart`).
+  (`shared/widgets/form_scaffold.dart`); formulário longo põe o botão em
+  `bottomAction`. Ver **Padrões de tela**.
 - Navegação em `core/router/app_router.dart`, com `redirect` por estado de auth.
   Telas que dependem da equipe usam o helper `_withActiveTeam`.
 - Equipe ativa: `activeTeamIdProvider` (`features/team/data/team_repository.dart`).

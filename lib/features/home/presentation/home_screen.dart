@@ -17,7 +17,6 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
-import '../../events/presentation/event_schedule_facts.dart';
 import '../../songs/data/song_repository.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
@@ -126,14 +125,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: AppContentWidth.wide(
           child: Column(
             children: [
-              GreetingHeader(
-                name: auth.user?.firstName ?? '',
+              TabHeader(
+                title: _greeting(auth.user?.firstName ?? ''),
                 teamName: team.name,
                 activeTeamId: teamId,
                 showTeamSwitcher: !wide,
-                onCreate: team.canManage && wide
-                    ? () => context.push('/agenda/novo')
-                    : null,
+                trailing: [
+                  if (team.canManage && wide)
+                    FilledButton.icon(
+                      onPressed: () => context.push('/agenda/novo'),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Nova escala'),
+                    ),
+                ],
                 teams: [
                   for (final item in auth.teams)
                     (id: item.teamId, name: item.name),
@@ -141,7 +145,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onTeamChanged: (id) =>
                     ref.read(activeTeamIdProvider.notifier).select(id),
               ),
-              const AppUpdateBanner(),
+              const AppUpdateBanner(
+                margin: EdgeInsets.fromLTRB(
+                  AppSpacing.screenPadding,
+                  0,
+                  AppSpacing.screenPadding,
+                  AppSpacing.md,
+                ),
+              ),
               Expanded(
                 child: events.when(
                   // Esqueleto no formato do que vem — a manchete, os dois
@@ -194,12 +205,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+String _greeting(String name) {
+  final greeting = greetingForHour(DateTime.now().hour);
+  return name.isEmpty ? greeting : '$greeting, $name';
+}
+
 /// O corpo da Home, na hierarquia que a tela promete.
 ///
-/// Manchete, atalhos, avisos — nesta ordem, e sempre nesta. Um bloco pode não
-/// existir (não há avisos), mas nenhum troca de lugar com outro: a Home é
-/// consultada de relance, e uma tela cujo conteúdo muda de posição obriga a
-/// lê-la inteira toda vez.
+/// Manchete, avisos, atalhos, próximo evento — nesta ordem, e sempre nesta. Um
+/// bloco pode não existir (não há avisos), mas nenhum troca de lugar com outro:
+/// a Home é consultada de relance, e uma tela cujo conteúdo muda de posição
+/// obriga a lê-la inteira toda vez.
+///
+/// **Os avisos vêm logo depois da manchete.** Moravam no pé da tela, abaixo
+/// dos atalhos — e "escalas em rascunho" e "Ninguém escalado ainda", as únicas
+/// coisas aqui que pedem providência, ficavam fora da primeira dobra.
 ///
 /// **A lista de próximas escalas saiu daqui.** Ela mostrava três escalas da
 /// equipe — que é o que a aba Agenda mostra, com mais recurso e mais espaço —
@@ -241,11 +261,13 @@ class _HomeBody extends StatelessWidget {
             event: myNext,
             positions: summary.myPositions,
             following: summary.myFollowing,
+            daysAway: summary.myNextDaysAway,
           );
 
     return Column(
       children: [
-        if (fromCache && cachedAt != null) CacheStampBanner(cachedAt: cachedAt!),
+        if (fromCache && cachedAt != null)
+          CacheStampBanner(cachedAt: cachedAt!),
         Expanded(
           // A largura de que o **corpo** dispõe, e não a da janela: dentro da
           // casca com barra lateral aberta sobram ~900px de 1200, e é esse o
@@ -257,30 +279,49 @@ class _HomeBody extends StatelessWidget {
                 teamId: teamId,
                 canManage: canManage,
               );
+              final notices = summary.notices.isEmpty
+                  ? null
+                  : _HomeNotices(notices: summary.notices);
 
               return RefreshIndicator(
                 onRefresh: onRefresh,
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
+                    AppSpacing.screenPadding,
                     0,
-                    AppSpacing.xl,
+                    AppSpacing.screenPadding,
                     // Espaço para o botão flutuante não cobrir o último item.
                     // Sem ele (monitor), o rodapé volta ao normal.
-                    twoColumns ? AppSpacing.xxl : AppSpacing.xxxl * 2,
+                    twoColumns ? AppSpacing.xxl : AppSpacing.fabClearance,
                   ),
                   children: [
                     if (twoColumns)
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(flex: 3, child: hero),
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                hero,
+                                if (notices != null) ...[
+                                  const SizedBox(height: AppSpacing.xl),
+                                  notices,
+                                ],
+                              ],
+                            ),
+                          ),
                           const SizedBox(width: AppSpacing.lg),
                           Expanded(flex: 2, child: quickAccess),
                         ],
                       )
                     else ...[
                       hero,
+                      if (notices != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        notices,
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       quickAccess,
                     ],
@@ -294,12 +335,11 @@ class _HomeBody extends StatelessWidget {
                       AppGroup(
                         title: 'Próximo evento',
                         dividerIndent: AppGroup.textIndent,
-                        children: [TeamEventTile(event: evento)],
+                        // Sem o selo "Evento": o título do grupo já diz.
+                        children: [
+                          TeamEventTile(event: evento, showBadge: false),
+                        ],
                       ),
-                    ],
-                    if (summary.notices.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      _HomeNotices(notices: summary.notices),
                     ],
                   ],
                 ),
@@ -312,7 +352,7 @@ class _HomeBody extends StatelessWidget {
   }
 }
 
-/// O pé da Home: até dois avisos, e só quando há o que avisar.
+/// Os avisos da Home: até dois, e só quando há o que avisar.
 ///
 /// **Nada aqui é dado novo** — tudo sai da lista de escalas que a tela já
 /// mostrou acima (ver [HomeSummary]). Sem aviso nenhum o bloco simplesmente não
@@ -328,8 +368,7 @@ class _HomeNotices extends StatelessWidget {
     return AppGroup(
       title: 'Avisos',
       children: [
-        for (final notice in notices)
-          _noticeRow(context, notice),
+        for (final notice in notices) _noticeRow(context, notice),
       ],
     );
   }
@@ -347,12 +386,8 @@ class _HomeNotices extends StatelessWidget {
     );
   }
 
-  /// A frase de cada aviso.
-  ///
-  /// Mora aqui, e não no domínio: os horários saem de [ScheduleFacts], que é
-  /// quem já sabe escrever "Manhã 08:30 · Noite 19:00" — e escrever isso de
-  /// novo em outro lugar é como as três versões daquela frase apareceram da
-  /// primeira vez.
+  /// A frase de cada aviso. Mora aqui, e não no domínio: é onde vivem os
+  /// formatadores de data.
   ({IconData icon, String title, String message}) _copyFor(HomeNotice notice) {
     final event = notice.event;
     final timezone = event == null || event.timezone.isEmpty
@@ -360,16 +395,6 @@ class _HomeNotices extends StatelessWidget {
         : event.timezone;
 
     return switch (notice.kind) {
-      HomeNoticeKind.scheduleToday => (
-          icon: Icons.today_rounded,
-          title: 'Sua escala é hoje',
-          message: ScheduleFacts.of(event!, timezone).times,
-        ),
-      HomeNoticeKind.scheduleTomorrow => (
-          icon: Icons.event_rounded,
-          title: 'Sua escala é amanhã',
-          message: ScheduleFacts.of(event!, timezone).times,
-        ),
       HomeNoticeKind.pendingDrafts => (
           icon: Icons.edit_note_rounded,
           title: notice.count == 1
@@ -389,8 +414,8 @@ class _HomeNotices extends StatelessWidget {
 
 /// A Home carregando, na forma que ela vai ter.
 ///
-/// A manchete é um bloco alto; abaixo, os dois atalhos lado a lado e a faixa
-/// do terceiro. Um esqueleto genérico prometeria outra tela — e a promessa
+/// A manchete é um bloco alto; abaixo, os quatro atalhos em duas linhas de
+/// dois. Um esqueleto genérico prometeria outra tela — e a promessa
 /// quebrada é o que faz o conteúdo "pular" quando chega.
 class _HomeSkeleton extends StatelessWidget {
   const _HomeSkeleton();
@@ -402,32 +427,33 @@ class _HomeSkeleton extends StatelessWidget {
     return ExcludeSemantics(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl,
+          AppSpacing.screenPadding,
           0,
-          AppSpacing.xl,
+          AppSpacing.screenPadding,
           AppSpacing.xxl,
         ),
         children: [
           Container(
-            height: 230,
+            height: 250,
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Row(
-            children: [
-              for (var i = 0; i < 2; i++) ...[
-                if (i > 0) const SizedBox(width: AppSpacing.md),
-                const Expanded(
-                  child: AppSkeleton(height: 108, radius: AppSpacing.radiusLg),
-                ),
+          for (var row = 0; row < 2; row++) ...[
+            if (row > 0) const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                for (var i = 0; i < 2; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpacing.md),
+                  const Expanded(
+                    child: AppSkeleton(height: 92, radius: AppSpacing.radiusLg),
+                  ),
+                ],
               ],
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const AppSkeleton(height: 88, radius: AppSpacing.radiusLg),
+            ),
+          ],
         ],
       ),
     );

@@ -185,8 +185,8 @@ void main() {
     });
   });
 
-  group('os avisos do pé da tela', () {
-    test('"é hoje" quando a minha escala é hoje', () {
+  group('os avisos logo abaixo da manchete', () {
+    test('"é hoje" mora na manchete, e não num aviso que a repete', () {
       final resumo = HomeSummary.of(
         [
           _event(
@@ -200,8 +200,8 @@ void main() {
         now: DateTime.utc(2026, 9, 13, 10),
       );
 
-      expect(resumo.notices.single.kind, HomeNoticeKind.scheduleToday);
-      expect(resumo.notices.single.route, '/agenda/e1');
+      expect(resumo.myNextDaysAway, 0);
+      expect(resumo.notices, isEmpty);
     });
 
     test('escala distante não vira aviso nenhum', () {
@@ -250,7 +250,9 @@ void main() {
       expect(lider.notices.last.route, '/agenda/e1/escalar');
     });
 
-    test('nunca mais de dois avisos', () {
+    test('quem lidera e toca hoje não perde o aviso de escala vazia', () {
+      // Era o defeito do aviso "é hoje": com o limite de dois, ele tomava a
+      // vaga de "Ninguém escalado ainda" justamente de quem lidera e toca.
       final resumo = HomeSummary.of(
         [
           _event(
@@ -267,8 +269,11 @@ void main() {
       );
 
       expect(resumo.notices, hasLength(HomeSummary.maxNotices));
-      // O que é sobre a própria pessoa vem primeiro.
-      expect(resumo.notices.first.kind, HomeNoticeKind.scheduleToday);
+      expect(
+        resumo.notices.map((n) => n.kind),
+        [HomeNoticeKind.pendingDrafts, HomeNoticeKind.unstaffedSchedule],
+      );
+      expect(resumo.myNextDaysAway, 0);
     });
   });
 }

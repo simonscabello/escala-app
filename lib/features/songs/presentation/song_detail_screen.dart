@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -9,6 +8,8 @@ import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_detail_header.dart';
+import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -17,6 +18,7 @@ import '../../auth/application/auth_controller.dart';
 import '../data/song_repository.dart';
 import '../domain/song_history.dart';
 import '../domain/song_models.dart';
+import 'song_resources.dart';
 import 'song_theme_picker.dart';
 
 class SongDetailScreen extends ConsumerWidget {
@@ -201,20 +203,6 @@ class _Body extends StatelessWidget {
 String _displayTitle(Song song) =>
     song.hymnal != null ? '${song.hymnal!.number} · ${song.title}' : song.title;
 
-Future<void> _openLink(BuildContext context, String url) async {
-  final ok = await launchUrl(
-    Uri.parse(url),
-    mode: LaunchMode.externalApplication,
-  );
-  if (!ok && context.mounted) {
-    showAppSnackBar(
-      context,
-      'Não foi possível abrir o link.',
-      tone: AppTone.danger,
-    );
-  }
-}
-
 void _openLyrics(BuildContext context, Song song) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(builder: (_) => SongLyricsScreen(song: song)),
@@ -222,31 +210,6 @@ void _openLyrics(BuildContext context, Song song) {
 }
 
 bool _filled(String? value) => value != null && value.trim().isNotEmpty;
-
-/// O artista em versalete, abaixo do nome.
-///
-/// Caixa alta **só no desenho**: o leitor de tela recebe o nome como foi
-/// escrito, senão soletraria "M-I-N-I-S-T-É-R-I-O".
-class _ArtistLine extends StatelessWidget {
-  const _ArtistLine({required this.song});
-
-  final Song song;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Text(
-      song.subtitle.toUpperCase(),
-      semanticsLabel: song.subtitle,
-      style: theme.textTheme.labelLarge?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
 
 class _Header extends StatelessWidget {
   const _Header({required this.song});
@@ -256,243 +219,86 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // `Wrap` e não `Row`: título longo ocupa duas linhas, e a etiqueta
-        // desce inteira em vez de espremer o nome.
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            Text(_displayTitle(song), style: theme.textTheme.headlineMedium),
-            if (song.isNew)
-              const AppBadge(
-                label: 'Nova',
-                tone: AppTone.info,
-                semanticsLabel: 'A equipe está aprendendo esta música',
-              ),
-            // Aberta a partir de uma escala antiga, a música arquivada não
-            // teria como se explicar: some do repertório e continua ali.
-            if (song.isArchived)
-              const AppBadge(
-                label: 'Arquivada',
-                tone: AppTone.warning,
-                semanticsLabel: 'Esta música está fora do repertório',
-              ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _ArtistLine(song: song),
+    return AppDetailHeader(
+      title: _displayTitle(song),
+      badges: [
+        if (song.isNew)
+          const AppBadge(
+            label: 'Nova',
+            tone: AppTone.info,
+            semanticsLabel: 'A equipe está aprendendo esta música',
+          ),
+        // Aberta a partir de uma escala antiga, a música arquivada não
+        // teria como se explicar: some do repertório e continua ali.
+        if (song.isArchived)
+          const AppBadge(
+            label: 'Arquivada',
+            tone: AppTone.warning,
+            semanticsLabel: 'Esta música está fora do repertório',
+          ),
+      ],
+      overline: song.subtitle,
+      lines: [
         // Os hinários, todos: aqui é a tela da música, e a que está no Cantor
         // Cristão e no HCC precisa mostrar os dois números -- é justamente o
         // que a estrutura anterior não sabia dizer. A escala mostra só a
         // principal, porque lá cabe uma.
-        if (song.hymnals.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xs),
+        if (song.hymnals.isNotEmpty)
           Text(
             song.hymnals.map((ref) => '${ref.number} ${ref.name}').join(' · '),
-            style: theme.textTheme.bodySmall?.copyWith(color: scheme.primary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
           ),
-        ],
       ],
     );
   }
 }
 
-/// Tom, tipo e andamento, numa faixa só.
+/// Tom, tipo e andamento, numa faixa só ([AppFactsStrip]).
 ///
 /// O tom da equipe vem primeiro e na cor da marca quando existe; sem ele, o da
-/// gravação aparece embaixo, como sugestão — são coisas diferentes.
-///
-/// **Nada aqui vira reticências.** "Modera…" não diz se é moderada ou outra
-/// coisa. Primeiro saem os ícones — ajudam a achar a coluna, mas é o valor que
-/// a pessoa veio ler —, e se nem assim couber (320px com a fonte do sistema
-/// aumentada) o texto encolhe um pouco em vez de ser cortado.
-///
-/// A decisão dos ícones é medida com a fonte e a escala do aparelho, como faz
-/// a `AppChoiceBar` — e contra o vocabulário inteiro, não contra os valores
-/// desta música: senão "Calma" teria ícones e "Moderada" não, e a faixa
-/// mudaria de desenho de uma música para outra no mesmo celular.
+/// gravação aparece embaixo, como sugestão — são coisas diferentes. Os ícones
+/// são medidos contra o vocabulário inteiro, e não contra os valores desta
+/// música: senão "Calma" teria ícones e "Moderada" não.
 class _Facts extends StatelessWidget {
   const _Facts({required this.song});
 
   final Song song;
 
-  static const _dividerWidth = AppSpacing.md;
-
-  static bool _iconsFit(BuildContext context, double column) {
-    final theme = Theme.of(context);
-    final texts = [
-      for (final label in ['Tom', 'Tipo', 'Andamento'])
-        (label, _Fact.labelStyle(theme)),
-      for (final value in [
-        'C#m',
-        ...['HYMN', 'SONG'].map(kindLabel),
-        ...['CALM', 'MODERATE', 'UPBEAT'].map(paceLabel),
-      ])
-        (value, _Fact.valueStyle(theme)),
-    ];
-
-    return texts.every((entry) {
-      final painter = TextPainter(
-        text: TextSpan(text: entry.$1, style: entry.$2),
-        maxLines: 1,
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      final fits = painter.width + _Fact.iconSpace <= column;
-      painter.dispose();
-      return fits;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final hasKey = _filled(song.defaultKey);
 
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.md,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final column = (constraints.maxWidth - 2 * _dividerWidth) / 3;
-          final showIcons = _iconsFit(context, column);
-          final divider = VerticalDivider(
-            width: _dividerWidth,
-            thickness: 1,
-            color: theme.colorScheme.outlineVariant,
-          );
-
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _Fact(
-                    icon: showIcons ? Icons.piano_rounded : null,
-                    label: 'Tom',
-                    value: hasKey ? song.defaultKey!.trim() : '—',
-                    // Anotação antiga ("G (capo 2)") quebra em duas linhas em
-                    // vez de encolher até ninguém ler. Tom da lista sempre
-                    // cabe.
-                    wrapValue: true,
-                    hint: !hasKey && _filled(song.originalKey)
-                        ? 'gravação: ${song.originalKey}'
-                        : null,
-                    highlight: hasKey,
-                  ),
-                ),
-                divider,
-                Expanded(
-                  child: _Fact(
-                    icon: showIcons ? Icons.library_music_outlined : null,
-                    label: 'Tipo',
-                    value: kindLabel(song.kind),
-                  ),
-                ),
-                divider,
-                Expanded(
-                  child: _Fact(
-                    icon: showIcons ? Icons.speed_rounded : null,
-                    label: 'Andamento',
-                    value: paceLabel(song.pace),
-                    hint: song.pace == null && song.bpm != null
-                        ? '${song.bpm} bpm'
-                        : null,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({
-    required this.label,
-    required this.value,
-    this.icon,
-    this.hint,
-    this.highlight = false,
-    this.wrapValue = false,
-  });
-
-  final String label;
-  final String value;
-
-  /// Nulo quando a coluna não comporta ícone.
-  final IconData? icon;
-  final String? hint;
-  final bool highlight;
-  final bool wrapValue;
-
-  static const _iconSize = 20.0;
-
-  /// O que o ícone ocupa na coluna, com o intervalo até o texto.
-  static const iconSpace = _iconSize + AppSpacing.sm;
-
-  static TextStyle? labelStyle(ThemeData theme) =>
-      theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      );
-
-  static TextStyle? valueStyle(ThemeData theme) =>
-      theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    Widget oneLine(String text, TextStyle? style) => FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: AlignmentDirectional.centerStart,
-          child: Text(text, maxLines: 1, style: style),
-        );
-
-    final valueColored = valueStyle(theme)?.copyWith(
-      color: highlight ? scheme.primary : scheme.onSurface,
-    );
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (icon != null) ...[
-          Icon(
-            icon,
-            size: _iconSize,
-            color: highlight ? scheme.primary : scheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              oneLine(label, labelStyle(theme)),
-              if (wrapValue)
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: valueColored,
-                )
-              else
-                oneLine(value, valueColored),
-              if (hint != null) oneLine(hint!, labelStyle(theme)),
-            ],
-          ),
+    return AppFactsStrip(
+      facts: [
+        AppFact(
+          icon: Icons.piano_rounded,
+          label: 'Tom',
+          value: hasKey ? song.defaultKey!.trim() : '—',
+          // Anotação antiga ("G (capo 2)") quebra em duas linhas em vez de
+          // encolher até ninguém ler. Tom da lista sempre cabe.
+          wrapValue: true,
+          hint: !hasKey && _filled(song.originalKey)
+              ? 'gravação: ${song.originalKey}'
+              : null,
+          highlight: hasKey,
+          probeValues: const ['C#m'],
+        ),
+        AppFact(
+          icon: Icons.library_music_outlined,
+          label: 'Tipo',
+          value: kindLabel(song.kind),
+          probeValues: ['HYMN', 'SONG'].map(kindLabel).toList(),
+        ),
+        AppFact(
+          icon: Icons.speed_rounded,
+          label: 'Andamento',
+          value: paceLabel(song.pace),
+          hint:
+              song.pace == null && song.bpm != null ? '${song.bpm} bpm' : null,
+          probeValues: ['CALM', 'MODERATE', 'UPBEAT'].map(paceLabel).toList(),
         ),
       ],
     );
@@ -500,11 +306,6 @@ class _Fact extends StatelessWidget {
 }
 
 /// Cifra, letra, YouTube e Spotify: o que se abre para ensaiar.
-///
-/// **As quatro sempre, no mesmo lugar**, e apagadas quando não há o que abrir.
-/// Esconder a que falta faria a grade mudar de forma de uma música para outra,
-/// e "esta música está sem cifra" é justamente a informação que a equipe
-/// precisa ver para ir atrás dela.
 ///
 /// A letra é a única que tem duas fontes: guardada no banco ela abre aqui
 /// dentro (sem rede, sem site fora do ar); sem ela, vale o link. Quando há os
@@ -516,53 +317,6 @@ class _Preparation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    _PrepItem link({
-      required IconData icon,
-      required String label,
-      required String? url,
-      required String action,
-    }) =>
-        _PrepItem(
-          icon: icon,
-          label: label,
-          status: _filled(url) ? action : 'Sem link',
-          onTap: _filled(url) ? () => _openLink(context, url!.trim()) : null,
-        );
-
-    final items = [
-      link(
-        icon: Icons.music_note_rounded,
-        label: 'Cifra',
-        url: song.chordsUrl,
-        action: 'Abrir cifra',
-      ),
-      song.hasLyrics
-          ? _PrepItem(
-              icon: Icons.article_outlined,
-              label: 'Letra',
-              status: 'Ler no app',
-              onTap: () => _openLyrics(context, song),
-            )
-          : link(
-              icon: Icons.article_outlined,
-              label: 'Letra',
-              url: song.lyricsUrl,
-              action: 'Abrir no site',
-            ),
-      link(
-        icon: Icons.play_circle_outline_rounded,
-        label: 'YouTube',
-        url: song.youtubeUrl,
-        action: 'Ver no YouTube',
-      ),
-      link(
-        icon: Icons.headphones_rounded,
-        label: 'Spotify',
-        url: song.spotifyUrl,
-        action: 'Ouvir no Spotify',
-      ),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -572,103 +326,18 @@ class _Preparation extends StatelessWidget {
           title: 'Preparação',
           padding: EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
         ),
-        for (var row = 0; row < items.length; row += 2) ...[
-          if (row > 0) const SizedBox(height: AppSpacing.sm),
-          // Altura igual nas duas colunas: com a fonte do sistema aumentada,
-          // um rótulo quebra e o vizinho ficaria mais baixo.
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _PrepTile(item: items[row])),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: _PrepTile(item: items[row + 1])),
-              ],
-            ),
+        SongResourceGrid(
+          resources: songResources(
+            context,
+            chordsUrl: song.chordsUrl,
+            lyricsUrl: song.lyricsUrl,
+            youtubeUrl: song.youtubeUrl,
+            spotifyUrl: song.spotifyUrl,
+            onOpenLyrics:
+                song.hasLyrics ? () => _openLyrics(context, song) : null,
           ),
-        ],
+        ),
       ],
-    );
-  }
-}
-
-class _PrepItem {
-  const _PrepItem({
-    required this.icon,
-    required this.label,
-    required this.status,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String status;
-  final VoidCallback? onTap;
-}
-
-class _PrepTile extends StatelessWidget {
-  const _PrepTile({required this.item});
-
-  final _PrepItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final available = item.onTap != null;
-    final muted = scheme.onSurfaceVariant;
-
-    return AppCard(
-      onTap: item.onTap,
-      // Sem nada para abrir, o ladrilho afunda na página: sem borda e sem
-      // seta, lê-se como vaga, não como botão que não responde.
-      surface: available ? CardSurface.plain : CardSurface.sunken,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(
-                item.icon,
-                size: 22,
-                color: available ? scheme.primary : muted,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: available ? scheme.onSurface : muted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.status,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
-                ),
-              ),
-              if (available)
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: muted.withValues(alpha: 0.7),
-                ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -797,7 +466,7 @@ class SongLyricsScreen extends StatelessWidget {
             IconButton(
               tooltip: 'Abrir no site',
               icon: const Icon(Icons.open_in_new_rounded),
-              onPressed: () => _openLink(context, url!.trim()),
+              onPressed: () => openResourceLink(context, url!),
             ),
         ],
       ),
@@ -814,7 +483,7 @@ class SongLyricsScreen extends StatelessWidget {
             children: [
               Text(_displayTitle(song), style: theme.textTheme.headlineMedium),
               const SizedBox(height: AppSpacing.xs),
-              _ArtistLine(song: song),
+              SmallCapsLine(song.subtitle),
               const SizedBox(height: AppSpacing.lg),
               Divider(height: 1, color: scheme.outlineVariant),
               const SizedBox(height: AppSpacing.lg),

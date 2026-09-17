@@ -15,6 +15,7 @@ import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
+import '../../../shared/widgets/greeting_header.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../team/data/team_repository.dart';
@@ -67,6 +68,11 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   String? _teamKey;
   int _upcomingCount = 6;
   AgendaFilter _filter = AgendaFilter.all;
+
+  /// As datas sem escala abertas embaixo do resumo. Começam recolhidas: são
+  /// planejamento, e a lista inteira empurrava "Próximos compromissos" para
+  /// longe.
+  bool _openDatesExpanded = false;
 
   void _select(DateTime day) => setState(() {
         _selected = day;
@@ -160,9 +166,9 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       for (final entry in groups.entries) entry.key: entry.value.length,
     };
     final selectedRows = groups[dateKey(selected)] ?? const <AgendaEntry>[];
-    final dayHasAny =
-        (groupAgendaRows(allEntries)[dateKey(selected)] ?? const <AgendaEntry>[])
-            .isNotEmpty;
+    final dayHasAny = (groupAgendaRows(allEntries)[dateKey(selected)] ??
+            const <AgendaEntry>[])
+        .isNotEmpty;
     final selectedIds = {for (final row in selectedRows) row.rowId};
 
     // As próximas, sem repetir o que já está na lista do dia. A ordem é a das
@@ -238,13 +244,10 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           onToday: () => _select(today),
           legend: _filter.isMine ? 'Seus compromissos' : 'Com compromisso',
         ),
-        if (monthIncomplete)
-          const Padding(
-            padding: EdgeInsets.all(AppSpacing.sm),
-            child:
-                Text('Este mês pode ter escalas fora do período disponível.'),
-          )
-        else if (allLoaded && !monthHasEntries)
+        // Mês que a consulta não cobre inteiro fica calado: dizer "pode ter
+        // escalas fora do período disponível" era expor o limite da API a
+        // quem só queria ver o mês. O vazio só é afirmado quando é verdade.
+        if (!monthIncomplete && allLoaded && !monthHasEntries)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.sm),
             child: Text(
@@ -270,9 +273,6 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       }
       return AppGroup(
         title: _dayLabel(selected, today),
-        subtitle: dayIncomplete
-            ? 'A consulta disponível não cobre este dia por completo.'
-            : null,
         // Sem ação própria: criar evento saiu daqui e entrou no menu do botão
         // **Nova**, junto de criar escala. Eram dois pontos de partida para a
         // mesma intenção ("quero marcar alguma coisa"), em dois cantos da
@@ -320,195 +320,206 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       body: SafeArea(
         bottom: false,
         child: AppContentWidth.wide(
-          child: RefreshIndicator(
-            onRefresh: () => _refresh(teamId),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // A largura de que a **lista** dispõe, e não a da janela: é o
-                // mesmo número com que a Home vira a linha em colunas.
-                final wide = constraints.maxWidth >= 880;
-                final desktop =
-                    AppBreakpoints.fromWidth(constraints.maxWidth).isDesktop;
+          child: Column(
+            children: [
+              // O mesmo cabeçalho da Home ([TabHeader]): muda só o título. Com
+              // mouse, atualizar e criar sobem para cá; no celular há o gesto
+              // de puxar e o botão flutuante.
+              TabHeader(
+                title: 'Agenda',
+                teamName: team.name,
+                activeTeamId: teamId,
+                showTeamSwitcher: !janelaLarga,
+                teams: [
+                  for (final item in auth.teams)
+                    (id: item.teamId, name: item.name),
+                ],
+                onTeamChanged: (id) =>
+                    ref.read(activeTeamIdProvider.notifier).select(id),
+                trailing: [
+                  if (janelaLarga)
+                    IconButton(
+                      tooltip: 'Atualizar agenda',
+                      onPressed: () => _refresh(teamId),
+                      icon: const Icon(Icons.refresh_rounded),
+                    ),
+                  if (team.canManage && janelaLarga)
+                    IconButton.filled(
+                      tooltip: 'Criar escala ou evento',
+                      onPressed: create,
+                      icon: const Icon(Icons.add_rounded),
+                    ),
+                ],
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => _refresh(teamId),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // A largura de que a **lista** dispõe, e não a da janela: é o
+                      // mesmo número com que a Home vira a linha em colunas.
+                      final wide = constraints.maxWidth >= 880;
+                      final desktop =
+                          AppBreakpoints.fromWidth(constraints.maxWidth)
+                              .isDesktop;
 
-                return ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    // Espaço para o botão flutuante não cobrir a última linha.
-                    // Sem ele (monitor), o rodapé volta ao normal.
-                    fab ? AppSpacing.xxxl * 2 : AppSpacing.xxl,
-                  ),
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Agenda',
-                                style: theme.textTheme.headlineSmall,
-                              ),
-                              Text(
-                                team.name,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.screenPadding,
+                          0,
+                          AppSpacing.screenPadding,
+                          // Espaço para o botão flutuante não cobrir a última linha.
+                          // Sem ele (monitor), o rodapé volta ao normal.
+                          fab ? AppSpacing.fabClearance : AppSpacing.xxl,
                         ),
-                        if (auth.teams.length > 1)
-                          PopupMenuButton<String>(
-                            tooltip: 'Trocar equipe',
-                            initialValue: teamId,
-                            onSelected: (id) => ref
-                                .read(activeTeamIdProvider.notifier)
-                                .select(id),
-                            icon: const Icon(Icons.unfold_more_rounded),
-                            itemBuilder: (_) => [
-                              for (final item in auth.teams)
-                                CheckedPopupMenuItem(
-                                  value: item.teamId,
-                                  checked: item.teamId == teamId,
-                                  child: Text(item.name),
+                        children: [
+                          const AppUpdateBanner(),
+                          if (cacheDates.isNotEmpty) ...[
+                            CacheStampBanner(cachedAt: cacheDates.first),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          // O recorte fica **acima** do calendário porque manda nele
+                          // também: em "Minhas escalas" os pontos do mês passam a ser
+                          // os dias em que você toca, que é a pergunta que traz a
+                          // pessoa a esta tela.
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: wide ? 420 : double.infinity,
+                            ),
+                            child: AppChoiceBar<AgendaFilter>(
+                              value: _filter,
+                              onChanged: _changeFilter,
+                              options: const [
+                                AppChoice(
+                                  value: AgendaFilter.all,
+                                  label: 'Todas',
                                 ),
-                            ],
+                                AppChoice(
+                                  value: AgendaFilter.mine,
+                                  label: 'Minhas escalas',
+                                  icon: Icons.star_rounded,
+                                ),
+                              ],
+                            ),
                           ),
-                        IconButton(
-                          tooltip: 'Atualizar agenda',
-                          onPressed: () => _refresh(teamId),
-                          icon: const Icon(Icons.refresh_rounded),
-                        ),
-                        if (team.canManage && janelaLarga)
-                          IconButton.filled(
-                            tooltip: 'Criar escala ou evento',
-                            onPressed: create,
-                            icon: const Icon(Icons.add_rounded),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const AppUpdateBanner(),
-                    if (cacheDates.isNotEmpty) ...[
-                      CacheStampBanner(cachedAt: cacheDates.first),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                    // O recorte fica **acima** do calendário porque manda nele
-                    // também: em "Minhas escalas" os pontos do mês passam a ser
-                    // os dias em que você toca, que é a pergunta que traz a
-                    // pessoa a esta tela.
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: wide ? 420 : double.infinity,
-                      ),
-                      child: AppChoiceBar<AgendaFilter>(
-                        value: _filter,
-                        onChanged: _changeFilter,
-                        options: const [
-                          AppChoice(value: AgendaFilter.all, label: 'Todas'),
-                          AppChoice(
-                            value: AgendaFilter.mine,
-                            label: 'Minhas escalas',
-                            icon: Icons.star_rounded,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (!allLoaded)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: Text(
-                          'Os indicadores do calendário aparecem conforme as '
-                          'escalas carregam.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    if (desktop)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: calendar),
-                          const SizedBox(width: AppSpacing.xl),
-                          // Meia largura: a linha em colunas precisa dos 880px
-                          // inteiros, e aqui ela tem metade.
-                          Expanded(child: daySection(wide: false)),
-                        ],
-                      )
-                    else ...[
-                      calendar,
-                      const SizedBox(height: AppSpacing.lg),
-                      daySection(wide: wide),
-                    ],
-                    if (past.hasError &&
-                        !past.hasValue &&
-                        !selected.isBefore(today))
-                      _AgendaError(
-                        error: past.error!,
-                        message:
-                            'Não foi possível carregar as escalas passadas.',
-                        onRetry: () => _refresh(teamId),
-                      ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (upcoming.isLoading && !upcoming.hasValue)
-                      const _AgendaLoading()
-                    else if (upcoming.hasError && !upcoming.hasValue)
-                      _AgendaError(
-                        error: upcoming.error!,
-                        onRetry: () => _refresh(teamId),
-                      )
-                    else
-                      // O mesmo bloco da Home, com a mesma linha de escala. O
-                      // título diz "compromissos" e não "escalas" porque aqui
-                      // a lista tem as duas coisas -- e prometer só escala
-                      // faria a reunião de quinta parecer uma delas.
-                      AppGroup(
-                        title: 'Próximos compromissos',
-                        dividerIndent: AppGroup.textIndent,
-                        children: [
-                          if (nextRows.isEmpty)
-                            AppGroupRow(
-                              title: _filter.isMine
-                                  ? 'Nada seu por perto.'
-                                  : 'Nada mais marcado por perto.',
-                              showChevron: false,
+                          const SizedBox(height: AppSpacing.lg),
+                          if (desktop)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: calendar),
+                                const SizedBox(width: AppSpacing.xl),
+                                // Meia largura: a linha em colunas precisa dos 880px
+                                // inteiros, e aqui ela tem metade.
+                                Expanded(child: daySection(wide: false)),
+                              ],
                             )
                           else ...[
-                            for (final row in nextRows.take(_upcomingCount))
-                              _agendaRow(
-                                row,
-                                prefixo: 'upcoming',
-                                canManage: team.canManage,
-                                membershipId: team.membershipId,
+                            calendar,
+                            const SizedBox(height: AppSpacing.lg),
+                            daySection(wide: wide),
+                          ],
+                          // **Planejamento perto do topo, e recolhido.** As datas da
+                          // grade sem escala moravam no fim da tela, depois de todos
+                          // os próximos compromissos — justamente a informação que
+                          // pede providência de quem lidera. Aqui ela é uma linha
+                          // que conta, e a lista abre ao tocar.
+                          if (planningDates.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            AppGroup(
+                              children: [
+                                AppGroupRow(
+                                  icon: Icons.event_repeat_rounded,
+                                  title: planningDates.length == 1
+                                      ? '1 data sem escala'
+                                      : '${planningDates.length} datas sem escala',
+                                  subtitle:
+                                      'Pela grade de cultos, nas próximas '
+                                      '$openDatesWeeks semanas',
+                                  trailing: Icon(
+                                    _openDatesExpanded
+                                        ? Icons.expand_less_rounded
+                                        : Icons.expand_more_rounded,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  onTap: () => setState(
+                                    () => _openDatesExpanded =
+                                        !_openDatesExpanded,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_openDatesExpanded) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              AgendaOpenDates(
+                                teamId: teamId,
+                                dates: planningDates,
                                 wide: wide,
                               ),
-                            if (nextRows.length > _upcomingCount)
-                              AppGroupRow(
-                                icon: Icons.expand_more_rounded,
-                                title: 'Ver mais',
-                                showChevron: false,
-                                onTap: () =>
-                                    setState(() => _upcomingCount += 6),
-                              ),
+                            ],
                           ],
+                          if (past.hasError &&
+                              !past.hasValue &&
+                              !selected.isBefore(today))
+                            _AgendaError(
+                              error: past.error!,
+                              message:
+                                  'Não foi possível carregar as escalas passadas.',
+                              onRetry: () => _refresh(teamId),
+                            ),
+                          const SizedBox(height: AppSpacing.xl),
+                          if (upcoming.isLoading && !upcoming.hasValue)
+                            const _AgendaLoading()
+                          else if (upcoming.hasError && !upcoming.hasValue)
+                            _AgendaError(
+                              error: upcoming.error!,
+                              onRetry: () => _refresh(teamId),
+                            )
+                          else
+                            // O mesmo bloco da Home, com a mesma linha de escala. O
+                            // título diz "compromissos" e não "escalas" porque aqui
+                            // a lista tem as duas coisas -- e prometer só escala
+                            // faria a reunião de quinta parecer uma delas.
+                            AppGroup(
+                              title: 'Próximos compromissos',
+                              dividerIndent: AppGroup.textIndent,
+                              children: [
+                                if (nextRows.isEmpty)
+                                  AppGroupRow(
+                                    title: _filter.isMine
+                                        ? 'Nada seu por perto.'
+                                        : 'Nada mais marcado por perto.',
+                                    showChevron: false,
+                                  )
+                                else ...[
+                                  for (final row
+                                      in nextRows.take(_upcomingCount))
+                                    _agendaRow(
+                                      row,
+                                      prefixo: 'upcoming',
+                                      canManage: team.canManage,
+                                      membershipId: team.membershipId,
+                                      wide: wide,
+                                    ),
+                                  if (nextRows.length > _upcomingCount)
+                                    AppGroupRow(
+                                      icon: Icons.expand_more_rounded,
+                                      title: 'Ver mais',
+                                      showChevron: false,
+                                      onTap: () =>
+                                          setState(() => _upcomingCount += 6),
+                                    ),
+                                ],
+                              ],
+                            ),
                         ],
-                      ),
-                    if (planningDates.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      AgendaOpenDates(
-                        teamId: teamId,
-                        dates: planningDates,
-                        wide: wide,
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -696,9 +707,12 @@ Widget _emptyDayRow({
   required bool canManage,
   required VoidCallback onCreate,
 }) {
+  // A consulta não cobre o dia inteiro: dizer "nada marcado" poderia esconder
+  // uma escala que existe. A frase é a de uma falha, com a saída dela.
   if (dayIncomplete) {
     return const AppGroupRow(
-      title: 'Sem escalas nos dados disponíveis.',
+      title: 'Não carregou tudo deste dia.',
+      subtitle: 'Puxe a tela para baixo para atualizar.',
       showChevron: false,
     );
   }

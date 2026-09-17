@@ -240,7 +240,7 @@ void main() {
     expect(find.text('Nada marcado para este dia.'), findsNothing);
     expect(find.text('Nenhum compromisso neste mês.'), findsNothing);
     expect(
-      find.text('Sem escalas nos dados disponíveis.'),
+      find.text('Não carregou tudo deste dia.'),
       findsOneWidget,
     );
     expect(find.textContaining('Sem conexão.'), findsOneWidget);

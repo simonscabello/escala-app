@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
@@ -48,9 +50,20 @@ class _ServiceDraft {
   TimeOfDay time;
   final String? templateId;
 
-  String get timeLabel =>
-      '${time.hour.toString().padLeft(2, '0')}:'
+  String get timeLabel => '${time.hour.toString().padLeft(2, '0')}:'
       '${time.minute.toString().padLeft(2, '0')}';
+}
+
+/// Em que dia é o ensaio, em relação à escala.
+enum _RehearsalDay {
+  none('Sem ensaio'),
+  sameDay('No dia'),
+  dayBefore('Véspera'),
+  other('Outro dia…');
+
+  const _RehearsalDay(this.label);
+
+  final String label;
 }
 
 class EventFormScreen extends ConsumerStatefulWidget {
@@ -229,17 +242,25 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
         (_services.isEmpty || _services.every((s) => s.templateId != null));
 
     setState(() {
-      _date = newDate;
-      if (replaceable) _services = suggestion;
-      if (_rehearsalAt != null) {
+      // O ensaio acompanha a escala **mantendo a distância**: o da véspera
+      // continua na véspera do dia novo. Antes ele caía no mesmo dia da escala
+      // nova, qualquer que fosse o combinado.
+      final rehearsal = _rehearsalAt;
+      if (rehearsal != null) {
+        final offset = DateTime(rehearsal.year, rehearsal.month, rehearsal.day)
+            .difference(_date)
+            .inDays;
+        final day = newDate.add(Duration(days: offset));
         _rehearsalAt = DateTime(
-          newDate.year,
-          newDate.month,
-          newDate.day,
-          _rehearsalAt!.hour,
-          _rehearsalAt!.minute,
+          day.year,
+          day.month,
+          day.day,
+          rehearsal.hour,
+          rehearsal.minute,
         );
       }
+      _date = newDate;
+      if (replaceable) _services = suggestion;
     });
   }
 
@@ -270,11 +291,12 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   }
 
   Future<void> _addService() async {
-    final draft = await showModalBottomSheet<_ServiceDraft>(
+    final draft = await showAdaptiveSheet<_ServiceDraft>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => const _ExtraServiceSheet(),
+      maxWidth: 480,
+      builder: (_) => const _ExtraServiceSheet(
+        suggestions: serviceNamePresets,
+      ),
     );
     if (draft == null || !mounted) return;
     setState(() {
@@ -284,6 +306,53 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
   }
 
   static int _minutes(TimeOfDay time) => time.hour * 60 + time.minute;
+
+  /// Em que dia é o ensaio, em relação à escala.
+  _RehearsalDay get _rehearsalDay {
+    final rehearsal = _rehearsalAt;
+    if (rehearsal == null) return _RehearsalDay.none;
+    final offset = DateTime(rehearsal.year, rehearsal.month, rehearsal.day)
+        .difference(_date)
+        .inDays;
+    return switch (offset) {
+      0 => _RehearsalDay.sameDay,
+      -1 => _RehearsalDay.dayBefore,
+      _ => _RehearsalDay.other,
+    };
+  }
+
+  /// O ensaio é quase sempre no dia ou na véspera, e o formulário pedia um
+  /// calendário e depois um relógio para dizer isso. Agora é um chip e a hora.
+  Future<void> _chooseRehearsal(_RehearsalDay day) async {
+    switch (day) {
+      case _RehearsalDay.none:
+        setState(() => _rehearsalAt = null);
+      case _RehearsalDay.sameDay:
+      case _RehearsalDay.dayBefore:
+        final base = day == _RehearsalDay.sameDay
+            ? _date
+            : _date.subtract(const Duration(days: 1));
+        final time = await showQuarterHourPicker(
+          context: context,
+          initialTime: _rehearsalAt == null
+              ? const TimeOfDay(hour: 19, minute: 0)
+              : TimeOfDay.fromDateTime(_rehearsalAt!),
+          title: 'Horário do ensaio',
+        );
+        if (time == null || !mounted) return;
+        setState(() {
+          _rehearsalAt = DateTime(
+            base.year,
+            base.month,
+            base.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      case _RehearsalDay.other:
+        await _pickRehearsal();
+    }
+  }
 
   Future<void> _pickRehearsal() async {
     final current = _rehearsalAt ?? _date;
@@ -298,7 +367,9 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
 
     final time = await showQuarterHourPicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(current),
+      initialTime: _rehearsalAt == null
+          ? const TimeOfDay(hour: 19, minute: 0)
+          : TimeOfDay.fromDateTime(current),
       title: 'Horário do ensaio',
     );
     if (time == null || !mounted) return;
@@ -307,6 +378,19 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       _rehearsalAt =
           DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
+  }
+
+  /// "19:00" no dia da escala; "sáb 19:00" em outro dia — o mesmo formato do
+  /// detalhe da escala. Longe da semana da escala, a data vai junto.
+  String _rehearsalLabel(DateTime rehearsal) {
+    final hora = DateFormat('HH:mm', 'pt_BR').format(rehearsal);
+    final dia =
+        DateFormat('EEE', 'pt_BR').format(rehearsal).replaceAll('.', '');
+    return switch (_rehearsalDay) {
+      _RehearsalDay.sameDay => hora,
+      _RehearsalDay.dayBefore => '$dia $hora',
+      _ => '$dia ${DateFormat('d/M', 'pt_BR').format(rehearsal)} $hora',
+    };
   }
 
   DateTime _toUtc(DateTime dateTime, String timezone) {
@@ -519,22 +603,33 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar escala' : 'Nova escala'),
       ),
-      title: _isEditing ? 'Editar escala' : 'Nova escala',
-      subtitle: 'Escolha o dia e os cultos desta escala.',
+      // O botão fica preso embaixo: com "Informações adicionais" aberta o
+      // formulário rola mais de uma tela, e "Criar escala" ficava longe.
+      bottomAction: AppSubmitButton(
+        label: _isEditing ? 'Salvar' : 'Criar escala',
+        loading: _loading,
+        onPressed: _submit,
+      ),
       children: [
         Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SectionHeader(
-                title: 'Dia',
-                padding: EdgeInsets.only(bottom: AppSpacing.sm),
-              ),
-              _DateButton(
-                date: _date,
+              AppPickerField(
+                label: 'Dia',
+                icon: Icons.calendar_today_outlined,
+                // O ano só quando não é o atual, como no resto do app.
+                value: capitalizeWeekday(
+                  DateFormat(
+                    _date.year == DateTime.now().year
+                        ? "EEEE, d 'de' MMMM"
+                        : "EEEE, d 'de' MMMM 'de' y",
+                    'pt_BR',
+                  ).format(_date),
+                ),
                 enabled: !_loading,
-                onPressed: () => _pickDate(templates),
+                onTap: () => _pickDate(templates),
               ),
               const SizedBox(height: AppSpacing.xl),
               _ServicesSection(
@@ -548,34 +643,33 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
                 onAdd: _addService,
               ),
               const SizedBox(height: AppSpacing.xl),
-              SectionHeader(
-                title: 'Ensaio (opcional)',
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                trailing: _rehearsalAt == null
-                    ? null
-                    : IconButton(
-                        tooltip: 'Limpar ensaio',
-                        onPressed: _loading
-                            ? null
-                            : () => setState(() => _rehearsalAt = null),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
+              const SectionHeader(
+                title: 'Ensaio',
+                padding: EdgeInsets.only(bottom: AppSpacing.sm),
               ),
-              if (_rehearsalAt == null)
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : _pickRehearsal,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Adicionar ensaio'),
-                )
-              else
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : _pickRehearsal,
-                  icon: const Icon(Icons.schedule_outlined, size: 18),
-                  label: Text(
-                    DateFormat("d 'de' MMMM 'às' HH:mm", 'pt_BR')
-                        .format(_rehearsalAt!),
-                  ),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (final day in _RehearsalDay.values)
+                    ChoiceChip(
+                      label: Text(day.label),
+                      selected: _rehearsalDay == day,
+                      onSelected:
+                          _loading ? null : (_) => _chooseRehearsal(day),
+                    ),
+                ],
+              ),
+              if (_rehearsalAt != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppPickerField(
+                  label: 'Horário do ensaio',
+                  icon: Icons.schedule_outlined,
+                  value: _rehearsalLabel(_rehearsalAt!),
+                  enabled: !_loading,
+                  onTap: () => _chooseRehearsal(_rehearsalDay),
                 ),
+              ],
               const SizedBox(height: AppSpacing.xl),
               _RepertoireModeSection(
                 mode: _repertoireMode,
@@ -652,13 +746,10 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
-        if (_error != null) FormErrorBanner(message: _error!),
-        AppSubmitButton(
-          label: _isEditing ? 'Salvar' : 'Criar escala',
-          loading: _loading,
-          onPressed: _submit,
-        ),
+        if (_error != null) ...[
+          const SizedBox(height: AppSpacing.xl),
+          FormErrorBanner(message: _error!),
+        ],
       ],
     );
   }
@@ -835,49 +926,6 @@ class _AdditionalInfoSection extends StatelessWidget {
   }
 }
 
-class _DateButton extends StatelessWidget {
-  const _DateButton({
-    required this.date,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final DateTime date;
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: enabled ? onPressed : null,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.calendar_today_outlined, size: 18),
-          const SizedBox(width: AppSpacing.sm),
-          // `scaleDown` em vez de quebrar: num Galaxy S23 com a fonte do
-          // sistema aumentada, o ano ia para a linha de baixo.
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                capitalizeWeekday(
-                  DateFormat("EEEE, d 'de' MMMM 'de' y", 'pt_BR').format(date),
-                ),
-                maxLines: 1,
-                softWrap: false,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Os cultos desta escala.
 ///
 /// Vêm marcados a partir da grade da igreja: escolhida a data, os cultos
@@ -908,24 +956,22 @@ class _ServicesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final hasGradeForDay =
-        templates.any((t) => t.matchesDate(date));
+    final hasGradeForDay = templates.any((t) => t.matchesDate(date));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Enquanto a grade carrega não se afirma nada sobre ela: "Não há grade
+        // para este dia" aparecia por um instante e logo dava lugar ao culto
+        // que existia, como se a tela tivesse mudado de ideia.
         SectionHeader(
           title: 'Cultos',
-          subtitle: hasGradeForDay
-              ? 'Vieram da grade da igreja. Remova o que não vai ter.'
-              : 'Não há grade para este dia da semana. Adicione o horário.',
-          trailing: services.isEmpty
+          subtitle: loadingTemplates
               ? null
-              : AppBadge(
-                  label: services.length == 1
-                      ? '1 culto'
-                      : '${services.length} cultos',
-                ),
+              : hasGradeForDay
+                  ? 'Vieram da grade da igreja. Remova o que não vai ter.'
+                  : 'Não há grade para este dia da semana. Adicione o horário.',
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         ),
         if (loadingTemplates)
           const Padding(
@@ -939,13 +985,9 @@ class _ServicesSection extends StatelessWidget {
             ),
           )
         else if (services.isEmpty)
-          Container(
+          AppCard(
+            surface: CardSurface.sunken,
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: scheme.outlineVariant),
-            ),
             child: Text(
               'Nenhum culto nesta escala.',
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -954,16 +996,28 @@ class _ServicesSection extends StatelessWidget {
             ),
           )
         else
-          for (var i = 0; i < services.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _ServiceRow(
-                service: services[i],
-                enabled: enabled,
-                onPickTime: () => onPickTime(i),
-                onRemove: () => onRemove(i),
-              ),
+          // Uma superfície para os cultos, e não uma caixa com borda para
+          // cada um: são as linhas de uma lista só.
+          AppCard(
+            child: Column(
+              children: [
+                for (var i = 0; i < services.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      indent: AppSpacing.lg,
+                      color: scheme.outlineVariant,
+                    ),
+                  _ServiceRow(
+                    service: services[i],
+                    enabled: enabled,
+                    onPickTime: () => onPickTime(i),
+                    onRemove: () => onRemove(i),
+                  ),
+                ],
+              ],
             ),
+          ),
         const SizedBox(height: AppSpacing.xs),
         Align(
           alignment: Alignment.centerLeft,
@@ -996,21 +1050,16 @@ class _ServiceRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Container(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: scheme.outlineVariant),
+        AppSpacing.lg,
+        AppSpacing.xs,
+        AppSpacing.xs,
+        AppSpacing.xs,
       ),
       child: Row(
         children: [
-          Icon(Icons.church_rounded, size: 18, color: scheme.primary),
+          Icon(Icons.church_rounded, size: 18, color: scheme.onSurfaceVariant),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -1026,7 +1075,6 @@ class _ServiceRow extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Remover culto',
-            visualDensity: VisualDensity.compact,
             onPressed: enabled ? onRemove : null,
             icon: Icon(
               Icons.close_rounded,
@@ -1041,8 +1089,13 @@ class _ServiceRow extends StatelessWidget {
 }
 
 /// Culto fora da grade: Páscoa, vigília, culto especial.
+///
+/// O nome vem sugerido em chips — os nomes da grade e os especiais que se
+/// repetem —, e o campo continua aceitando qualquer outro.
 class _ExtraServiceSheet extends StatefulWidget {
-  const _ExtraServiceSheet();
+  const _ExtraServiceSheet({required this.suggestions});
+
+  final List<String> suggestions;
 
   @override
   State<_ExtraServiceSheet> createState() => _ExtraServiceSheetState();
@@ -1064,7 +1117,7 @@ class _ExtraServiceSheetState extends State<_ExtraServiceSheet> {
     final theme = Theme.of(context);
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.xl,
           0,
@@ -1084,9 +1137,24 @@ class _ExtraServiceSheetState extends State<_ExtraServiceSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+            ListenableBuilder(
+              listenable: _label,
+              builder: (context, _) => Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (final name in widget.suggestions)
+                    ChoiceChip(
+                      label: Text(name),
+                      selected: _label.text.trim() == name,
+                      onSelected: (_) => _label.text = name,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _label,
-              autofocus: true,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Nome',
@@ -1094,8 +1162,12 @@ class _ExtraServiceSheetState extends State<_ExtraServiceSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            OutlinedButton.icon(
-              onPressed: () async {
+            AppPickerField(
+              label: 'Horário',
+              icon: Icons.schedule_outlined,
+              value: '${_time.hour.toString().padLeft(2, '0')}:'
+                  '${_time.minute.toString().padLeft(2, '0')}',
+              onTap: () async {
                 final picked = await showQuarterHourPicker(
                   context: context,
                   initialTime: _time,
@@ -1103,11 +1175,6 @@ class _ExtraServiceSheetState extends State<_ExtraServiceSheet> {
                 );
                 if (picked != null) setState(() => _time = picked);
               },
-              icon: const Icon(Icons.schedule_outlined, size: 18),
-              label: Text(
-                '${_time.hour.toString().padLeft(2, '0')}:'
-                '${_time.minute.toString().padLeft(2, '0')}',
-              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),

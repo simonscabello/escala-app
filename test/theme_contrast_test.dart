@@ -127,6 +127,25 @@ void main() {
         expectContrast('outline/página', s.outline, s.surface, 3);
       });
 
+      test('o bloco rebaixado existe e o texto dele se lê', () {
+        final fundo = AppColors.sunken(s);
+        expectContrast(
+          'texto de apoio no bloco',
+          s.onSurfaceVariant,
+          fundo,
+          4.5,
+        );
+        if (s.brightness == Brightness.light) {
+          // No claro ele era 1,08:1 contra a página, e o bloco sumia.
+          final separacao = ratio(fundo, s.surface);
+          expect(
+            separacao,
+            greaterThanOrEqualTo(1.1),
+            reason: 'separação bloco/página: ${separacao.toStringAsFixed(3)}:1',
+          );
+        }
+      });
+
       test('o cartão se distingue da página sem depender da borda', () {
         // Sutil por natureza -- não é texto, e um degrau forte demais viraria
         // listra. O que não pode é ser a mesma cor: o par anterior dava

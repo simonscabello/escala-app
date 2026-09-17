@@ -7,6 +7,7 @@ import 'package:louvor_app/features/events/presentation/setlist_form_screen.dart
 import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
+import 'package:louvor_app/shared/widgets/app_badge.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
 /// O momento do culto na tela de montar o repertório.
@@ -86,7 +87,7 @@ void main() {
 
     // A linha de apoio dela é só o tom. Nada de "—" nem de "Sem momento": a
     // maioria das músicas de uma escala é assim.
-    expect(find.text('Tom A'), findsOneWidget);
+    expect(find.widgetWithText(AppBadge, 'A'), findsOneWidget);
     expect(find.textContaining('Sem momento'), findsNothing);
   });
 

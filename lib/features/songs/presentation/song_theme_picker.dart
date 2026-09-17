@@ -316,10 +316,16 @@ class SongThemeFilterBar extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
+    this.showTrigger = true,
   });
 
   final Set<String> selected;
   final ValueChanged<Set<String>> onChanged;
+
+  /// O chip "Temas" no começo da faixa. Sai quando quem chama já tem o
+  /// [SongThemeFilterButton] ao lado das abas, e a faixa serve só para mostrar
+  /// e tirar os temas escolhidos.
+  final bool showTrigger;
 
   Future<void> _open(BuildContext context) async {
     final escolha = await showSongThemePicker(context, selected: selected);
@@ -335,18 +341,22 @@ class SongThemeFilterBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ActionChip(
-            avatar: const Icon(Icons.sell_outlined, size: 18),
-            label: Text(
-              selected.isEmpty ? 'Temas' : 'Temas (${selected.length})',
+          if (showTrigger)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: ActionChip(
+                avatar: const Icon(Icons.sell_outlined, size: 18),
+                label: Text(
+                  selected.isEmpty ? 'Temas' : 'Temas (${selected.length})',
+                ),
+                tooltip: 'Filtrar por tema',
+                onPressed: () => _open(context),
+              ),
             ),
-            tooltip: 'Filtrar por tema',
-            onPressed: () => _open(context),
-          ),
           for (final tema in songThemeValues)
             if (selected.contains(tema))
               Padding(
-                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
                 child: InputChip(
                   label: Text(songThemeLabel(tema)),
                   selected: true,
@@ -396,6 +406,42 @@ class SongThemeChips extends StatelessWidget {
                   onPressed: onTap,
                 ),
       ],
+    );
+  }
+}
+
+/// O filtro de temas como botão, ao lado das abas.
+///
+/// Um ícone com a contagem, e não o chip "Temas": num celular de 360px as abas
+/// "Cânticos · Hinos · Novas" ocupam quase a linha inteira, e o chip não
+/// cabia ao lado delas — ele ficava sozinho numa terceira faixa de controles
+/// antes da primeira música.
+class SongThemeFilterButton extends StatelessWidget {
+  const SongThemeFilterButton({
+    super.key,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final Set<String> selected;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: selected.isEmpty
+          ? 'Filtrar por tema'
+          : 'Filtrar por tema (${selected.length} escolhidos)',
+      isSelected: selected.isNotEmpty,
+      onPressed: () async {
+        final escolha = await showSongThemePicker(context, selected: selected);
+        if (escolha != null) onChanged(escolha);
+      },
+      icon: Badge(
+        isLabelVisible: selected.isNotEmpty,
+        label: Text('${selected.length}'),
+        child: const Icon(Icons.sell_outlined),
+      ),
     );
   }
 }

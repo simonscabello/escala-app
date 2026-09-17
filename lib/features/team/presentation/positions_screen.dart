@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/position_icon.dart';
-import '../../../shared/widgets/section_header.dart';
 import '../data/team_repository.dart';
 import '../domain/team_models.dart';
 
@@ -76,10 +78,9 @@ class PositionsScreen extends ConsumerWidget {
     WidgetRef ref, {
     Position? position,
   }) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAdaptiveSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 480,
       builder: (_) => _PositionEditorSheet(teamId: teamId, position: position),
     );
     if (saved == true) {
@@ -116,10 +117,10 @@ class _PositionList extends StatelessWidget {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
+        AppSpacing.screenPadding,
         AppSpacing.lg,
-        AppSpacing.xl,
-        96,
+        AppSpacing.screenPadding,
+        AppSpacing.fabClearance,
       ),
       children: [
         Text(
@@ -142,8 +143,7 @@ class _PositionList extends StatelessWidget {
               child: Column(
                 children: [
                   for (var i = 0; i < byCategory[category]!.length; i++) ...[
-                    if (i > 0)
-                      Divider(color: scheme.outlineVariant, height: 1),
+                    if (i > 0) Divider(color: scheme.outlineVariant, height: 1),
                     _PositionRow(
                       teamId: teamId,
                       position: byCategory[category]![i],
@@ -157,11 +157,31 @@ class _PositionList extends StatelessWidget {
           ],
         if (inactive.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
-          const SectionHeader(
-            title: 'Desativadas',
-            subtitle: 'Não aparecem ao escalar. As escalas antigas que as '
-                'usaram continuam como estão.',
-            padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          // No mesmo desenho dos cabeçalhos de categoria acima: era um
+          // cabeçalho de seção, maior e mais claro, e parecia outro assunto.
+          Padding(
+            padding: const EdgeInsets.only(
+              left: AppSpacing.xs,
+              bottom: AppSpacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Desativadas',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  'Não aparecem ao escalar. As escalas antigas que as usaram '
+                  'continuam como estão.',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
           AppCard(
             surface: CardSurface.sunken,
@@ -205,7 +225,10 @@ class _CategoryHeader extends StatelessWidget {
         children: [
           Text(
             info?.label ?? category,
-            style: theme.textTheme.titleSmall?.copyWith(color: scheme.primary),
+            // Cinza, como os cabeçalhos de grupo do resto do app.
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -239,78 +262,53 @@ class _PositionRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Opacity(
-      opacity: position.isActive ? 1 : 0.6,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        onTap: onEdit,
-        leading: PositionIcon(
+    // Só o ícone e o nome ficam apagados. Com a linha inteira a 60%, o
+    // "Reativar" — a única ação da desativada — perdia contraste junto,
+    // principalmente no tema escuro.
+    Widget faded(Widget child) =>
+        position.isActive ? child : Opacity(opacity: 0.6, child: child);
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      onTap: onEdit,
+      leading: faded(
+        PositionIcon(
           position.name,
           category: position.category,
           size: 18,
         ),
-        title: Text(position.name),
-        trailing: position.isActive
-            ? IconButton(
-                tooltip: 'Desativar',
-                icon: Icon(
-                  Icons.visibility_off_outlined,
-                  color: scheme.onSurfaceVariant,
-                ),
-                onPressed: () => _confirmDeactivate(context, ref),
-              )
-            : TextButton(
-                onPressed: () => _reactivate(context, ref),
-                child: const Text('Reativar'),
-              ),
       ),
+      title: faded(Text(position.name)),
+      // Sem o "olho cortado" em toda linha: desativar é raro e mora na folha
+      // de edição. Na desativada, "Reativar" continua à mão — é a única coisa
+      // que se faz com ela.
+      trailing: position.isActive
+          ? Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+            )
+          : TextButton(
+              style: AppButtonStyles.compactText,
+              onPressed: () => _reactivate(context, ref),
+              child: const Text('Reativar'),
+            ),
     );
   }
 
-  Future<void> _confirmDeactivate(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Desativar ${position.name}?',
-      message: 'Ela some da tela de escalar e do cadastro de integrantes. As '
-          'escalas que já a usaram continuam como estão, e dá para reativar '
-          'depois.',
-      confirmLabel: 'Desativar',
-    );
-    if (!confirmed || !context.mounted) return;
-
-    await _run(
-      context,
-      ref,
-      () => ref
-          .read(teamRepositoryProvider)
-          .deactivatePosition(teamId, position.id),
-      done: '${position.name} foi desativada.',
-    );
-  }
-
-  Future<void> _reactivate(BuildContext context, WidgetRef ref) {
-    return _run(
-      context,
-      ref,
-      () => ref
-          .read(teamRepositoryProvider)
-          .updatePosition(teamId, position.id, isActive: true),
-      done: '${position.name} voltou para a lista.',
-    );
-  }
-
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    Future<void> Function() action, {
-    required String done,
-  }) async {
+  Future<void> _reactivate(BuildContext context, WidgetRef ref) async {
     try {
-      await action();
+      await ref
+          .read(teamRepositoryProvider)
+          .updatePosition(teamId, position.id, isActive: true);
       ref.invalidate(allPositionsProvider(teamId));
       ref.invalidate(positionsProvider(teamId));
       if (context.mounted) {
-        showAppSnackBar(context, done, tone: AppTone.success);
+        showAppSnackBar(
+          context,
+          '${position.name} voltou para a lista.',
+          tone: AppTone.success,
+        );
       }
     } on ApiException catch (error) {
       if (context.mounted) {
@@ -383,13 +381,47 @@ class _PositionEditorSheetState extends ConsumerState<_PositionEditorSheet> {
     }
   }
 
+  Future<void> _deactivate() async {
+    final position = widget.position!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Desativar ${position.name}?',
+      message: 'Ela some da tela de escalar e do cadastro de integrantes. As '
+          'escalas que já a usaram continuam como estão, e dá para reativar '
+          'depois.',
+      confirmLabel: 'Desativar',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(teamRepositoryProvider)
+          .deactivatePosition(widget.teamId, position.id);
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        '${position.name} foi desativada.',
+        tone: AppTone.success,
+      );
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.xl,
           0,
@@ -452,11 +484,10 @@ class _PositionEditorSheetState extends ConsumerState<_PositionEditorSheet> {
             ),
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
-              Text(
-                _error!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.error,
-                ),
+              AppNotice(
+                tone: AppTone.danger,
+                message: _error!,
+                liveRegion: true,
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
@@ -465,6 +496,14 @@ class _PositionEditorSheetState extends ConsumerState<_PositionEditorSheet> {
               loading: _saving,
               onPressed: _save,
             ),
+            if (_isEditing && widget.position!.isActive) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton(
+                onPressed: _saving ? null : _deactivate,
+                style: TextButton.styleFrom(foregroundColor: scheme.error),
+                child: const Text('Desativar função'),
+              ),
+            ],
           ],
         ),
       ),

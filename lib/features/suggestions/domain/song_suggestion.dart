@@ -130,6 +130,14 @@ class SongSuggestion {
 
   bool get isForRepertoire => targetDate == null;
 
+  /// Ficou sem resposta e o dia dela já passou.
+  ///
+  /// O servidor já a manda para as encerradas; a tela precisa saber também,
+  /// senão a lista a mostra sem selo nenhum e o detalhe ainda oferece
+  /// "Aceitar" para um domingo que acabou.
+  bool isExpiredOn(DateTime today) =>
+      status.isPending && targetDate != null && targetDate!.isBefore(today);
+
   /// Dá para pôr direto no culto? Sem cadastro, não há o que selecionar.
   bool get canGoToSetlist => songId != null;
 

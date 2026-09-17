@@ -57,9 +57,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return FormScaffold(
-      appBar: AppBar(title: const Text('Cadastro')),
+      appBar: AppBar(title: const Text('Criar conta')),
       showBrand: true,
-      title: 'Criar conta',
       subtitle: 'Leva menos de um minuto.',
       children: [
         Form(
@@ -96,9 +95,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 decoration: InputDecoration(
                   labelText: 'Senha',
                   helperText: 'Ao menos 8 caracteres',
+                  // Com descrição, como no login: sem ela o leitor de tela
+                  // anunciava só "botão".
                   suffixIcon: IconButton(
+                    tooltip: _obscure ? 'Mostrar senha' : 'Ocultar senha',
                     icon: Icon(
-                      _obscure ? Icons.visibility_off : Icons.visibility,
+                      _obscure
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                     ),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),

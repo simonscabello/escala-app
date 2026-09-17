@@ -23,6 +23,22 @@ String formatEventWeekdayDate(DateTime utc, String timezone) {
   return _capitalize(DateFormat(pattern, 'pt_BR').format(localTime));
 }
 
+/// "21 de setembro" — a data **sem** o dia da semana.
+///
+/// Para as linhas que já abrem com o bloco de data ("DOM 21"): ali o dia da
+/// semana e o número já estão escritos, e repeti-los por extenso ao lado
+/// ("Domingo, 21 de setembro") era dizer a mesma coisa duas vezes na mesma
+/// linha. O ano só aparece quando difere do atual, como em
+/// [formatEventWeekdayDate].
+String formatEventDayMonth(DateTime utc, String timezone) {
+  final location = tz.getLocation(timezone);
+  final localTime = tz.TZDateTime.from(utc, location);
+  final now = tz.TZDateTime.now(location);
+  final pattern =
+      localTime.year == now.year ? "d 'de' MMMM" : "d 'de' MMMM 'de' y";
+  return DateFormat(pattern, 'pt_BR').format(localTime);
+}
+
 /// O pt_BR devolve o dia da semana em minúscula; exposto para outros pontos
 /// que formatam data por conta própria usarem a mesma regra.
 String capitalizeWeekday(String value) {

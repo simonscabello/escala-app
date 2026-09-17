@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_spacing.dart';
 import 'app_pressable.dart';
@@ -71,12 +72,30 @@ class AppCard extends StatelessWidget {
         : color ??
             switch (surface) {
               CardSurface.plain => scheme.surfaceContainerLowest,
-              CardSurface.sunken => scheme.surfaceContainerLow,
+              CardSurface.sunken => AppColors.sunken(scheme),
               CardSurface.floating => scheme.surfaceContainerLowest,
             };
 
-    final content =
+    final padded =
         padding == null ? child : Padding(padding: padding!, child: child);
+
+    // No claro o bloco rebaixado é um tom abaixo da página ([AppColors.sunken]),
+    // e o botão tonal ("Montar repertório", "Pôr no culto") tem quase esse
+    // mesmo tom: dentro dele o botão perdia a forma. Aqui dentro ele fica
+    // branco, como a superfície do cartão — o mesmo degrau que tem sobre a
+    // página.
+    final content = surface == CardSurface.sunken &&
+            color == null &&
+            scheme.brightness == Brightness.light
+        ? Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: scheme.copyWith(
+                secondaryContainer: scheme.surfaceContainerLowest,
+              ),
+            ),
+            child: padded,
+          )
+        : padded;
 
     return Container(
       margin: margin ?? EdgeInsets.zero,

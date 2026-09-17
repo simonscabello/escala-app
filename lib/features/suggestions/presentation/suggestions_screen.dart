@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
-import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../songs/presentation/song_resources.dart';
 import '../data/suggestion_repository.dart';
 import '../domain/song_suggestion.dart';
 import 'suggest_song_sheet.dart';
@@ -18,18 +22,14 @@ import 'suggestion_detail_screen.dart';
 
 /// As sugestões da equipe.
 ///
-/// **Para todo mundo, e não só para quem lidera.** Quem sugeriu precisa ver o
-/// que aconteceu com a sugestão dele — inclusive o "por enquanto não" e o
-/// motivo, quando houver. Foi por não enxergar isso que o Repertório já esteve
-/// escondido atrás da engrenagem de Gerenciar equipe.
+/// **A lista é índice; o detalhe é onde se decide.** Nenhum botão aqui: decidir
+/// de raspão numa lista é decidir sem ler o motivo.
 ///
-/// **A lista é índice, não é o conteúdo.** O cartão nasceu mostrando a
-/// justificativa inteira e as duas decisões do líder; com dezenas de sugestões
-/// numa equipe ativa, cada uma ocupava meia tela e encontrar a de hoje virava
-/// rolagem. Agora a linha responde só "qual música, para quando, de quem, e
-/// tem material?" — o resto mora na tela de detalhes, que é onde também ficam
-/// as decisões. Ler a lista e decidir uma sugestão passaram a ser dois gestos
-/// diferentes, e é assim que a página densa deixa de ser perigosa.
+/// **Agrupada por destino.** A pergunta de quem lidera é "o que pediram para
+/// este domingo?", e a data vinha numa etiqueta repetida em cada cartão — um
+/// cartão por sugestão, com borda própria. Agora a data é o título do grupo
+/// ("Domingo, 21 de setembro", "Para o repertório") e as sugestões são linhas
+/// de uma superfície só.
 class SuggestionsScreen extends ConsumerStatefulWidget {
   const SuggestionsScreen({super.key, required this.teamId});
 
@@ -97,25 +97,40 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   ),
                   data: (list) {
                     if (list.isEmpty) return _vazio();
+                    final grupos = groupSuggestionsByTarget(
+                      list,
+                      newestFirst: _scope == SuggestionScope.closed,
+                    );
 
                     return RefreshIndicator(
                       onRefresh: () async =>
                           ref.refresh(suggestionsProvider(query).future),
-                      child: ListView.builder(
+                      child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.listPadding,
-                          0,
-                          AppSpacing.listPadding,
-                          96,
+                          AppSpacing.screenPadding,
+                          AppSpacing.sm,
+                          AppSpacing.screenPadding,
+                          AppSpacing.fabClearance,
                         ),
-                        itemCount: list.length,
-                        itemBuilder: (_, index) => SuggestionCard(
-                          suggestion: list[index],
-                          teamId: widget.teamId,
-                          isMine: list[index].createdBy.membershipId ==
-                              team?.membershipId,
-                        ),
+                        children: [
+                          for (var i = 0; i < grupos.length; i++) ...[
+                            if (i > 0) const SizedBox(height: AppSpacing.xl),
+                            AppGroup(
+                              title: grupos[i].title,
+                              dividerIndent: AppGroup.textIndent,
+                              children: [
+                                for (final item in grupos[i].items)
+                                  SuggestionRow(
+                                    suggestion: item,
+                                    teamId: widget.teamId,
+                                    isMine: item.createdBy.membershipId ==
+                                        team?.membershipId,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     );
                   },
@@ -137,27 +152,73 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             'aparecem aqui.',
       );
     }
-    return AppEmptyState(
+    // Sem botão próprio: o flutuante "Sugerir" já está na tela, e dois
+    // botões para a mesma ação fazem a pessoa procurar a diferença.
+    return const AppEmptyState(
       icon: Icons.lightbulb_outline_rounded,
       title: 'Nenhuma sugestão por enquanto',
       message: 'Qualquer pessoa da equipe pode sugerir uma música para o '
-          'repertório ou para um domingo.',
-      actionLabel: 'Sugerir uma música',
-      onAction: () => showSuggestSongSheet(context, teamId: widget.teamId),
+          'repertório ou para um domingo. Toque em "Sugerir".',
     );
   }
 }
 
-/// Uma linha da lista. **Índice, não resumo executivo.**
+/// Um grupo da lista: o destino e as sugestões dele.
+typedef SuggestionGroup = ({String title, List<SongSuggestion> items});
+
+/// Agrupa as sugestões pelo destino: uma data por grupo, e "Para o repertório"
+/// por último.
 ///
-/// Quatro fatos e nada mais: qual música, para quando, por que (a primeira
-/// linha do motivo), quem pediu — e uns pontinhos dizendo que há cifra, áudio
-/// ou vídeo esperando do outro lado. O cartão inteiro é o toque; não há botão
-/// nenhum aqui, de propósito: decisão que se toma de raspão numa lista é
-/// decisão que se toma sem ler o motivo, e o motivo é a razão de o campo ser
-/// obrigatório.
-class SuggestionCard extends StatelessWidget {
-  const SuggestionCard({
+/// Nas abertas, a data mais próxima primeiro — é o domingo que o líder está
+/// montando. Nas encerradas, a mais recente primeiro. Dentro de cada grupo, a
+/// ordem que o servidor mandou.
+List<SuggestionGroup> groupSuggestionsByTarget(
+  List<SongSuggestion> suggestions, {
+  bool newestFirst = false,
+  DateTime? now,
+}) {
+  final porData = <DateTime, List<SongSuggestion>>{};
+  final repertorio = <SongSuggestion>[];
+
+  for (final item in suggestions) {
+    final data = item.targetDate;
+    if (data == null) {
+      repertorio.add(item);
+    } else {
+      final dia = DateTime(data.year, data.month, data.day);
+      porData.putIfAbsent(dia, () => []).add(item);
+    }
+  }
+
+  final crescente = porData.keys.toList()..sort();
+  final datas = newestFirst ? crescente.reversed.toList() : crescente;
+  final anoAtual = (now ?? DateTime.now()).year;
+
+  return [
+    for (final data in datas)
+      (
+        title: suggestionTargetLabel(data, currentYear: anoAtual),
+        items: porData[data]!
+      ),
+    if (repertorio.isNotEmpty) (title: 'Para o repertório', items: repertorio),
+  ];
+}
+
+/// "Domingo, 21 de setembro" (com o ano quando não é o atual).
+String suggestionTargetLabel(DateTime date, {required int currentYear}) {
+  final pattern = date.year == currentYear
+      ? "EEEE, d 'de' MMMM"
+      : "EEEE, d 'de' MMMM 'de' y";
+  final texto = DateFormat(pattern, 'pt_BR').format(date);
+  return texto.isEmpty ? texto : texto[0].toUpperCase() + texto.substring(1);
+}
+
+/// Uma sugestão como linha: título, motivo cortado, quem pediu.
+///
+/// Sem data: o grupo em que ela está já diz para quando. Sem botão: o toque
+/// abre o detalhe, onde se lê o motivo inteiro antes de decidir.
+class SuggestionRow extends StatelessWidget {
+  const SuggestionRow({
     super.key,
     required this.suggestion,
     required this.teamId,
@@ -174,104 +235,83 @@ class SuggestionCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final s = suggestion;
 
-    return AppCard(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      // Mais apertado que o cartão de leitura: vertical menor porque são
-      // quatro linhas curtas, horizontal cheio porque o `Clip.antiAlias` do
-      // canto arredondado come a primeira letra de quem encosta na borda.
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
+    return AppPressable(
       onTap: () => openSuggestionDetail(
         context,
         teamId: teamId,
         suggestion: s,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  s.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              // Para quando. Em primeiro plano porque é o que muda a urgência:
-              // domingo marcado corre contra o relógio, repertório espera.
-              AppBadge(
-                label: s.isForRepertoire
-                    ? 'Repertório'
-                    : _dataCurta(s.targetDate!),
-                icon: s.isForRepertoire
-                    ? Icons.library_music_outlined
-                    : Icons.event_rounded,
-                tone: s.isForRepertoire ? AppTone.neutral : AppTone.primary,
-              ),
-            ],
-          ),
-          if ((s.artist ?? '').isNotEmpty)
-            Text(
-              s.artist!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          const SizedBox(height: AppSpacing.xs),
-          // Uma linha só. O motivo inteiro é o conteúdo da sugestão e continua
-          // inteiro — na tela de detalhes. Aqui ele é a isca que faz abrir.
-          Text(
-            s.reason,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              AppAvatar(
-                name: s.createdBy.displayName,
-                imageUrl: s.createdBy.avatarUrl,
-                radius: 9,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: Text(
-                  _assinatura(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (s.artist ?? '').isEmpty
+                        ? s.title
+                        : '${s.title} · ${s.artist}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    s.reason,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      AppAvatar(
+                        name: s.createdBy.displayName,
+                        imageUrl: s.createdBy.avatarUrl,
+                        radius: 9,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          _assinatura(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      SuggestionMaterialDots(materials: s.materials),
+                      if (s.status.isResolved || s.isExpiredOn(today())) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        _selo(),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              // Os materiais como pontinhos, e não como botões: aqui eles só
-              // respondem "tem o que ouvir e o que ler?". Quem abre são os
-              // botões da tela de detalhes.
-              SuggestionMaterialDots(materials: s.materials),
-              if (s.status.isResolved) ...[
-                const SizedBox(width: AppSpacing.xs),
-                _selo(),
-              ],
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// Quem resolveu **não** aparece: recusa com o nome do líder do lado azeda a
-  /// equipe. O selo diz o quê, não quem.
   Widget _selo() => switch (suggestion.status) {
         SuggestionStatus.accepted => const AppBadge(
             label: 'Aceita',
@@ -282,25 +322,29 @@ class SuggestionCard extends StatelessWidget {
             label: 'Recusada',
             tone: AppTone.neutral,
           ),
-        SuggestionStatus.pending => const SizedBox.shrink(),
+        // Só chega aqui a que venceu sem resposta (ver `isExpiredOn`).
+        SuggestionStatus.pending => const AppBadge(
+            label: 'Sem resposta',
+            tone: AppTone.neutral,
+          ),
       };
 
   String _assinatura() {
     final quem = isMine ? 'Você' : suggestion.createdBy.displayName;
     final outros = suggestion.alsoSuggestedBy;
-    // Repetida é sinal, não erro. Na lista vira contagem: o nome de cada um
-    // não caberia numa linha, e o que o líder usa para priorizar é o número.
     if (outros.isEmpty) return quem;
-    return '$quem · +${outros.length} ${outros.length == 1 ? 'pessoa' : 'pessoas'}';
+    // "+1", e não "+1 pessoa": ao lado dos materiais e do selo, a palavra
+    // saía cortada ("Maria · +1 pess…") num celular de 375px. O nome de quem
+    // mais sugeriu está no detalhe.
+    return '$quem +${outros.length}';
   }
 }
 
-/// Os pontinhos de material. Ícones miúdos e apagados, sem rótulo.
+/// Quais materiais a sugestão trouxe, em ícones miúdos — os mesmos ícones de
+/// recurso das músicas.
 ///
-/// Vive aqui e não na tela de detalhes porque é a **lista** que precisa dizer
-/// muito em pouco espaço; no detalhe os mesmos materiais viram botões com
-/// nome. Cada ícone leva o rótulo no leitor de tela: sem isso a informação
-/// existiria só para quem enxerga.
+/// Só os que existem: link que ninguém mandou não vira ícone apagado, seria
+/// promessa falsa.
 class SuggestionMaterialDots extends StatelessWidget {
   const SuggestionMaterialDots({super.key, required this.materials});
 
@@ -332,17 +376,8 @@ class SuggestionMaterialDots extends StatelessWidget {
   }
 }
 
-/// O ícone de cada material, num lugar só: a lista e o detalhe mostram o mesmo
-/// desenho para a mesma coisa.
 IconData suggestionMaterialIcon(SuggestionMaterialKind kind) => switch (kind) {
-      SuggestionMaterialKind.lyrics => Icons.article_outlined,
-      SuggestionMaterialKind.spotify => Icons.headphones_rounded,
-      SuggestionMaterialKind.youtube => Icons.play_circle_outline_rounded,
+      SuggestionMaterialKind.lyrics => SongResourceIcons.lyrics,
+      SuggestionMaterialKind.spotify => SongResourceIcons.spotify,
+      SuggestionMaterialKind.youtube => SongResourceIcons.youtube,
     };
-
-const _meses = [
-  'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
-  'jul', 'ago', 'set', 'out', 'nov', 'dez',
-];
-
-String _dataCurta(DateTime date) => '${date.day} ${_meses[date.month - 1]}';

@@ -7,6 +7,7 @@ import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
+import 'package:louvor_app/features/songs/presentation/song_resources.dart';
 import 'package:louvor_app/features/suggestions/presentation/suggestion_detail_screen.dart';
 
 /// A tela de detalhes da sugestão.
@@ -144,7 +145,8 @@ void main() {
     await _montar(tester, suggestion: _sugestao());
 
     expect(find.text('Bondade de Deus'), findsOneWidget);
-    expect(find.text('Isaías Saad'), findsOneWidget);
+    // Em versalete, como na tela da música; o leitor de tela ouve o nome.
+    expect(find.text('ISAÍAS SAAD'), findsOneWidget);
     // O motivo é o conteúdo da sugestão: aqui ele não é cortado.
     expect(
       find.textContaining('exatamente do que o pastor tem pregado'),
@@ -154,22 +156,23 @@ void main() {
     expect(find.text('Para o repertório'), findsOneWidget);
   });
 
-  testWidgets('só os links que existem viram botão', (tester) async {
+  testWidgets('só os links que existem viram ladrilho', (tester) async {
     await _montar(
       tester,
       suggestion: _sugestao(youtubeUrl: 'https://youtu.be/x'),
     );
 
-    expect(find.widgetWithText(ActionChip, 'Letra ou cifra'), findsOneWidget);
-    expect(find.widgetWithText(ActionChip, 'YouTube'), findsOneWidget);
-    // Link que ninguém mandou não vira botão apagado: promessa falsa.
-    expect(find.widgetWithText(ActionChip, 'Spotify'), findsNothing);
+    expect(find.byType(SongResourceRow), findsOneWidget);
+    expect(find.text('Letra ou cifra'), findsOneWidget);
+    expect(find.text('YouTube'), findsOneWidget);
+    // Link que ninguém mandou não vira ladrilho apagado: promessa falsa.
+    expect(find.text('Spotify'), findsNothing);
   });
 
   testWidgets('sem link nenhum, a faixa de materiais some', (tester) async {
     await _montar(tester, suggestion: _sugestao(lyricsUrl: null));
 
-    expect(find.byType(ActionChip), findsNothing);
+    expect(find.byType(SongResourceRow), findsNothing);
   });
 
   testWidgets('as decisões são de quem lidera', (tester) async {
@@ -246,7 +249,8 @@ void main() {
     await _montar(
       tester,
       suggestion: _sugestao(
-        targetDate: '2026-09-13',
+        // Uma data que não vence: a de um domingo passado some com os botões.
+        targetDate: '2099-09-13',
         spotifyUrl: 'https://open.spotify.com/track/x',
         youtubeUrl: 'https://youtu.be/x',
         alsoSuggestedBy: const ['Ana', 'João', 'Pedro'],
@@ -267,6 +271,19 @@ void main() {
     expect(find.text('Aceitar sugestão'), findsOneWidget);
     expect(find.text('Recusar'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('domingo que já passou não oferece aceitar nem recusar',
+      (tester) async {
+    await _montar(tester, suggestion: _sugestao(targetDate: '2020-01-05'));
+
+    await tester.scrollUntilVisible(
+      find.textContaining('já passou'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Aceitar sugestão'), findsNothing);
+    expect(find.text('Recusar'), findsNothing);
   });
 
   testWidgets('quem resolveu não aparece; quem mais sugeriu, sim',

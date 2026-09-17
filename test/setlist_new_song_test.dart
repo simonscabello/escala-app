@@ -8,6 +8,7 @@ import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/songs/presentation/musical_key_picker.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
+import 'package:louvor_app/shared/widgets/app_badge.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
 /// A etiqueta "Nova" na tela de montar o repertório.
@@ -114,6 +115,7 @@ void main() {
     await tester.tap(find.text('Aplicar'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Tom D'), findsOneWidget);
+    // O tom desta escala vira a etiqueta à direita da linha.
+    expect(find.widgetWithText(AppBadge, 'D'), findsOneWidget);
   });
 }

@@ -57,7 +57,8 @@ class HomeQuickAccess extends ConsumerWidget {
         ? ref.watch(openSuggestionCountProvider(teamId)).valueOrNull ?? 0
         : 0;
     // Para a equipe inteira: estudar a música nova é de quem canta.
-    final learning = ref.watch(learningSongsProvider(teamId)).valueOrNull?.length;
+    final learning =
+        ref.watch(learningSongsProvider(teamId)).valueOrNull?.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -76,25 +77,29 @@ class HomeQuickAccess extends ConsumerWidget {
             // monitor sugere, e é a largura daqui que decide se quatro
             // ladrilhos cabem.
             final quatroEmLinha = constraints.maxWidth >= 640;
+            // Em 2×2 o ícone sobe para cima do nome: ao lado dele, sobravam
+            // ~100px para o texto, e "disponibilidade" — uma palavra só, que
+            // não quebra — saía cortada em "disponibilida…" num celular de
+            // 375px. Em cima, o nome tem a largura inteira do ladrilho.
+            final empilhado = !quatroEmLinha;
 
             final repertorio = _QuickCard(
               icon: Icons.library_music_rounded,
               title: 'Repertório',
-              subtitle: 'Cânticos e hinos',
+              stacked: empilhado,
               onTap: () => context.push('/equipe/musicas'),
             );
             final novas = _QuickCard(
               icon: Icons.headphones_rounded,
               title: 'Músicas novas',
+              stacked: empilhado,
               subtitle: learningShortcutSubtitle(learning),
               onTap: () => context.push('/equipe/musicas?aba=novas'),
             );
             final sugestoes = _QuickCard(
               icon: Icons.lightbulb_rounded,
               title: 'Sugestões',
-              // Quem responde as sugestões e quem as faz não abrem esta tela
-              // pelo mesmo motivo: uma legenda só serviria a metade da equipe.
-              subtitle: canManage ? 'Ideias da equipe' : 'Peça uma música',
+              stacked: empilhado,
               badge: pending == 0
                   ? null
                   : AppBadge(
@@ -110,7 +115,7 @@ class HomeQuickAccess extends ConsumerWidget {
             final disponibilidade = _QuickCard(
               icon: Icons.event_busy_rounded,
               title: 'Minha disponibilidade',
-              subtitle: 'Avise quando não puder',
+              stacked: empilhado,
               onTap: () => context.push('/disponibilidade'),
             );
 
@@ -149,71 +154,91 @@ class HomeQuickAccess extends ConsumerWidget {
   }
 }
 
-/// Um atalho: ícone, nome, uma linha do que há lá dentro.
+/// Um atalho: ícone, nome e, quando há o que contar, uma linha que conta.
 ///
-/// O ícone fica no ladrilho tingido — é a exceção que o app se permite fora da
-/// manchete, e ela se paga aqui: são objetos do mesmo tamanho lado a lado, e é
-/// a cor que os distingue antes de o texto ser lido.
+/// **Baixo, e sem quadrado colorido atrás do ícone.** O ladrilho tinha ~124px
+/// de altura, com o ícone num quadrado lavanda e uma legenda fixa ("Cânticos e
+/// hinos", "Avise quando não puder") que não dizia nada que o nome já não
+/// dissesse. Quatro deles ocupavam mais que a manchete. A legenda ficou só
+/// onde ela muda — "3 para estudar" —, e o selo de sugestões continua.
 class _QuickCard extends StatelessWidget {
   const _QuickCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.onTap,
+    this.subtitle,
     this.badge,
+    this.stacked = false,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback onTap;
   final Widget? badge;
+
+  /// Ícone em cima do nome, e não ao lado.
+  final bool stacked;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
+    final texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall,
+          // Duas linhas, e não reticências: "Minha disponibilidade"
+          // cortada em "Minha disponibi…" não se lê.
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (subtitle != null)
+          Text(
+            subtitle!,
+            style: theme.textTheme.bodySmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    );
+
     return AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: Icon(icon, size: 20, color: scheme.onPrimaryContainer),
-              ),
-              const Spacer(),
-              if (badge != null) badge!,
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            style: theme.textTheme.titleSmall,
-            // Duas linhas, e não reticências: "Minha disponibilidade" cortada
-            // em "Minha disponibi…" num ladrilho de meia tela não se lê.
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
       ),
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 22, color: scheme.primary),
+                    const Spacer(),
+                    if (badge != null) badge!,
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                texts,
+              ],
+            )
+          : Row(
+              children: [
+                Icon(icon, size: 22, color: scheme.primary),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: texts),
+                if (badge != null) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  badge!,
+                ],
+              ],
+            ),
     );
   }
 }

@@ -1,12 +1,9 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/date/civil_date.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/app_card.dart';
-import '../domain/event_datetime.dart';
+import '../../../shared/widgets/app_month_grid.dart';
 
 /// Calendário de consulta, independente dos modelos de escala e de Riverpod.
 /// Segue a semana e as cores do seletor de indisponibilidade; aqui o passado
@@ -67,15 +64,12 @@ class AgendaCalendar extends StatelessWidget {
   /// Acima disto a contagem some do desenho e fica só na leitura de tela e na
   /// lista do dia: três domingos de vigília não precisam de sete riscos de
   /// 4px para dizer "tem bastante coisa aqui".
-  static const int maxMarks = 3;
+  static const int maxMarks = AppMonthGrid.maxMarks;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final leading = DateTime(month.year, month.month).weekday % 7;
-    final count = DateTime(month.year, month.month + 1, 0).day;
-    final rows = ((leading + count) / 7).ceil();
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -107,65 +101,21 @@ class AgendaCalendar extends StatelessWidget {
               ),
             ],
           ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // Em celulares muito estreitos, conserva o alvo de toque sem
-              // diminuir a fonte escolhida pelo usuário.
-              final width = math.max(constraints.maxWidth, 7 * 44.0);
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: width,
-                  child: Table(
-                    children: [
-                      TableRow(
-                        children: [
-                          for (final label in [
-                            'D',
-                            'S',
-                            'T',
-                            'Q',
-                            'Q',
-                            'S',
-                            'S',
-                          ])
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.sm,
-                              ),
-                              child: ExcludeSemantics(
-                                child: Text(
-                                  label,
-                                  textAlign: TextAlign.center,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      for (var row = 0; row < rows; row++)
-                        TableRow(
-                          children: [
-                            for (var col = 0; col < 7; col++)
-                              if (row * 7 + col < leading ||
-                                  row * 7 + col >= leading + count)
-                                const SizedBox.shrink()
-                              else
-                                _day(
-                                  context,
-                                  DateTime(
-                                    month.year,
-                                    month.month,
-                                    row * 7 + col - leading + 1,
-                                  ),
-                                ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
+          AppMonthGrid(
+            month: month,
+            today: today,
+            keyPrefix: 'agenda-day-',
+            onTap: onSelected,
+            describe: (day) {
+              final count = markedDays[dateKey(day)] ?? 0;
+              return AppMonthDay(
+                selected: dateKey(day) == dateKey(selectedDay),
+                marks: count,
+                detail: count == 0
+                    ? null
+                    : count == 1
+                        ? '1 compromisso'
+                        : '$count compromissos',
               );
             },
           ),
@@ -173,13 +123,7 @@ class AgendaCalendar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Row(
               children: [
-                // A legenda mostra o **mesmo** desenho do dia marcado, em
-                // miniatura: um ponto solto ao lado de "Com compromisso"
-                // mandava procurar no mês uma coisa que não está lá.
-                _LegendChip(
-                  background: scheme.primaryContainer,
-                  foreground: scheme.onPrimaryContainer,
-                ),
+                const AppDayLegendChip(),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -194,153 +138,6 @@ class AgendaCalendar extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _day(BuildContext context, DateTime day) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final selected = dateKey(day) == dateKey(selectedDay);
-    final isToday = dateKey(day) == dateKey(today);
-    final count = markedDays[dateKey(day)] ?? 0;
-    final marked = count > 0;
-
-    // Fundo cheio para o selecionado, fundo claro para o dia que tem algo,
-    // nada para o resto. São três superfícies distintas, e é delas que vem a
-    // leitura de relance -- o traço embaixo confirma e conta.
-    final background = selected
-        ? scheme.primary
-        : marked
-            ? scheme.primaryContainer
-            : Colors.transparent;
-    final foreground = selected
-        ? scheme.onPrimary
-        : marked
-            ? scheme.onPrimaryContainer
-            : scheme.onSurface;
-
-    return Semantics(
-      key: ValueKey('agenda-day-${dateKey(day)}'),
-      button: true,
-      selected: selected,
-      label:
-          '${capitalizeWeekday(DateFormat("EEEE, d 'de' MMMM 'de' y", 'pt_BR').format(day))}'
-          '${isToday ? ', hoje' : ''}'
-          '${marked ? ', ${_countLabel(count)}' : ''}',
-      excludeSemantics: true,
-      child: Padding(
-        padding: const EdgeInsets.all(1),
-        child: Material(
-          color: background,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-            // Hoje é uma **moldura**, e continua sendo nos quatro estados: é o
-            // único sinal que não disputa com o fundo, e sem ele o dia de hoje
-            // desapareceria dentro de um mês cheio de dias pintados.
-            side: isToday
-                ? BorderSide(
-                    color: selected ? scheme.onPrimary : scheme.primary,
-                    width: 2,
-                  )
-                : BorderSide.none,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => onSelected(day),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${day.day}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: foreground,
-                        fontWeight: selected || isToday || marked
-                            ? FontWeight.w700
-                            : FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    // O espaço é reservado mesmo vazio: sem isto a grade
-                    // sacode meio pixel entre um mês com compromissos e outro
-                    // sem.
-                    SizedBox(
-                      height: 4,
-                      child: marked
-                          ? _DayMarks(count: count, color: foreground)
-                          : null,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _countLabel(int count) => count == 1
-      ? '1 compromisso'
-      : '$count compromissos';
-}
-
-/// Os traços embaixo do número: um por compromisso, até [AgendaCalendar.maxMarks].
-///
-/// Traço e não ponto porque ele é mais largo que alto, e é essa proporção que
-/// o faz aparecer num quadrado de 44px sem virar uma bolinha disputando espaço
-/// com o número.
-class _DayMarks extends StatelessWidget {
-  const _DayMarks({required this.count, required this.color});
-
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final marks = count.clamp(1, AgendaCalendar.maxMarks);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < marks; i++) ...[
-          if (i > 0) const SizedBox(width: 3),
-          Container(
-            width: 6,
-            height: 4,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// O dia marcado em miniatura, para a legenda.
-class _LegendChip extends StatelessWidget {
-  const _LegendChip({required this.background, required this.foreground});
-
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
-      ),
-      alignment: Alignment.center,
-      child: _DayMarks(count: 1, color: foreground),
     );
   }
 }

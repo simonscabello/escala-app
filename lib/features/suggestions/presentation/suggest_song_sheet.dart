@@ -10,6 +10,9 @@ import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../events/data/event_repository.dart';
+import '../../events/domain/event_datetime.dart';
+import '../../events/domain/event_models.dart';
 import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../data/suggestion_repository.dart';
@@ -37,8 +40,10 @@ Future<bool> showSuggestSongSheet(
 /// Sugerir uma música para a equipe.
 ///
 /// Três decisões numa tela só: **qual música**, **quando** (opcional) e **por
-/// quê** (obrigatório). A ordem importa — a pergunta do porquê muda conforme a
-/// data, então ela vem por último.
+/// quê** (obrigatório), nesta ordem — a pergunta do porquê muda conforme a
+/// data. Os links de onde encontrar a música vêm **depois**, recolhidos: são
+/// opcionais, e na frente da justificativa eles empurravam o único campo
+/// obrigatório para baixo de três campos de endereço.
 class SuggestSongSheet extends ConsumerStatefulWidget {
   const SuggestSongSheet({
     super.key,
@@ -82,6 +87,11 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   bool _searched = false;
 
   DateTime? _date;
+
+  /// Os campos de link abertos. Começam fechados: são opcionais, e quando a
+  /// música vem do repertório nem aparecem (os links dela já estão lá).
+  bool _linksOpen = false;
+
   bool _sending = false;
   String? _error;
 
@@ -269,18 +279,19 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-
           if (!_escolhida) ..._buscaDeMusica(theme) else _escolhaFeita(theme),
-
           if (_escolhida) ...[
-            const SizedBox(height: AppSpacing.lg),
-            _blocoLinks(theme),
             const SizedBox(height: AppSpacing.lg),
             _blocoData(theme),
             const SizedBox(height: AppSpacing.lg),
             _blocoJustificativa(theme),
+            // A música do repertório já tem os links dela, e eles vão junto
+            // sem ninguém precisar ver os campos.
+            if (_song == null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _blocoLinks(theme),
+            ],
           ],
-
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -289,7 +300,6 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
                   ?.copyWith(color: theme.colorScheme.error),
             ),
           ],
-
           if (_escolhida) ...[
             const SizedBox(height: AppSpacing.xl),
             AppSubmitButton(
@@ -328,50 +338,28 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         ),
       if (_results.isNotEmpty) ...[
         _rotulo(theme, 'No repertório da equipe'),
-        ..._results.take(6).map(
-              (song) => AppCard(
-                margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                onTap: () => setState(() {
-                  _song = song;
-                  _preencherLinks(song);
-                }),
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(song.title),
-                  subtitle: Text(song.subtitle),
-                  trailing: const Icon(Icons.add_rounded),
-                ),
-              ),
-            ),
+        for (final song in _results.take(6))
+          _ResultRow(
+            title: song.title,
+            subtitle: song.subtitle,
+            onTap: () => setState(() {
+              _song = song;
+              _preencherLinks(song);
+            }),
+          ),
         const SizedBox(height: AppSpacing.md),
       ],
       if (_externalResults.isNotEmpty) ...[
         _rotulo(theme, 'No Spotify'),
-        ..._externalResults.take(6).map(
-              (candidate) => AppCard(
-                margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                // O Spotify já entrega a URL: gravá-la sozinha é o que
-                // separa "a equipe ouviu" de "a equipe leu um título".
-                onTap: () => setState(() {
-                  _external = candidate;
-                  _spotifyController.text = candidate.spotifyUrl;
-                }),
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(candidate.title),
-                  subtitle: Text(candidate.artist),
-                  trailing: const Icon(Icons.add_rounded),
-                ),
-              ),
-            ),
+        for (final candidate in _externalResults.take(6))
+          _ResultRow(
+            title: candidate.title,
+            subtitle: candidate.artist,
+            onTap: () => setState(() {
+              _external = candidate;
+              _spotifyController.text = candidate.spotifyUrl;
+            }),
+          ),
         const SizedBox(height: AppSpacing.md),
       ],
       // A porta de saída existe desde o começo, e não só depois de a busca
@@ -480,6 +468,27 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
   /// foi exigida de música fora do repertório e era o degrau que fazia a
   /// pessoa sair da tela atrás de um link e não voltar.
   Widget _blocoLinks(ThemeData theme) {
+    final preenchidos = [
+      if (_lyricsController.text.trim().isNotEmpty) 'letra ou cifra',
+      if (_spotifyController.text.trim().isNotEmpty) 'Spotify',
+      if (_youtubeController.text.trim().isNotEmpty) 'YouTube',
+    ];
+
+    if (!_linksOpen) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _linksOpen = true),
+          icon: const Icon(Icons.link_rounded, size: 18),
+          label: Text(
+            preenchidos.isEmpty
+                ? 'Adicionar links (opcional)'
+                : 'Links: ${preenchidos.join(', ')}',
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -521,38 +530,81 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
     );
   }
 
+  /// Para quando: chips com as próximas datas, e não um interruptor que abre
+  /// um calendário.
+  ///
+  /// As datas possíveis são conhecidas — as próximas escalas da equipe, que a
+  /// agenda já carregou. Sem elas (carregando, ou equipe sem escala marcada),
+  /// ficam os próximos domingos. "Outra data…" continua abrindo o calendário
+  /// para o culto especial.
   Widget _blocoData(ThemeData theme) {
+    final hoje = DateTime.now();
+    final inicioDeHoje = DateTime(hoje.year, hoje.month, hoje.day);
+    final escalas = ref
+            .watch(eventsProvider((widget.teamId, 'upcoming')))
+            .valueOrNull
+            ?.data ??
+        const <Event>[];
+
+    final proximas = <DateTime>[];
+    for (final escala in escalas) {
+      final local = eventLocalTime(
+        escala.startsAt,
+        escala.timezone.isEmpty ? 'America/Sao_Paulo' : escala.timezone,
+      );
+      final dia = DateTime(local.year, local.month, local.day);
+      if (dia.isBefore(inicioDeHoje) || proximas.contains(dia)) continue;
+      proximas.add(dia);
+      if (proximas.length == 3) break;
+    }
+    if (proximas.isEmpty) {
+      final domingo = _proximoDomingo(hoje);
+      proximas
+        ..add(domingo)
+        ..add(domingo.add(const Duration(days: 7)));
+    }
+    final escolhida = _date;
+    final datas = [
+      ...proximas,
+      if (escolhida != null && !proximas.contains(escolhida)) escolhida,
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _date != null,
-          // Desligado é o padrão: a maior parte das sugestões é "vamos
-          // aprender essa", sem domingo marcado.
-          onChanged: (ligado) {
-            if (!ligado) {
-              setState(() => _date = null);
-              return;
-            }
-            _pickDate();
-          },
-          title: const Text('É para um domingo específico?'),
-          subtitle: Text(
-            _date == null
-                ? 'Sem data, a sugestão é para o repertório'
-                : _dataLonga(_date!),
+        Text('Para quando?', style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            ChoiceChip(
+              label: const Text('Repertório'),
+              selected: _date == null,
+              onSelected: (_) => setState(() => _date = null),
+            ),
+            for (final data in datas)
+              ChoiceChip(
+                label: Text(_dataCurta(data)),
+                selected: _date == data,
+                onSelected: (_) => setState(() => _date = data),
+              ),
+            ActionChip(
+              avatar: const Icon(Icons.event_rounded, size: 18),
+              label: const Text('Outra data…'),
+              onPressed: _pickDate,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          _date == null
+              ? 'Sem data, a sugestão é para o repertório.'
+              : 'Para ${_dataLonga(_date!)}.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        if (_date != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _pickDate,
-              icon: const Icon(Icons.event_rounded),
-              label: const Text('Trocar a data'),
-            ),
-          ),
       ],
     );
   }
@@ -571,6 +623,7 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
         Text(label, style: theme.textTheme.titleSmall),
         const SizedBox(height: AppSpacing.sm),
         TextField(
+          key: const ValueKey('sugestao-motivo'),
           controller: _reasonController,
           maxLines: 4,
           maxLength: 500,
@@ -599,18 +652,67 @@ class _SuggestSongSheetState extends ConsumerState<SuggestSongSheet> {
       );
 }
 
+/// Uma sugestão encontrada na busca: linha simples, sem cartão em volta.
+///
+/// Era um cartão com uma linha de lista dentro — a folga dos dois somada, e
+/// uma borda por resultado numa lista que se percorre com o polegar.
+class _ResultRow extends StatelessWidget {
+  const _ResultRow({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.add_rounded),
+      onTap: onTap,
+    );
+  }
+}
+
+/// "Dom 21/9" — a data no espaço de um chip.
+String _dataCurta(DateTime date) {
+  const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  return '${dias[date.weekday - 1]} ${date.day}/${date.month}';
+}
+
 DateTime _proximoDomingo(DateTime from) {
   final faltam = (DateTime.sunday - from.weekday) % 7;
   return DateTime(from.year, from.month, from.day + (faltam == 0 ? 7 : faltam));
 }
 
 const _meses = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
 ];
 
 const _diasDaSemana = [
-  'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo',
+  'segunda',
+  'terça',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sábado',
+  'domingo',
 ];
 
 String _dataLonga(DateTime date) {

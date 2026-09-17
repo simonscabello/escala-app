@@ -155,8 +155,8 @@ class _JoinTeamScreenState extends ConsumerState<JoinTeamScreen> {
     final code = cleanInviteCode(_code.text);
 
     return FormScaffold(
-      appBar: AppBar(title: const Text('Convite')),
-      title: 'Entrar com convite',
+      // O nome da ação na barra, e não repetido no corpo.
+      appBar: AppBar(title: const Text('Entrar com convite')),
       subtitle: 'Cole o código que o líder da sua equipe enviou.',
       children: [
         TextField(

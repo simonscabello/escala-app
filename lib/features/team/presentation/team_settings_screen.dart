@@ -96,7 +96,6 @@ class _TeamSettingsScreenState extends ConsumerState<TeamSettingsScreen> {
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Dados da equipe')),
-      title: 'Dados da equipe',
       subtitle: 'O nome aparece na agenda e nos convites.',
       children: [
         TextField(

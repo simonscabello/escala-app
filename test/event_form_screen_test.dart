@@ -56,7 +56,15 @@ void main() {
     // tela. Quem chegou dali já decidiu, e a grade não pode opinar.
     await _pump(tester, initialDate: DateTime(2026, 9, 2));
 
-    expect(find.text('Quarta-feira, 2 de setembro de 2026'), findsOneWidget);
+    // O ano só aparece fora do ano atual; o dia e a semana, sempre.
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            (widget.data?.startsWith('Quarta-feira, 2 de setembro') ?? false),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('sem grade cadastrada, a tela continua abrindo em hoje',

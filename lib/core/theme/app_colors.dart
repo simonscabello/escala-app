@@ -138,6 +138,21 @@ class AppColors {
   static const Color lightSurfaceContainerHigh = Color(0xFFDCD9EE);
   static const Color lightSurfaceContainerHighest = Color(0xFFD1CEE9);
 
+  /// O fundo do bloco rebaixado (`CardSurface.sunken`): "Nenhuma música
+  /// escolhida ainda", o recurso sem link.
+  ///
+  /// **No claro ele fica abaixo da página, e não acima.** Era o
+  /// `surfaceContainerLow` nos dois temas, e no claro esse tom (F6F5FC) é mais
+  /// claro que a página (EEECF7) e mais escuro que o cartão: a 1,08:1 da
+  /// página, o bloco sumia e o texto parecia solto no fundo. Um degrau abaixo
+  /// da página dá a mesma separação do cartão branco, mas no sentido de
+  /// "rebaixado". No escuro o `surfaceContainerLow` já fica entre a página e o
+  /// cartão, e continua.
+  static Color sunken(ColorScheme scheme) =>
+      scheme.brightness == Brightness.light
+          ? scheme.surfaceContainerHigh
+          : scheme.surfaceContainerLow;
+
   /// Borda de controle: campo, botão contornado, o que se toca. 3:1.
   static const Color lightOutline = Color(0xFF807DA3);
 

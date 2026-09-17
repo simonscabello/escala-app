@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/app_notice.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/app_submit_button.dart';
-import '../../../shared/widgets/form_scaffold.dart';
 import '../../../shared/widgets/quarter_hour_picker.dart';
 import '../../events/data/event_repository.dart';
 import '../data/team_repository.dart';
@@ -33,18 +37,9 @@ class ServiceTemplatesScreen extends ConsumerWidget {
     final templates = ref.watch(serviceTemplatesProvider(teamId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cultos da igreja'),
-        actions: [
-          IconButton(
-            tooltip: 'Planejar próximas escalas',
-            onPressed: templates.valueOrNull?.isNotEmpty == true
-                ? () => _openGenerator(context, ref)
-                : null,
-            icon: const Icon(Icons.event_repeat_rounded),
-          ),
-        ],
-      ),
+      // "Planejar próximas escalas" era um ícone sem rótulo nesta barra. Virou
+      // uma linha com nome no fim da lista, onde a grade já foi lida.
+      appBar: AppBar(title: const Text('Cultos da igreja')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context, ref),
         icon: const Icon(Icons.add_rounded),
@@ -81,6 +76,7 @@ class ServiceTemplatesScreen extends ConsumerWidget {
                       teamId: teamId,
                       templates: list,
                       onEdit: (t) => _openEditor(context, ref, template: t),
+                      onPlan: () => _openGenerator(context, ref),
                     ),
                   ),
           ),
@@ -94,19 +90,19 @@ class ServiceTemplatesScreen extends ConsumerWidget {
     WidgetRef ref, {
     ServiceTemplate? template,
   }) async {
-    final saved = await showModalBottomSheet<bool>(
+    final saved = await showAdaptiveSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 480,
       builder: (_) => _TemplateEditorSheet(teamId: teamId, template: template),
     );
     if (saved == true) ref.invalidate(serviceTemplatesProvider(teamId));
   }
 
   Future<void> _openGenerator(BuildContext context, WidgetRef ref) async {
-    final result = await showDialog<GeneratedSchedules>(
+    final result = await showAdaptiveSheet<GeneratedSchedules>(
       context: context,
-      builder: (_) => _GenerateSchedulesDialog(teamId: teamId),
+      maxWidth: 480,
+      builder: (_) => _GenerateSchedulesSheet(teamId: teamId),
     );
     if (result == null || !context.mounted) return;
 
@@ -119,18 +115,21 @@ class ServiceTemplatesScreen extends ConsumerWidget {
   }
 }
 
-class _GenerateSchedulesDialog extends ConsumerStatefulWidget {
-  const _GenerateSchedulesDialog({required this.teamId});
+/// Folha, e não diálogo: é um formulário curto (período + confirmar), como as
+/// outras do app. O período é uma barra de três opções, e não uma lista
+/// suspensa com três linhas.
+class _GenerateSchedulesSheet extends ConsumerStatefulWidget {
+  const _GenerateSchedulesSheet({required this.teamId});
 
   final String teamId;
 
   @override
-  ConsumerState<_GenerateSchedulesDialog> createState() =>
-      _GenerateSchedulesDialogState();
+  ConsumerState<_GenerateSchedulesSheet> createState() =>
+      _GenerateSchedulesSheetState();
 }
 
-class _GenerateSchedulesDialogState
-    extends ConsumerState<_GenerateSchedulesDialog> {
+class _GenerateSchedulesSheetState
+    extends ConsumerState<_GenerateSchedulesSheet> {
   int _weeks = 4;
   bool _saving = false;
   String? _error;
@@ -154,50 +153,57 @@ class _GenerateSchedulesDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Planejar próximas escalas'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Cria rascunhos usando os dias e horários desta grade. Datas que '
-            'já têm escala são mantidas como estão.',
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          DropdownButtonFormField<int>(
-            initialValue: _weeks,
-            decoration: const InputDecoration(labelText: 'Período'),
-            items: const [
-              DropdownMenuItem(value: 4, child: Text('Próximas 4 semanas')),
-              DropdownMenuItem(value: 8, child: Text('Próximas 8 semanas')),
-              DropdownMenuItem(value: 12, child: Text('Próximas 12 semanas')),
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Planejar próximas escalas', style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Cria rascunhos usando os dias e horários desta grade. Datas que '
+              'já têm escala são mantidas como estão.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppChoiceBar<int>(
+              expanded: true,
+              value: _weeks,
+              onChanged: (value) {
+                if (!_saving) setState(() => _weeks = value);
+              },
+              options: const [
+                AppChoice(value: 4, label: '4 semanas'),
+                AppChoice(value: 8, label: '8 semanas'),
+                AppChoice(value: 12, label: '12 semanas'),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              AppNotice(
+                tone: AppTone.danger,
+                message: _error!,
+                liveRegion: true,
+              ),
             ],
-            onChanged:
-                _saving ? null : (value) => setState(() => _weeks = value ?? 4),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            FormErrorBanner(message: _error!),
+            const SizedBox(height: AppSpacing.xl),
+            AppSubmitButton(
+              label: 'Criar rascunhos',
+              loading: _saving,
+              onPressed: _generate,
+            ),
           ],
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: _saving ? null : _generate,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Criar rascunhos'),
-        ),
-      ],
     );
   }
 }
@@ -207,11 +213,13 @@ class _TemplateList extends ConsumerWidget {
     required this.teamId,
     required this.templates,
     required this.onEdit,
+    required this.onPlan,
   });
 
   final String teamId;
   final List<ServiceTemplate> templates;
   final ValueChanged<ServiceTemplate> onEdit;
+  final VoidCallback onPlan;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -228,10 +236,10 @@ class _TemplateList extends ConsumerWidget {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
+        AppSpacing.screenPadding,
         AppSpacing.lg,
-        AppSpacing.xl,
-        96,
+        AppSpacing.screenPadding,
+        AppSpacing.fabClearance,
       ),
       children: [
         Text(
@@ -248,10 +256,12 @@ class _TemplateList extends ConsumerWidget {
               left: AppSpacing.xs,
               bottom: AppSpacing.sm,
             ),
+            // Cinza, como os cabeçalhos de grupo do resto do app: o violeta
+            // fica para o que se toca.
             child: Text(
               weekdayName(weekday),
               style: theme.textTheme.titleSmall?.copyWith(
-                color: scheme.primary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -265,7 +275,6 @@ class _TemplateList extends ConsumerWidget {
                 for (var i = 0; i < byWeekday[weekday]!.length; i++) ...[
                   if (i > 0) Divider(color: scheme.outlineVariant, height: 1),
                   _TemplateRow(
-                    teamId: teamId,
                     template: byWeekday[weekday]![i],
                     onEdit: () => onEdit(byWeekday[weekday]![i]),
                   ),
@@ -275,24 +284,30 @@ class _TemplateList extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
+        const SizedBox(height: AppSpacing.sm),
+        AppGroup(
+          children: [
+            AppGroupRow(
+              icon: Icons.event_repeat_rounded,
+              title: 'Planejar próximas escalas',
+              subtitle: 'Cria rascunhos das próximas semanas com esta grade',
+              onTap: onPlan,
+            ),
+          ],
+        ),
       ],
     );
   }
 }
 
-class _TemplateRow extends ConsumerWidget {
-  const _TemplateRow({
-    required this.teamId,
-    required this.template,
-    required this.onEdit,
-  });
+class _TemplateRow extends StatelessWidget {
+  const _TemplateRow({required this.template, required this.onEdit});
 
-  final String teamId;
   final ServiceTemplate template;
   final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -312,46 +327,13 @@ class _TemplateRow extends ConsumerWidget {
         ),
       ),
       title: Text(template.label, style: theme.textTheme.titleSmall),
-      trailing: IconButton(
-        tooltip: 'Remover ${template.label}',
-        icon: Icon(
-          Icons.delete_outline_rounded,
-          color: scheme.onSurfaceVariant,
-        ),
-        onPressed: () => _confirmRemove(context, ref),
+      // Sem lixeira em toda linha: remover é raro e mora na folha de edição.
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        size: 20,
+        color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
       ),
     );
-  }
-
-  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Remover ${template.label}?',
-      message: 'Sai da grade de '
-          '${weekdayName(template.weekday).toLowerCase()}. As escalas já '
-          'montadas continuam com o horário que têm hoje.',
-      confirmLabel: 'Remover',
-      destructive: true,
-    );
-    if (!confirmed || !context.mounted) return;
-
-    try {
-      await ref
-          .read(teamRepositoryProvider)
-          .removeServiceTemplate(teamId, template.id);
-      ref.invalidate(serviceTemplatesProvider(teamId));
-      if (context.mounted) {
-        showAppSnackBar(
-          context,
-          '${template.label} saiu da grade.',
-          tone: AppTone.success,
-        );
-      }
-    } on ApiException catch (error) {
-      if (context.mounted) {
-        showAppSnackBar(context, error.message, tone: AppTone.danger);
-      }
-    }
   }
 }
 
@@ -367,9 +349,27 @@ class _TemplateEditorSheet extends ConsumerStatefulWidget {
       _TemplateEditorSheetState();
 }
 
+/// Os nomes que quase toda igreja usa ([serviceNamePresets], os mesmos do
+/// culto avulso da escala). Um toque, sem teclado; "Outro" abre o campo para o
+/// que fugir disso ("Quinta", "Jovens", "Santa Ceia").
+const _presetLabels = serviceNamePresets;
+
 class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
-  late final TextEditingController _label =
-      TextEditingController(text: widget.template?.label ?? '');
+  late final TextEditingController _label = TextEditingController(
+    text: _presetLabels.contains(widget.template?.label)
+        ? ''
+        : widget.template?.label ?? '',
+  );
+  late String? _preset = _presetLabels.contains(widget.template?.label)
+      ? widget.template!.label
+      : null;
+  late bool _other =
+      widget.template != null && !_presetLabels.contains(widget.template!.label);
+
+  /// O campo só ganha foco quando a pessoa toca em "Outro". Abrindo a edição
+  /// de um culto que já tem nome livre, o teclado subia sem ninguém pedir e
+  /// cobria o resto da folha.
+  bool _focusOther = false;
   late int _weekday = widget.template?.weekday ?? 0;
   late TimeOfDay _time =
       widget.template?.timeOfDay ?? const TimeOfDay(hour: 19, minute: 0);
@@ -388,9 +388,13 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
   int get _startMinutes => _time.hour * 60 + _time.minute;
 
   Future<void> _save() async {
-    final label = _label.text.trim();
+    final label = _other ? _label.text.trim() : (_preset ?? '');
     if (label.isEmpty) {
-      setState(() => _error = 'Informe o nome do culto.');
+      setState(
+        () => _error = _other
+            ? 'Informe o nome do culto.'
+            : 'Escolha o nome do culto.',
+      );
       return;
     }
 
@@ -465,6 +469,8 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
           'o nome novos?\n\n'
           'A data de cada escala não muda.',
         ),
+        // "Só as próximas" dizia o contrário do que fazia: mantinha as escalas
+        // já criadas. Os dois botões agora dizem o que acontece com elas.
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -472,23 +478,61 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Só as próximas'),
+            child: const Text('Manter como estão'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Atualizar'),
+            child: Text(
+              count == 1 ? 'Atualizar 1 escala' : 'Atualizar $count escalas',
+            ),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _remove() async {
+    final template = widget.template!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Remover ${template.label}?',
+      message: 'Sai da grade de '
+          '${weekdayName(template.weekday).toLowerCase()}. As escalas já '
+          'montadas continuam com o horário que têm hoje.',
+      confirmLabel: 'Remover',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(teamRepositoryProvider)
+          .removeServiceTemplate(widget.teamId, template.id);
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        '${template.label} saiu da grade.',
+        tone: AppTone.success,
+      );
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.xl,
           0,
@@ -504,20 +548,52 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _label,
-              autofocus: !_isEditing,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Nome',
-                hintText: 'Manhã, Noite, Quinta...',
+            Text('Nome', style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final preset in _presetLabels)
+                  ChoiceChip(
+                    label: Text(preset),
+                    selected: !_other && _preset == preset,
+                    onSelected: _saving
+                        ? null
+                        : (_) => setState(() {
+                              _preset = preset;
+                              _other = false;
+                              _error = null;
+                            }),
+                  ),
+                ChoiceChip(
+                  label: const Text('Outro'),
+                  selected: _other,
+                  onSelected: _saving
+                      ? null
+                      : (_) => setState(() {
+                            _other = true;
+                            _focusOther = true;
+                            _error = null;
+                          }),
+                ),
+              ],
+            ),
+            if (_other) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _label,
+                autofocus: _focusOther,
+                enabled: !_saving,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Nome do culto',
+                  hintText: 'Quinta, Jovens, Santa Ceia...',
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: AppSpacing.lg),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Dia da semana', style: theme.textTheme.titleSmall),
-            ),
+            Text('Dia da semana', style: theme.textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
@@ -533,30 +609,29 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            OutlinedButton.icon(
-              onPressed: _saving
-                  ? null
-                  : () async {
-                      final picked = await showQuarterHourPicker(
-                        context: context,
-                        initialTime: _time,
-                        title: 'Horário do culto',
-                      );
-                      if (picked != null) setState(() => _time = picked);
-                    },
-              icon: const Icon(Icons.schedule_outlined, size: 18),
-              label: Text(
-                '${_time.hour.toString().padLeft(2, '0')}:'
-                '${_time.minute.toString().padLeft(2, '0')}',
-              ),
+            // O campo inteiro abre o seletor, como os outros campos de escolha
+            // do app. Era um botão contornado com a hora dentro.
+            AppPickerField(
+              label: 'Horário',
+              icon: Icons.schedule_outlined,
+              value: '${_time.hour.toString().padLeft(2, '0')}:'
+                  '${_time.minute.toString().padLeft(2, '0')}',
+              enabled: !_saving,
+              onTap: () async {
+                final picked = await showQuarterHourPicker(
+                  context: context,
+                  initialTime: _time,
+                  title: 'Horário do culto',
+                );
+                if (picked != null) setState(() => _time = picked);
+              },
             ),
             if (_error != null) ...[
               const SizedBox(height: AppSpacing.md),
-              Text(
-                _error!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
+              AppNotice(
+                tone: AppTone.danger,
+                message: _error!,
+                liveRegion: true,
               ),
             ],
             const SizedBox(height: AppSpacing.xl),
@@ -565,6 +640,14 @@ class _TemplateEditorSheetState extends ConsumerState<_TemplateEditorSheet> {
               loading: _saving,
               onPressed: _save,
             ),
+            if (_isEditing) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton(
+                onPressed: _saving ? null : _remove,
+                style: TextButton.styleFrom(foregroundColor: scheme.error),
+                child: const Text('Remover da grade'),
+              ),
+            ],
           ],
         ),
       ),

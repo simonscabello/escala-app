@@ -54,7 +54,8 @@ void main() {
     expect(find.text('Vocal · Violão'), findsOneWidget);
     expect(find.text('5 músicas'), findsOneWidget);
     expect(find.text('Ensaio sábado · 19:30'), findsOneWidget);
-    expect(find.text('Ver escala'), findsOneWidget);
+    // O cartão inteiro abre a escala; o botão "Ver escala" repetia a porta.
+    expect(find.text('Ver escala'), findsNothing);
   });
 
   testWidgets('sem ensaio, nenhuma linha de ensaio — não se inventa ausência',
@@ -174,7 +175,8 @@ void main() {
 
     expect(find.text('Acessos rápidos'), findsOneWidget);
     expect(find.text('Repertório'), findsOneWidget);
-    expect(find.text('Cânticos e hinos'), findsOneWidget);
+    // Legenda só onde ela muda: "Cânticos e hinos" não dizia nada.
+    expect(find.text('Cânticos e hinos'), findsNothing);
     expect(find.text('Sugestões'), findsOneWidget);
     // O selo é o mesmo da aba Equipe, com o mesmo provider por trás.
     expect(find.text('3'), findsOneWidget);
@@ -182,7 +184,7 @@ void main() {
     // O terceiro atalho: no celular era o mais escondido dos três -- só se
     // chegava nele pelo Perfil -- e é o que tem prazo.
     expect(find.text('Minha disponibilidade'), findsOneWidget);
-    expect(find.text('Avise quando não puder'), findsOneWidget);
+    expect(find.text('Avise quando não puder'), findsNothing);
 
     await tester.tap(find.text('Repertório'));
     await tester.pumpAndSettle();
@@ -207,7 +209,8 @@ void main() {
     expect(find.text('Ver agenda da equipe'), findsOneWidget);
     // Nem o selo de sugestões: a contagem é de quem pode respondê-las, e para
     // o integrante ela custaria uma requisição que não paga o próprio preço.
-    expect(find.text('Peça uma música'), findsOneWidget);
+    expect(find.text('Sugestões'), findsOneWidget);
+    expect(find.text('3'), findsNothing);
   });
 
   testWidgets('quem gerencia recebe o botão de criar escala', (tester) async {

@@ -37,11 +37,7 @@ void main() {
       (tester) async {
     await _pump(tester);
 
-    await tester.scrollUntilVisible(
-      find.text('Datas sem escala'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _abrirDatas(tester);
     expect(find.text('Datas sem escala'), findsOneWidget);
     expect(find.text('Criar os rascunhos destas 8 datas'), findsOneWidget);
     // E some o beco sem saída que estava ali antes.
@@ -57,11 +53,7 @@ void main() {
       // lista por um caminho: a agenda vazia e a agenda com escala.
       await _pump(tester, size: Size(width, 900));
       expect(tester.takeException(), isNull);
-      await tester.scrollUntilVisible(
-        find.text('Datas sem escala'),
-        250,
-        scrollable: find.byType(Scrollable).first,
-      );
+      await _abrirDatas(tester);
       expect(find.text('Datas sem escala'), findsOneWidget);
 
       final futura = DateTime.now().toUtc().add(const Duration(days: 200));
@@ -71,11 +63,7 @@ void main() {
         events: [_evento(futura)],
       );
       expect(tester.takeException(), isNull);
-      await tester.scrollUntilVisible(
-        find.text('Datas sem escala'),
-        250,
-        scrollable: find.byType(Scrollable).first,
-      );
+      await _abrirDatas(tester);
       expect(find.text('Datas sem escala'), findsOneWidget);
     });
   }
@@ -88,14 +76,14 @@ void main() {
 
     // Nenhuma data em aberto é "sua": não há ninguém escalado nela, e
     // deixá-las ali faria o recorte pessoal mentir.
-    expect(find.text('Datas sem escala'), findsNothing);
+    expect(find.textContaining('datas sem escala'), findsNothing);
     expect(find.text('Nada seu por perto.'), findsOneWidget);
   });
 
   testWidgets('quem não gerencia não vê datas em aberto', (tester) async {
     await _pump(tester, canManage: false);
 
-    expect(find.text('Datas sem escala'), findsNothing);
+    expect(find.textContaining('datas sem escala'), findsNothing);
     expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
@@ -103,7 +91,7 @@ void main() {
       (tester) async {
     await _pump(tester, templates: const []);
 
-    expect(find.text('Datas sem escala'), findsNothing);
+    expect(find.textContaining('datas sem escala'), findsNothing);
     expect(find.text('Nada marcado para este dia.'), findsOneWidget);
   });
 
@@ -115,11 +103,7 @@ void main() {
     final harness = await _pump(tester, events: [_evento(futura)]);
 
     expect(find.text('Agenda'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Datas sem escala'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _abrirDatas(tester);
     expect(find.text('Datas sem escala'), findsOneWidget);
     expect(find.text('Criar os rascunhos destas 8 datas'), findsOneWidget);
     expect(harness.dataPedida, isNull);
@@ -129,11 +113,7 @@ void main() {
       (tester) async {
     final harness = await _pump(tester);
 
-    await tester.scrollUntilVisible(
-      find.text('Datas sem escala'),
-      250,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _abrirDatas(tester);
     await tester
         .ensureVisible(find.byIcon(Icons.add_circle_outline_rounded).first);
     await tester.pumpAndSettle();
@@ -192,12 +172,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(harness.repository.semanasPedidas, isNull);
-    await tester.scrollUntilVisible(
-      find.text('Datas sem escala'),
-      250,
-      scrollable: find.byType(Scrollable).first,
+    // A lista continua aberta, com as mesmas datas.
+    expect(
+      find.text('Criar os rascunhos destas 8 datas', skipOffstage: false),
+      findsOneWidget,
     );
-    expect(find.text('Datas sem escala'), findsOneWidget);
   });
 }
 
@@ -205,11 +184,7 @@ void main() {
 /// nasce fora da tela, e tocar sem rolar até lá erraria o alvo.
 Future<void> _tocarEmCriar(WidgetTester tester) async {
   final botao = find.text('Criar os rascunhos destas 8 datas');
-  await tester.scrollUntilVisible(
-    find.text('Datas sem escala'),
-    250,
-    scrollable: find.byType(Scrollable).first,
-  );
+  await _abrirDatas(tester);
   await tester.ensureVisible(botao);
   await tester.pumpAndSettle();
   await tester.tap(botao);
@@ -372,4 +347,24 @@ class _FakeAuthController extends AuthController {
   Future<void> bootstrap() async {
     state = _initial;
   }
+}
+
+/// As datas em aberto moram recolhidas numa linha-resumo logo abaixo do dia
+/// ("8 datas sem escala"); a lista abre ao tocar nela.
+Future<void> _abrirDatas(WidgetTester tester) async {
+  final resumo = find.textContaining('datas sem escala');
+  await tester.scrollUntilVisible(
+    resumo,
+    250,
+    scrollable: find.byType(Scrollable).first,
+  );
+  if (find.text('Datas sem escala').evaluate().isEmpty) {
+    await tester.tap(resumo);
+    await tester.pumpAndSettle();
+  }
+  await tester.scrollUntilVisible(
+    find.text('Datas sem escala'),
+    250,
+    scrollable: find.byType(Scrollable).first,
+  );
 }

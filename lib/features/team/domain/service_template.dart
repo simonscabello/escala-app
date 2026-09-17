@@ -96,3 +96,16 @@ const weekdayNames = [
 ];
 
 String weekdayName(int jsWeekday) => weekdayNames[jsWeekday];
+
+/// Os nomes de culto que quase toda igreja usa, como chips de um toque.
+///
+/// **Uma lista só**, para a grade (Cultos da igreja) e para o culto avulso da
+/// escala: as duas folhas ofereciam nomes diferentes para a mesma pergunta.
+const serviceNamePresets = [
+  'Manhã',
+  'Tarde',
+  'Noite',
+  'EBD',
+  'Vigília',
+  'Especial',
+];

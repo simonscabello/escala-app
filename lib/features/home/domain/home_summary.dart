@@ -44,12 +44,6 @@ int daysUntilEvent(Event event, DateTime now) {
 /// onde já vivem os formatadores de horário. Aqui fica só a decisão de qual
 /// aviso nasce, que é o que vale a pena travar em teste.
 enum HomeNoticeKind {
-  /// Você toca hoje.
-  scheduleToday,
-
-  /// Você toca amanhã.
-  scheduleTomorrow,
-
   /// (liderança) escalas em rascunho, que a equipe ainda não vê.
   pendingDrafts,
 
@@ -57,7 +51,7 @@ enum HomeNoticeKind {
   unstaffedSchedule,
 }
 
-/// Um aviso curto no pé da Home.
+/// Um aviso curto da Home, logo abaixo da manchete.
 ///
 /// **Nada aqui é dado novo.** Todo aviso sai da mesma lista de escalas que a
 /// tela já mostrou acima — é a leitura dela, não uma segunda requisição.
@@ -81,9 +75,6 @@ class HomeNotice {
 
   /// Para onde o toque leva. Sempre uma rota que já existe.
   String get route => switch (kind) {
-        HomeNoticeKind.scheduleToday ||
-        HomeNoticeKind.scheduleTomorrow =>
-          '/agenda/${event!.id}',
         HomeNoticeKind.pendingDrafts => '/agenda',
         HomeNoticeKind.unstaffedSchedule => '/agenda/${event!.id}/escalar',
       };
@@ -104,6 +95,7 @@ class HomeNotice {
 class HomeSummary {
   const HomeSummary({
     required this.myNext,
+    required this.myNextDaysAway,
     required this.myPositions,
     required this.myFollowing,
     required this.notices,
@@ -113,6 +105,15 @@ class HomeSummary {
   /// A próxima escala em que a pessoa está escalada, dentro do horizonte que a
   /// agenda carregou. Nula quando ela não aparece em nenhuma.
   final Event? myNext;
+
+  /// Quantos dias civis faltam para [myNext]: 0 é hoje, 1 é amanhã. Nulo sem
+  /// [myNext].
+  ///
+  /// **"É hoje" mora na manchete, e não num aviso.** O aviso "Sua escala é
+  /// hoje" falava exatamente da escala que a manchete já mostrava — e, com o
+  /// limite de dois avisos, tomava a vaga de "Ninguém escalado ainda" de quem
+  /// lidera e toca no mesmo domingo.
+  final int? myNextDaysAway;
 
   /// As funções dela em [myNext]. Vazio quando não há [myNext].
   final List<String> myPositions;
@@ -154,42 +155,21 @@ class HomeSummary {
 
     return HomeSummary(
       myNext: myNext,
+      myNextDaysAway: myNext == null ? null : daysUntilEvent(myNext, now),
       myPositions: myNext?.positionsForMembership(membershipId) ?? const [],
       // A segunda em que eu entro, e não a segunda da equipe: a manchete abriu
       // o fio de "quando eu toco", e "e depois?" continua o mesmo fio.
       myFollowing: minhas.length > 1 ? minhas[1] : null,
       hasSchedules: events.isNotEmpty,
-      notices: _notices(
-        events,
-        myNext: myNext,
-        canManage: canManage,
-        now: now,
-      ),
+      notices: _notices(events, canManage: canManage),
     );
   }
 
   static List<HomeNotice> _notices(
     List<Event> events, {
-    required Event? myNext,
     required bool canManage,
-    required DateTime now,
   }) {
     final notices = <HomeNotice>[];
-
-    // Primeiro o que é sobre a própria pessoa e tem hora marcada: "é hoje"
-    // vale mais do que qualquer pendência da liderança.
-    if (myNext != null) {
-      final days = daysUntilEvent(myNext, now);
-      if (days == 0) {
-        notices.add(
-          HomeNotice(kind: HomeNoticeKind.scheduleToday, event: myNext),
-        );
-      } else if (days == 1) {
-        notices.add(
-          HomeNotice(kind: HomeNoticeKind.scheduleTomorrow, event: myNext),
-        );
-      }
-    }
 
     if (canManage) {
       // Rascunho não é visível para a equipe: só quem gerencia recebe a lista

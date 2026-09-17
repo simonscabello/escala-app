@@ -8,7 +8,9 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/domain/person_fields.dart';
 import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
@@ -200,14 +202,25 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     final positions = ref.watch(positionsProvider(widget.teamId));
 
     return FormScaffold(
+      // "Integrante", como na aba Equipe: "membro" é o nome de um papel.
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Editar membro' : 'Adicionar membro'),
+        title: Text(
+          widget.isEditing ? 'Editar integrante' : 'Adicionar integrante',
+        ),
       ),
-      title: widget.isEditing ? 'Editar membro' : 'Adicionar membro',
       subtitle: widget.isEditing
-          ? 'Atualize os dados e as funções.'
+          ? null
           : 'A pessoa não precisa ter conta ainda. Cadastre agora e envie o '
               'convite depois.',
+      // A ficha de quem já existe passa de uma tela (funções, papel,
+      // afastamento): o botão fica preso embaixo.
+      bottomAction: widget.isEditing
+          ? AppSubmitButton(
+              label: 'Salvar',
+              loading: _loading,
+              onPressed: _submit,
+            )
+          : null,
       children: [
         Form(
           key: _formKey,
@@ -216,15 +229,12 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
             children: [
               TextFormField(
                 controller: _name,
-                decoration: const InputDecoration(
-                  labelText: 'Nome',
-                  helperText: 'Como a pessoa é chamada na equipe',
-                ),
+                decoration: const InputDecoration(labelText: 'Nome'),
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next,
                 enabled: !_loading,
                 validator: (v) => (v == null || v.trim().length < 2)
-                    ? 'Informe o nome do membro.'
+                    ? 'Informe o nome.'
                     : null,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -232,7 +242,6 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
                 controller: _phone,
                 decoration: const InputDecoration(
                   labelText: 'Telefone (opcional)',
-                  helperText: 'Vira o atalho de WhatsApp na lista da equipe',
                 ),
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
@@ -333,11 +342,12 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
         ],
         const SizedBox(height: AppSpacing.xxl),
         if (_error != null) FormErrorBanner(message: _error!),
-        AppSubmitButton(
-          label: widget.isEditing ? 'Salvar' : 'Adicionar',
-          loading: _loading,
-          onPressed: _submit,
-        ),
+        if (!widget.isEditing)
+          AppSubmitButton(
+            label: 'Adicionar',
+            loading: _loading,
+            onPressed: _submit,
+          ),
       ],
     );
   }
@@ -458,20 +468,12 @@ class _LeaveField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Afastamento', style: theme.textTheme.titleMedium),
+        const SectionHeader(
+          title: 'Afastamento',
+          subtitle: 'Continua na equipe e no histórico, mas a etiqueta aparece '
+              'na hora de escalar.',
+          padding: EdgeInsets.only(bottom: AppSpacing.md),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Continua na equipe e no histórico, mas a etiqueta aparece na hora '
-            'de escalar.',
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
         SwitchListTile.adaptive(
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -507,29 +509,16 @@ class _LeaveField extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
-          InkWell(
-            onTap: enabled ? onPickUntil : null,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            child: InputDecorator(
-              decoration: InputDecoration(
-                labelText: 'Previsão de retorno (opcional)',
-                helperText: 'Só para lembrar. O afastamento não termina sozinho.',
-                enabled: enabled,
-                suffixIcon: until != null
-                    ? IconButton(
-                        tooltip: 'Remover previsão',
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        onPressed: enabled ? onClearUntil : null,
-                      )
-                    : const Icon(Icons.event_rounded, size: 20),
-              ),
-              child: Text(
-                until != null ? formatFullDate(until!) : 'Sem data definida',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: until != null ? null : scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+          AppPickerField(
+            label: 'Previsão de retorno (opcional)',
+            icon: Icons.event_rounded,
+            value: until != null ? formatFullDate(until!) : null,
+            placeholder: 'Sem data definida',
+            helperText: 'Só para lembrar. O afastamento não termina sozinho.',
+            enabled: enabled,
+            onTap: onPickUntil,
+            onClear: onClearUntil,
+            clearTooltip: 'Remover previsão',
           ),
           const SizedBox(height: AppSpacing.lg),
           TextFormField(
@@ -539,7 +528,7 @@ class _LeaveField extends StatelessWidget {
             maxLength: 120,
             decoration: const InputDecoration(
               labelText: 'Motivo (opcional)',
-              helperText: 'Ex.: licença-maternidade, intercâmbio, saúde',
+              hintText: 'Licença, intercâmbio, saúde...',
             ),
           ),
         ],
@@ -638,32 +627,19 @@ class _RoleField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Papel na equipe', style: theme.textTheme.titleMedium),
+        const SectionHeader(
+          title: 'Papel na equipe',
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            bloqueio ??
-                'Líder faz tudo o que você faz: escalas, convites, repertório '
-                    'e dados da equipe.',
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
         if (bloqueio != null)
-          // Sem opções para escolher: mostra o que a pessoa é hoje e para por
-          // aí. Um seletor desabilitado convidaria a insistir.
           Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: scheme.outlineVariant),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   member.isOwner
@@ -673,28 +649,48 @@ class _RoleField extends StatelessWidget {
                   color: scheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(member.roleLabel, style: theme.textTheme.bodyLarge),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(member.roleLabel, style: theme.textTheme.bodyLarge),
+                      Text(bloqueio, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
               ],
             ),
           )
         else ...[
-          _RoleOption(
-            label: 'Membro',
-            description: 'Vê as escalas e onde está escalado.',
-            icon: Icons.person_outline_rounded,
-            selected: value == 'MEMBER',
-            enabled: enabled,
-            onTap: () => onChanged('MEMBER'),
+          // Uma barra de escolha, e não duas caixas grandes com borda, ícone e
+          // descrição: é uma escolha entre duas palavras. A explicação do que
+          // foi escolhido fica numa linha embaixo.
+          AppChoiceBar<String>(
+            expanded: true,
+            value: value ?? 'MEMBER',
+            onChanged: (role) {
+              if (enabled) onChanged(role);
+            },
+            options: const [
+              AppChoice(
+                value: 'MEMBER',
+                label: 'Membro',
+                icon: Icons.person_outline_rounded,
+              ),
+              AppChoice(
+                value: 'LEADER',
+                label: 'Líder',
+                icon: Icons.shield_outlined,
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          _RoleOption(
-            label: 'Líder',
-            description: 'Monta escalas, convida pessoas e cuida da '
-                'equipe.',
-            icon: Icons.shield_outlined,
-            selected: value == 'LEADER',
-            enabled: enabled,
-            onTap: () => onChanged('LEADER'),
+          Text(
+            value == 'LEADER'
+                ? 'Monta escalas, convida pessoas e cuida da equipe — tudo o '
+                    'que você faz.'
+                : 'Vê as escalas e onde está escalado.',
+            style: theme.textTheme.bodySmall,
           ),
         ],
       ],
@@ -702,102 +698,6 @@ class _RoleField extends StatelessWidget {
   }
 }
 
-class _RoleOption extends StatelessWidget {
-  const _RoleOption({
-    required this.label,
-    required this.description,
-    required this.icon,
-    required this.selected,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final String label;
-  final String description;
-  final IconData icon;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: selected ? scheme.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: selected ? scheme.primary : scheme.outline,
-                width: selected ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: selected
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: selected
-                              ? scheme.onPrimaryContainer
-                              : scheme.onSurface,
-                        ),
-                      ),
-                      Text(
-                        description,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: selected
-                              ? scheme.onPrimaryContainer
-                              : scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // A marca de selecionado não pode ser só a cor: quem não
-                // distingue azul de cinza precisa de uma forma.
-                if (selected)
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 20,
-                    color: scheme.onPrimaryContainer,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Funcoes em duas colunas.
-///
-/// Antes era um `Wrap`: os chips tinham larguras diferentes ("Som" ao lado de
-/// "Multimidia") e as linhas ficavam desalinhadas, dando ao bloco a aparencia
-/// de sobra de layout. Em duas colunas de largura igual a lista vira uma
-/// grade que se le de cima para baixo.
 class _PositionGrid extends StatelessWidget {
   const _PositionGrid({
     required this.positions,

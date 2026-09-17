@@ -7,8 +7,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
-import '../../../shared/widgets/app_choice_bar.dart';
-import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/app_skeleton.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -32,16 +30,16 @@ enum _UsageOrder {
 /// dentro de cada escala, uma por uma. Quem monta o culto perguntava à memória
 /// "já cantamos essa?" e "faz quanto tempo?", e a memória responde repetindo o
 /// que se cantou no domingo passado.
-class SongUsageScreen extends ConsumerStatefulWidget {
-  const SongUsageScreen({super.key, required this.teamId});
+class SongUsageView extends ConsumerStatefulWidget {
+  const SongUsageView({super.key, required this.teamId});
 
   final String teamId;
 
   @override
-  ConsumerState<SongUsageScreen> createState() => _SongUsageScreenState();
+  ConsumerState<SongUsageView> createState() => _SongUsageViewState();
 }
 
-class _SongUsageScreenState extends ConsumerState<SongUsageScreen> {
+class _SongUsageViewState extends ConsumerState<SongUsageView> {
   int _months = 6;
   _UsageOrder _order = _UsageOrder.mostPlayed;
 
@@ -50,72 +48,84 @@ class _SongUsageScreenState extends ConsumerState<SongUsageScreen> {
     final query = (teamId: widget.teamId, months: _months);
     final report = ref.watch(songUsageProvider(query));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Uso do repertório'),
-        actions: [
-          PopupMenuButton<_UsageOrder>(
-            tooltip: 'Ordenar',
-            icon: const Icon(Icons.swap_vert_rounded),
-            initialValue: _order,
-            onSelected: (value) => setState(() => _order = value),
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: _UsageOrder.mostPlayed,
-                child: Text('Mais cantadas'),
-              ),
-              PopupMenuItem(
-                value: _UsageOrder.longestAgo,
-                child: Text('Há mais tempo'),
-              ),
-            ],
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenPadding,
+            AppSpacing.md,
+            AppSpacing.screenPadding - AppSpacing.sm,
+            AppSpacing.md,
           ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: AppContentWidth.wide(
-          child: Column(
+          // O período é um menu de texto, e não outra barra de escolha: logo
+          // abaixo das abas Análise | Uso, duas barras iguais empilhadas
+          // tinham o mesmo peso, e o período parecia uma terceira aba.
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl,
-                  AppSpacing.lg,
-                  AppSpacing.xl,
-                  AppSpacing.md,
-                ),
-                child: AppChoiceBar<int>(
-                  value: _months,
-                  onChanged: (value) => setState(() => _months = value),
-                  options: const [
-                    AppChoice(value: 3, label: '3 meses'),
-                    AppChoice(value: 6, label: '6 meses'),
-                    AppChoice(value: 12, label: '12 meses'),
-                  ],
+              PopupMenuButton<int>(
+                tooltip: 'Período',
+                initialValue: _months,
+                onSelected: (value) => setState(() => _months = value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 3, child: Text('Últimos 3 meses')),
+                  PopupMenuItem(value: 6, child: Text('Últimos 6 meses')),
+                  PopupMenuItem(value: 12, child: Text('Últimos 12 meses')),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Últimos $_months meses',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      const Icon(Icons.expand_more_rounded, size: 20),
+                    ],
+                  ),
                 ),
               ),
-              Expanded(
-                child: report.when(
-                  loading: () => const AppListSkeleton(itemCount: 8),
-                  error: (error, _) => AppErrorState(
-                    message: error is ApiException
-                        ? error.message
-                        : 'Não foi possível carregar o histórico.',
-                    onRetry: () => ref.invalidate(songUsageProvider(query)),
+              const Spacer(),
+              PopupMenuButton<_UsageOrder>(
+                tooltip: 'Ordenar',
+                icon: const Icon(Icons.swap_vert_rounded),
+                initialValue: _order,
+                onSelected: (value) => setState(() => _order = value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _UsageOrder.mostPlayed,
+                    child: Text('Mais cantadas'),
                   ),
-                  data: (value) => _UsageBody(
-                    teamId: widget.teamId,
-                    report: value,
-                    order: _order,
-                    onRefresh: () =>
-                        ref.refresh(songUsageProvider(query).future),
+                  PopupMenuItem(
+                    value: _UsageOrder.longestAgo,
+                    child: Text('Há mais tempo'),
                   ),
-                ),
+                ],
               ),
             ],
           ),
         ),
-      ),
+        Expanded(
+          child: report.when(
+            loading: () => const AppListSkeleton(itemCount: 8),
+            error: (error, _) => AppErrorState(
+              message: error is ApiException
+                  ? error.message
+                  : 'Não foi possível carregar o histórico.',
+              onRetry: () => ref.invalidate(songUsageProvider(query)),
+            ),
+            data: (value) => _UsageBody(
+              teamId: widget.teamId,
+              report: value,
+              order: _order,
+              onRefresh: () => ref.refresh(songUsageProvider(query).future),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

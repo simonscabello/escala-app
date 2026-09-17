@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
-import '../../../shared/widgets/app_card.dart';
-import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_detail_header.dart';
+import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../songs/data/song_repository.dart';
+import '../../songs/presentation/song_resources.dart';
 import '../domain/event_models.dart';
 
 /// A música aberta de dentro da escala: tom, recado, links e letra.
@@ -22,6 +22,12 @@ import '../domain/event_models.dart';
 ///
 /// **Vale para MEMBER.** É justamente quem toca que precisa da cifra; o líder
 /// já tem o caminho da edição.
+///
+/// **A mesma linguagem da tela da música.** A folha respondia à mesma pergunta
+/// com outro desenho: links em etiquetas (só os que existiam), artista em texto
+/// comum, tom num cartão grande. Agora é o cabeçalho, a faixa de fatos e os
+/// quatro recursos da tela da música — numa versão compacta, e com o tom
+/// **desta escala** no lugar do tom da equipe.
 ///
 /// **E daqui se chega ao repertório** ([_RepertoireLink]). Perceber que a
 /// música está sem cifra é o que mais acontece nesta folha, e consertar isso
@@ -51,8 +57,7 @@ class _EventSongSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final temTom = song.key?.isNotEmpty ?? false;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -71,132 +76,80 @@ class _EventSongSheet extends ConsumerWidget {
           AppSpacing.xxl + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          // `Wrap` e não `Row`: título longo em `headlineSmall` ocupa duas
-          // linhas, e a etiqueta desce inteira em vez de espremer o nome.
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(song.title, style: theme.textTheme.headlineSmall),
-              if (song.isNew)
-                const AppBadge(
-                  label: 'Nova',
-                  tone: AppTone.info,
-                  semanticsLabel: 'Música nova: a equipe ainda não tocou esta',
+              Expanded(
+                child: AppDetailHeader(
+                  title: song.title,
+                  badges: [
+                    if (song.isNew)
+                      const AppBadge(
+                        label: 'Nova',
+                        tone: AppTone.info,
+                        semanticsLabel:
+                            'Música nova: a equipe ainda não tocou esta',
+                      ),
+                  ],
+                  overline: song.artist,
                 ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _RepertoireLink(teamId: teamId, songId: song.songId),
             ],
           ),
-          // "314 CC · Dízimos e Ofertas" logo abaixo do título: quem abre
-          // esta folha minutos antes de tocar procura primeiro o número (é
-          // como a igreja pede o hino) e depois em que ponto do culto ela
-          // entra. Some inteira quando não há nem um nem outro.
-          if (_reference(song) != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              _reference(song)!,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: scheme.primary,
-              ),
-            ),
-          ],
-          if (song.artist?.isNotEmpty ?? false) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              song.artist!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
           const SizedBox(height: AppSpacing.lg),
-          _KeyCard(song: song),
+          // Tom, momento e número do hino: o que se procura minutos antes de
+          // tocar. O tom é o **desta escala**; quando ela mudou o da equipe, o
+          // de costume aparece embaixo — quem decorou "sempre em G" precisa
+          // ver que hoje é diferente.
+          AppFactsStrip(
+            facts: [
+              AppFact(
+                icon: Icons.piano_rounded,
+                label: song.hasCustomKey ? 'Tom nesta escala' : 'Tom',
+                value: temTom ? song.key! : '—',
+                highlight: temTom,
+                wrapValue: true,
+                hint: song.hasCustomKey && (song.defaultKey?.isNotEmpty ?? false)
+                    ? 'equipe: ${song.defaultKey}'
+                    : null,
+              ),
+              AppFact(
+                icon: Icons.flag_outlined,
+                label: 'Momento',
+                value: song.momentText ?? '—',
+                wrapValue: true,
+              ),
+              AppFact(
+                icon: Icons.menu_book_outlined,
+                label: 'Hinário',
+                value: song.hymnal?.label ?? '—',
+              ),
+            ],
+          ),
           if (song.note?.isNotEmpty ?? false) ...[
             const SizedBox(height: AppSpacing.md),
             _NoteBand(note: song.note!),
           ],
           const SizedBox(height: AppSpacing.lg),
-          _Links(song: song),
-          const SizedBox(height: AppSpacing.lg),
-          _RepertoireLink(teamId: teamId, songId: song.songId),
+          // Os quatro, sempre, como na tela da música: "está sem cifra" é
+          // justamente o que a equipe precisa ver para ir atrás dela. A letra
+          // guardada aparece inteira logo abaixo; o ladrilho abre o site.
+          SongResourceRow(
+            resources: songResources(
+              context,
+              chordsUrl: song.chordsUrl,
+              lyricsUrl: song.lyricsUrl,
+              youtubeUrl: song.youtubeUrl,
+              spotifyUrl: song.spotifyUrl,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           // A escala não carrega a letra -- são centenas de caracteres por
           // música e ela já é a tela mais pesada. Aqui a busca é de uma música
           // só, e só quando alguém abriu esta folha.
           _Lyrics(teamId: teamId, songId: song.songId),
-        ],
-      ),
-    );
-  }
-}
-
-/// "314 CC · Dízimos e Ofertas", ou o que houver dos dois. Nulo quando não há
-/// nenhum -- a linha inteira some em vez de mostrar campo vazio.
-String? _reference(EventSong song) {
-  final partes = [
-    if (song.hymnal != null) song.hymnal!.label,
-    if (song.momentText != null) song.momentText!,
-  ];
-  return partes.isEmpty ? null : partes.join(' · ');
-}
-
-/// O tom desta escala, em destaque.
-///
-/// Quando a escala mudou o tom, o da equipe aparece embaixo em vez de sumir:
-/// quem decorou "sempre em G" precisa ver que hoje é diferente, e por quê.
-class _KeyCard extends StatelessWidget {
-  const _KeyCard({required this.song});
-
-  final EventSong song;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final temTom = song.key?.isNotEmpty ?? false;
-
-    return AppCard(
-      color: song.hasCustomKey ? scheme.primaryContainer : null,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          Icon(
-            Icons.piano_rounded,
-            color: song.hasCustomKey ? scheme.onPrimaryContainer : scheme.primary,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  temTom ? 'Tom nesta escala' : 'Tom não definido',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: song.hasCustomKey
-                        ? scheme.onPrimaryContainer
-                        : scheme.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  temTom ? song.key! : '—',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: song.hasCustomKey
-                        ? scheme.onPrimaryContainer
-                        : scheme.onSurface,
-                  ),
-                ),
-                if (song.hasCustomKey &&
-                    (song.defaultKey?.isNotEmpty ?? false))
-                  Text(
-                    'A equipe costuma cantar em ${song.defaultKey}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onPrimaryContainer.withValues(alpha: 0.85),
-                    ),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -231,63 +184,11 @@ class _NoteBand extends StatelessWidget {
   }
 }
 
-class _Links extends StatelessWidget {
-  const _Links({required this.song});
-
-  final EventSong song;
-
-  Future<void> _open(BuildContext context, String url) async {
-    final ok = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!ok && context.mounted) {
-      showAppSnackBar(
-        context,
-        'Não foi possível abrir o link.',
-        tone: AppTone.danger,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // A cifra primeiro: é o que o instrumentista abre, e é o link que a escala
-    // existia para não alcançar.
-    final entries = <(IconData, String, String?)>[
-      (Icons.music_note_rounded, 'Cifra', song.chordsUrl),
-      (Icons.article_outlined, 'Letra', song.lyricsUrl),
-      (Icons.play_circle_outline_rounded, 'YouTube', song.youtubeUrl),
-      (Icons.headphones_rounded, 'Spotify', song.spotifyUrl),
-    ].where((e) => e.$3?.isNotEmpty ?? false).toList();
-
-    if (entries.isEmpty) {
-      return Text(
-        'Esta música ainda não tem cifra nem link cadastrado.',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        for (final (icon, label, url) in entries)
-          ActionChip(
-            avatar: Icon(icon, size: 18),
-            label: Text(label),
-            onPressed: () => _open(context, url!),
-          ),
-      ],
-    );
-  }
-}
-
 /// A ponte para o repertório: a mesma música, na tela onde ela se cadastra.
+///
+/// **Um ícone ao lado do título**, e não um botão contornado de largura
+/// inteira entre os links e a letra: ali ele pesava mais que a cifra, que é o
+/// que a folha existe para abrir.
 ///
 /// **Vai pelo id, nunca pelo nome.** A música da escala aponta para a do
 /// repertório (`songId`), e procurar por título abriria a música errada nas
@@ -299,12 +200,10 @@ class _Links extends StatelessWidget {
 /// que não é a que ele está consultando.
 ///
 /// Fecha a folha antes de navegar, e é isso que faz o botão "voltar" do
-/// aparelho devolver a **escala** -- e não esta folha por cima dela, que é o
-/// que aconteceria se ela continuasse empilhada embaixo.
+/// aparelho devolver a **escala** -- e não esta folha por cima dela.
 ///
 /// O rótulo diz "Ver", e não "Editar": quem é MEMBER também chega aqui, e a
-/// tela do repertório é que decide se mostra o lápis. Prometer edição a quem
-/// não pode editar seria pior do que não oferecer o caminho.
+/// tela do repertório é que decide se mostra o lápis.
 class _RepertoireLink extends StatelessWidget {
   const _RepertoireLink({required this.teamId, required this.songId});
 
@@ -316,16 +215,13 @@ class _RepertoireLink extends StatelessWidget {
     final router = GoRouter.of(context);
     final navigator = Navigator.of(context);
 
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          navigator.pop();
-          router.push('/equipe/musicas/$songId?equipe=$teamId');
-        },
-        icon: const Icon(Icons.library_music_outlined, size: 18),
-        label: const Text('Ver no repertório'),
-      ),
+    return IconButton(
+      tooltip: 'Ver no repertório',
+      icon: const Icon(Icons.library_music_outlined),
+      onPressed: () {
+        navigator.pop();
+        router.push('/equipe/musicas/$songId?equipe=$teamId');
+      },
     );
   }
 }

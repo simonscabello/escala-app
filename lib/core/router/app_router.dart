@@ -29,10 +29,9 @@ import '../../features/team/domain/team_models.dart';
 import '../../features/songs/domain/song_models.dart';
 import '../../features/songs/data/song_repository.dart';
 import '../../features/songs/presentation/add_song_screen.dart';
-import '../../features/songs/presentation/repertoire_health_screen.dart';
+import '../../features/songs/presentation/repertoire_reports_screen.dart';
 import '../../features/songs/presentation/song_detail_screen.dart';
 import '../../features/songs/presentation/song_form_screen.dart';
-import '../../features/songs/presentation/song_usage_screen.dart';
 import '../../features/songs/presentation/songs_screen.dart';
 import '../../features/suggestions/domain/song_suggestion.dart';
 import '../../features/suggestions/presentation/suggestion_detail_screen.dart';
@@ -311,14 +310,19 @@ final routerProvider = Provider<GoRouter>((ref) {
               // lidos como o id de uma música e a tela abriria em erro.
               GoRoute(
                 path: 'uso',
-                builder: (_, __) =>
-                    _withActiveTeam(ref, (id) => SongUsageScreen(teamId: id)),
+                builder: (_, __) => _withActiveTeam(
+                  ref,
+                  (id) => RepertoireReportsScreen(
+                    teamId: id,
+                    initial: RepertoireReport.usage,
+                  ),
+                ),
               ),
               GoRoute(
                 path: 'saude',
                 builder: (_, __) => _withActiveTeam(
                   ref,
-                  (id) => RepertoireHealthScreen(teamId: id),
+                  (id) => RepertoireReportsScreen(teamId: id),
                 ),
               ),
               GoRoute(

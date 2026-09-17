@@ -4,14 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_badge.dart';
+import '../../../shared/widgets/app_bottom_action_bar.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_detail_header.dart';
+import '../../../shared/widgets/app_facts_strip.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_notice.dart';
 import '../../../shared/widgets/app_states.dart';
 import '../../../shared/widgets/cache_stamp_banner.dart';
 import '../../../shared/widgets/position_icon.dart';
@@ -24,12 +28,10 @@ import '../data/event_repository.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/schedule_share_text.dart';
-import 'event_schedule_facts.dart';
 import '../../suggestions/presentation/suggest_song_sheet.dart';
 import '../../unavailability/domain/unavailability_models.dart';
 import 'duplicate_event_dialog.dart';
 import 'event_song_sheet.dart';
-import 'event_times.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -77,8 +79,6 @@ class EventDetailScreen extends ConsumerWidget {
                   tooltip: 'Mais opções desta escala',
                   onSelected: (value) async {
                     switch (value) {
-                      case 'assign':
-                        context.push('/agenda/${event.id}/escalar');
                       case 'edit':
                         context.push('/agenda/${event.id}/editar');
                       case 'duplicate':
@@ -93,11 +93,10 @@ class EventDetailScreen extends ConsumerWidget {
                         await _confirmDelete(context, ref, event);
                     }
                   },
+                  // Sem "Escalar equipe": a ação está no bloco da equipe, no
+                  // lugar onde a falta é percebida, e repeti-la aqui era a
+                  // mesma porta em dois cantos.
                   itemBuilder: (menuContext) => [
-                    const PopupMenuItem(
-                      value: 'assign',
-                      child: Text('Escalar equipe'),
-                    ),
                     const PopupMenuItem(
                       value: 'edit',
                       child: Text('Editar dia e horários'),
@@ -285,51 +284,31 @@ class _PublishBarState extends ConsumerState<_PublishBar> {
     final scheme = theme.colorScheme;
     final blockers = widget.event.publicationBlockers;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        border: Border(top: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: SafeArea(
-        child: AppContentWidth.reading(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.xl,
-              vertical: AppSpacing.md,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const AppBadge(label: 'Rascunho', tone: AppTone.warning),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        _resumo(blockers),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                FilledButton(
-                  onPressed: _publishing ? null : _publish,
-                  child: _publishing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Publicar'),
-                ),
-              ],
+    return AppBottomActionBar(
+      sideBySideFrom: 0,
+      leading: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AppBadge(label: 'Rascunho', tone: AppTone.warning),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _resumo(blockers),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
           ),
-        ),
+        ],
+      ),
+      action: FilledButton(
+        onPressed: _publishing ? null : _publish,
+        child: _publishing
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Publicar'),
       ),
     );
   }
@@ -365,7 +344,7 @@ class _EventDetailBody extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.screenPadding,
-            AppSpacing.xl,
+            AppSpacing.lg,
             AppSpacing.screenPadding,
             AppSpacing.xxxl,
           ),
@@ -383,6 +362,12 @@ class _EventDetailBody extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xl),
               _EventNotes(event: event),
+              // **O repertório vem antes da equipe.** É o que traz o músico a
+              // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
+              // da lista de nomes ele começava fora da tela. "Onde eu entro"
+              // já está respondido na faixa de fatos do topo.
+              _SongsSection(event: event, canManage: canManage),
+              const SizedBox(height: AppSpacing.xl),
               if (event.warnings.unavailableAssigned.isNotEmpty) ...[
                 _UnavailableWarningBand(
                   people: event.warnings.unavailableAssigned,
@@ -391,8 +376,6 @@ class _EventDetailBody extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
               ],
               _TeamSection(event: event, canManage: canManage),
-              const SizedBox(height: AppSpacing.xl),
-              _SongsSection(event: event, canManage: canManage),
               const SizedBox(height: AppSpacing.xl),
               // Para a equipe inteira, e não dentro do menu de quem lidera:
               // "quem me tirou da escala?" é pergunta de quem foi tirado.
@@ -428,17 +411,17 @@ class _HistoryLink extends StatelessWidget {
   }
 }
 
-/// A manchete da escala: data, título, horários, local e "onde você entra".
+/// O cabeçalho da escala: a data, e a faixa com o que se pergunta primeiro.
 ///
-/// **A mesma superfície do destaque da agenda**, e isso é o ponto: quem toca no
-/// cartão violeta da agenda chega numa tela que abre com o mesmo cartão
-/// violeta. A continuidade entre as duas telas passou a ser visível, em vez de
-/// ser só a mesma informação repetida em outro tom.
+/// **No modelo da tela da música, e não da manchete da Home.** A escala abria
+/// com o mesmo cartão violeta da Home — quem tocava na manchete de lá chegava
+/// numa tela que repetia a manchete. A justificativa era a continuidade com a
+/// manchete da agenda, que deixou de existir quando a agenda virou calendário.
 ///
-/// Chegou a ficar sem moldura, e a lição foi a mesma dos dois lados: sem fundo,
-/// o bloco não se lê como um objeto — parece texto derramado no começo da tela.
-/// A hierarquia contra os blocos de baixo (equipe, músicas) vem do corpo da
-/// data, da folga interna e da superfície, não de tirar o chão dele.
+/// A data é o título; o nome especial ("Páscoa") e o local ficam embaixo; e a
+/// faixa de fatos responde, na ordem, **quando é o culto, quando é o ensaio e
+/// onde você entra** — a frase "Domingo 09h, você, guitarra, ensaio sábado 19h"
+/// que é a razão de o app existir. Sem você na escala, a coluna não existe.
 class _EventHeader extends StatelessWidget {
   const _EventHeader({
     required this.event,
@@ -453,68 +436,77 @@ class _EventHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     final hasLocation = event.location?.isNotEmpty ?? false;
+    final services = event.displayServices;
+    final rehearsalAt = event.rehearsalAt;
 
-    return AppCard(
-      gradient: AppColors.heroGradient(theme.colorScheme),
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Sem selo de data: ele dizia "DOM 9 AGO" logo ao lado de "Domingo,
-          // 9 de agosto". A data por extenso sozinha basta.
-          Text(
-            // A mesma quebra da agenda, pela mesma razão: a manchete não muda
-            // de forma conforme o comprimento do dia da semana.
-            heroDateText(
-              context,
-              formatEventWeekdayDate(event.startsAt, timezone),
-            ),
-            style: theme.textTheme.displaySmall?.copyWith(
-              color: AppColors.onHero,
-            ),
-          ),
-          if (event.hasTitle)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppDetailHeader(
+          title: formatEventWeekdayDate(event.startsAt, timezone),
+          lines: [
+            if (event.hasTitle)
+              Text(
                 event.title!,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: AppColors.onHeroVariant,
+                style: theme.textTheme.titleMedium?.copyWith(color: muted),
+              ),
+            // Fora de etiqueta: um endereço longo tem a largura toda e corta
+            // com "…" em vez de estourar.
+            if (hasLocation)
+              DetailMetaLine(
+                icon: Icons.location_on_outlined,
+                text: event.location!,
+                maxLines: 1,
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppFactsStrip(
+          facts: [
+            if (services.length <= 1)
+              AppFact(
+                icon: Icons.church_rounded,
+                label: services.isEmpty ? 'Culto' : services.first.label,
+                value: formatEventTime(
+                  services.isEmpty ? event.startsAt : services.first.startsAt,
+                  timezone,
                 ),
+              )
+            else
+              AppFact(
+                icon: Icons.church_rounded,
+                label: 'Cultos',
+                // Uma linha por culto, com a hora alinhada: é a pergunta de
+                // quem abre a escala, e comparar 08:30 com 19:00 é de relance.
+                value: [
+                  for (final service in services)
+                    '${service.label} '
+                        '${formatEventTime(service.startsAt, timezone)}',
+                ].join('\n'),
+                wrapValue: true,
+                maxLines: services.length,
               ),
+            AppFact(
+              icon: Icons.schedule_rounded,
+              label: 'Ensaio',
+              value: rehearsalAt == null
+                  ? 'Sem ensaio'
+                  : formatRehearsalTime(rehearsalAt, event.startsAt, timezone),
+              wrapValue: true,
             ),
-          const SizedBox(height: AppSpacing.lg),
-          EventTimesList(
-            event: event,
-            timezone: timezone,
-            color: AppColors.onHeroVariant,
-            hourColor: AppColors.onHero,
-          ),
-          // Fora de etiqueta: um endereço longo não caberia e estouraria a
-          // linha. Aqui ele tem a largura toda e corta com "…".
-          if (hasLocation) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _MetaLine(
-              icon: Icons.location_on_outlined,
-              text: event.location!,
-              maxLines: 1,
-              color: AppColors.onHeroVariant,
-            ),
-          ],
-          if (youPositions.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: YouHighlight(
-                positionNames: youPositions,
-                background: AppColors.onHero.withValues(alpha: 0.16),
-                foreground: AppColors.onHero,
+            if (youPositions.isNotEmpty)
+              AppFact(
+                icon: Icons.star_rounded,
+                label: 'Sua função',
+                value: youPositions.join(' · '),
+                highlight: true,
+                wrapValue: true,
               ),
-            ),
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -566,35 +558,33 @@ class _EventNotes extends StatelessWidget {
   }
 }
 
-/// Linha de apoio (local, paleta, observações): ícone à esquerda, texto que
-/// ocupa o resto da largura.
+/// Linha de apoio (paleta, observações): ícone à esquerda, texto que ocupa o
+/// resto da largura.
 class _MetaLine extends StatelessWidget {
   const _MetaLine({
     required this.icon,
     required this.text,
     required this.maxLines,
-    this.color,
   });
 
   final IconData icon;
   final String text;
   final int maxLines;
 
-  /// A tinta da linha sobre a manchete violeta. Nula em cartão comum.
-  final Color? color;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final ink = color ?? scheme.onSurfaceVariant;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 15, color: ink),
+          child: Icon(
+            icon,
+            size: 15,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -602,7 +592,7 @@ class _MetaLine extends StatelessWidget {
             text,
             maxLines: maxLines,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(color: color),
+            style: theme.textTheme.bodyMedium,
           ),
         ),
       ],
@@ -641,8 +631,6 @@ class _UnavailableWarningBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final palette = AppStatusColors.of(context).danger;
     final names = joinNames(people.map((p) => p.displayName));
     final single = people.length == 1;
 
@@ -652,62 +640,21 @@ class _UnavailableWarningBand extends StatelessWidget {
         .map((p) => '${p.displayName}: ${p.reason}')
         .join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: palette.container,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border(
-          left: BorderSide(color: palette.foreground, width: 4),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.event_busy_rounded,
-            color: palette.onContainer,
-            size: 22,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  single
-                      ? '$names avisou que não pode neste dia'
-                      : '$names avisaram que não podem neste dia',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: palette.onContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (reasons.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    reasons,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: palette.onContainer,
-                    ),
-                  ),
-                ],
-                if (canManage) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    single
-                        ? 'Ainda está na escala. Ajuste em "Escalar equipe".'
-                        : 'Ainda estão na escala. Ajuste em "Escalar equipe".',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: palette.onContainer.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
+    final message = [
+      if (reasons.isNotEmpty) reasons,
+      if (canManage)
+        single
+            ? 'Ainda está na escala. Ajuste em "Editar", na equipe escalada.'
+            : 'Ainda estão na escala. Ajuste em "Editar", na equipe escalada.',
+    ].join('\n');
+
+    return AppNotice(
+      tone: AppTone.danger,
+      icon: Icons.event_busy_rounded,
+      title: single
+          ? '$names avisou que não pode neste dia'
+          : '$names avisaram que não podem neste dia',
+      message: message.isEmpty ? 'Confira com a pessoa antes do culto.' : message,
     );
   }
 }
@@ -727,8 +674,6 @@ class _TeamSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final empty = event.assignments.isEmpty;
 
     return Column(
@@ -737,30 +682,28 @@ class _TeamSection extends StatelessWidget {
         SectionHeader(
           title: 'Equipe escalada',
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          trailing: canManage
+          trailing: canManage && !empty
               ? TextButton.icon(
                   onPressed: () => context.push('/agenda/${event.id}/escalar'),
-                  icon: Icon(
-                    empty ? Icons.add_rounded : Icons.edit_outlined,
-                    size: 18,
-                  ),
-                  label: Text(empty ? 'Escalar' : 'Editar'),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Editar'),
                 )
               : null,
         ),
         if (empty)
-          AppCard(
-            color: scheme.surfaceContainerLow,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(
-              canManage
-                  ? 'Ninguém escalado ainda. Toque em "Escalar" para escolher '
-                      'quem toca o quê.'
-                  : 'A equipe desta escala ainda não foi definida.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
+          _EmptySection(
+            message: canManage
+                ? 'Ninguém escalado ainda.'
+                : 'A equipe desta escala ainda não foi definida.',
+            action: canManage
+                ? FilledButton.tonalIcon(
+                    style: AppButtonStyles.compact,
+                    onPressed: () =>
+                        context.push('/agenda/${event.id}/escalar'),
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: const Text('Escalar equipe'),
+                  )
+                : null,
           )
         else
           _AssignedTeamCard(
@@ -772,6 +715,43 @@ class _TeamSection extends StatelessWidget {
             },
           ),
       ],
+    );
+  }
+}
+
+/// Um bloco vazio que diz o que falta **e** oferece o caminho.
+///
+/// Os vazios da escala diziam "Toque em ‘Escalar’ para escolher quem toca o
+/// quê" — mandando procurar um botão de texto pequeno no cabeçalho, num canto
+/// que o olho não visita. A ação agora mora dentro do próprio vazio.
+class _EmptySection extends StatelessWidget {
+  const _EmptySection({required this.message, this.action});
+
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AppCard(
+      surface: CardSurface.sunken,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            action!,
+          ],
+        ],
+      ),
     );
   }
 }
@@ -953,7 +933,7 @@ class _MinisterBanner extends StatelessWidget {
         Icon(
           Icons.record_voice_over_rounded,
           size: 18,
-          color: scheme.primary,
+          color: scheme.onSurfaceVariant,
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -1012,17 +992,20 @@ class _AssignmentGroupSection extends StatelessWidget {
           children: [
             // Sem `category`: o backend so devolve o nome da funcao no grupo
             // da escala. O mapa de icones resolve pelo nome.
+            // Cinza, e não violeta: é cabeçalho de grupo, e o violeta do app
+            // diz "é aqui que você entra". Cinco funções em violeta faziam a
+            // escala inteira gritar.
             PositionIcon(
               group.positionName,
               size: 15,
-              color: scheme.primary,
+              color: scheme.onSurfaceVariant,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 group.positionName,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: scheme.primary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1101,7 +1084,7 @@ class _AssignedMemberRow extends StatelessWidget {
                 UnavailableBadge(reason: unavailableReason)
               else if (!member.isRegisteredForPosition)
                 AppBadge(
-                  label: 'fora do cadastro',
+                  label: 'Fora do cadastro',
                   tone: AppTone.warning,
                   semanticsLabel: '${member.displayName} não tem esta função '
                       'no cadastro da equipe',
@@ -1141,8 +1124,7 @@ class _SongsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final timezone =
         event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone;
     final grupos = event.songsByService;
@@ -1161,84 +1143,61 @@ class _SongsSection extends StatelessWidget {
               ? 'Repertório definido na hora, no culto.'
               : null,
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          trailing: canManage
+          // Com músicas, "Editar" no cabeçalho. Sem nenhuma, a ação mora no
+          // vazio logo abaixo — menos no modo "na hora" para quem lidera, em
+          // que anotar uma música continua possível mas não é convidado.
+          trailing: canManage && (event.songs.isNotEmpty || event.isRepertoireOnTheFly)
               ? TextButton.icon(
                   onPressed: () => context.push(
                     '/agenda/${event.id}/repertorio',
                     extra: event,
                   ),
                   icon: Icon(
-                    event.songs.isEmpty
-                        ? Icons.add_rounded
-                        : Icons.edit_outlined,
+                    event.songs.isEmpty ? Icons.add_rounded : Icons.edit_outlined,
                     size: 18,
                   ),
-                  // Continua sendo possível anotar uma música: o modo é sobre
-                  // não **cobrar** repertório, não sobre proibi-lo. Mas o botão
-                  // deixa de convidar ("Montar") e passa a ser o que é.
-                  label: Text(
-                    switch ((event.songs.isEmpty, event.isRepertoireOnTheFly)) {
-                      (true, true) => 'Anotar',
-                      (true, false) => 'Montar',
-                      (false, _) => 'Editar',
-                    },
-                  ),
+                  label: Text(event.songs.isEmpty ? 'Anotar' : 'Editar'),
                 )
               : null,
         ),
         // Escala inteira sem música: um aviso só. Repetir "sem músicas" em cada
         // culto diria a mesma coisa duas vezes e ocuparia o dobro da tela.
         if (event.songs.isEmpty)
-          AppCard(
-            color: scheme.surfaceContainerLow,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  switch ((event.isRepertoireOnTheFly, canManage)) {
-                    // Nada de "ainda": o "ainda" promete uma lista que não vem.
-                    (true, _) =>
-                      'As músicas desta escala são definidas na hora, no '
-                          'culto.',
-                    (false, true) =>
-                      'Nenhuma música escolhida ainda. Toque em "Montar" para '
-                          'escolher o repertório.',
-                    (false, false) => 'O repertório ainda não foi definido.',
-                  },
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+          _EmptySection(
+            message: switch ((event.isRepertoireOnTheFly, canManage)) {
+              // Nada de "ainda": o "ainda" promete uma lista que não vem.
+              (true, _) =>
+                'As músicas desta escala são definidas na hora, no culto.',
+              (false, true) => 'Nenhuma música escolhida ainda.',
+              (false, false) => 'O repertório ainda não foi definido.',
+            },
+            action: switch ((event.isRepertoireOnTheFly, canManage)) {
+              (false, true) => FilledButton.tonalIcon(
+                  style: AppButtonStyles.compact,
+                  onPressed: () => context.push(
+                    '/agenda/${event.id}/repertorio',
+                    extra: event,
                   ),
+                  icon: const Icon(Icons.queue_music_rounded, size: 18),
+                  label: const Text('Montar repertório'),
                 ),
-                // A porta que este vazio abre. A escala agora chega à equipe
-                // com as músicas em aberto, e é exatamente aí que a sugestão
-                // tem chance de ser acolhida -- depois de montado o
-                // repertório, ela já chega atrasada. A data vem preenchida com
-                // a do culto: quem toca aqui está pensando neste domingo.
-                //
-                // Culto que já passou não oferece nada: o servidor recusa
-                // sugestão com data no passado, e o seletor de data da folha
-                // começa em hoje.
-                if (!canManage && !_jaPassou(diaDoCulto)) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => showSuggestSongSheet(
-                        context,
-                        teamId: event.teamId,
-                        targetDate: diaDoCulto,
-                      ),
-                      icon: const Icon(
-                        Icons.lightbulb_outline_rounded,
-                        size: 18,
-                      ),
-                      label: const Text('Sugerir uma música'),
-                    ),
+              // A porta que este vazio abre para quem não lidera. A escala
+              // chega à equipe com as músicas em aberto, e é aí que a sugestão
+              // tem chance de ser acolhida. A data vem preenchida com a do
+              // culto. Culto que já passou não oferece nada: o servidor recusa
+              // sugestão com data no passado.
+              (_, false) when !_jaPassou(diaDoCulto) => TextButton.icon(
+                  style: AppButtonStyles.compactText,
+                  onPressed: () => showSuggestSongSheet(
+                    context,
+                    teamId: event.teamId,
+                    targetDate: diaDoCulto,
                   ),
-                ],
-              ],
-            ),
+                  icon: const Icon(Icons.lightbulb_outline_rounded, size: 18),
+                  label: const Text('Sugerir uma música'),
+                ),
+              _ => null,
+            },
           )
         else
           AppCard(
@@ -1313,14 +1272,18 @@ class _ServiceSongsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.church_rounded, size: 15, color: scheme.primary),
+            Icon(
+              Icons.church_rounded,
+              size: 15,
+              color: scheme.onSurfaceVariant,
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 '${service.label} '
                 '${formatEventTime(service.startsAt, timezone)}',
                 style: theme.textTheme.titleSmall?.copyWith(
-                  color: scheme.primary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),

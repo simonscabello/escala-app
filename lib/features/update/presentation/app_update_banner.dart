@@ -5,10 +5,22 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_notice.dart';
 import '../data/version_repository.dart';
 
+/// Aviso de versão nova, no topo da Home e da Agenda.
+///
+/// É um [AppNotice] como os outros avisos do app. [margin] é de quem chama: a
+/// Home o põe fora da lista (com a margem da página), a Agenda dentro dela
+/// (que já tem a margem) — com a margem fixa de antes, na Agenda ele ficava
+/// 40px recuado em relação ao calendário.
 class AppUpdateBanner extends ConsumerWidget {
-  const AppUpdateBanner({super.key});
+  const AppUpdateBanner({
+    super.key,
+    this.margin = const EdgeInsets.only(bottom: AppSpacing.md),
+  });
+
+  final EdgeInsetsGeometry margin;
 
   Future<void> _download(BuildContext context, String url) async {
     final uri = Uri.tryParse(url);
@@ -30,53 +42,22 @@ class AppUpdateBanner extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final url = update.apkUrl;
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        0,
-        AppSpacing.xl,
-        AppSpacing.md,
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.system_update_rounded, color: scheme.onPrimaryContainer),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              url == null
-                  ? 'Versão ${update.latestVersion} disponível. Peça o APK '
-                      'atualizado ao líder.'
-                  : 'Versão ${update.latestVersion} disponível.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (url != null)
-            TextButton(
+    return AppNotice(
+      margin: margin,
+      tone: AppTone.primary,
+      icon: Icons.system_update_rounded,
+      message: url == null
+          ? 'Versão ${update.latestVersion} disponível. Peça o APK atualizado '
+              'ao líder.'
+          : 'Versão ${update.latestVersion} disponível.',
+      action: url == null
+          ? null
+          : TextButton(
               onPressed: () => _download(context, url),
-              style: TextButton.styleFrom(
-                foregroundColor: scheme.onPrimaryContainer,
-              ),
               child: const Text('Atualizar'),
             ),
-        ],
-      ),
     );
   }
 }

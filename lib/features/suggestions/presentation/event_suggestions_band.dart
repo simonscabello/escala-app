@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
+import '../../../shared/widgets/app_button_styles.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../events/domain/event_models.dart';
@@ -291,8 +292,14 @@ class _SuggestionRow extends StatelessWidget {
           ),
         const SizedBox(height: AppSpacing.xs),
         // A justificativa aparece aqui, e não só na tela de sugestões: é o que
-        // o líder lê para decidir, e ele está decidindo agora.
-        Text(s.reason, style: theme.textTheme.bodySmall),
+        // o líder lê para decidir, e ele está decidindo agora. Em duas linhas:
+        // inteira, cada sugestão ocupava meio celular no topo da montagem.
+        Text(
+          s.reason,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall,
+        ),
         const SizedBox(height: AppSpacing.xs),
         Text(
           s.alsoSuggestedBy.isEmpty
@@ -318,9 +325,16 @@ class _SuggestionRow extends StatelessWidget {
             runSpacing: AppSpacing.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              TextButton(onPressed: onAccept, child: const Text('Aceitar')),
+              // Botões do tamanho de uma ação de linha: o tonal herdava os
+              // 52px do botão que salva um formulário.
+              TextButton(
+                style: AppButtonStyles.compactText,
+                onPressed: onAccept,
+                child: const Text('Aceitar'),
+              ),
               if (!s.canGoToSetlist)
                 FilledButton.tonalIcon(
+                  style: AppButtonStyles.compact,
                   onPressed: onRegister,
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: const Text('Cadastrar'),
@@ -334,6 +348,7 @@ class _SuggestionRow extends StatelessWidget {
                 )
               else
                 FilledButton.tonalIcon(
+                  style: AppButtonStyles.compact,
                   onPressed: onAdd,
                   icon: const Icon(Icons.playlist_add_rounded, size: 18),
                   label: const Text('Adicionar ao culto'),

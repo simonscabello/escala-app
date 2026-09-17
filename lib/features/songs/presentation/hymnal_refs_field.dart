@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../data/hymnal_repository.dart';
 import '../domain/hymnal_models.dart';
@@ -73,8 +74,11 @@ class HymnalRefsField extends ConsumerWidget {
         .map((ref) => ref.hymnalId)
         .toSet();
 
-    final escolha = await showDialog<HymnalRef>(
+    // Folha no celular, diálogo no monitor: é um formulário curto, como os
+    // outros do app. Diálogo puro fica para confirmação.
+    final escolha = await showAdaptiveSheet<HymnalRef>(
       context: context,
+      maxWidth: 440,
       builder: (_) => _HymnalRefDialog(
         hymnals: hymnals.where((h) => !ocupados.contains(h.id)).toList(),
         atual: atual,
@@ -105,8 +109,10 @@ class HymnalRefsField extends ConsumerWidget {
       children: [
         Text('Hinários', style: theme.textTheme.titleSmall),
         Text(
-          'O número com que a igreja pede a música. A primeira é a que aparece '
-          'na escala.',
+          refs.length > 1
+              ? 'O número com que a igreja pede a música. A marcada com estrela '
+                  'aparece na escala.'
+              : 'O número com que a igreja pede a música.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
@@ -293,48 +299,57 @@ class _HymnalRefDialogState extends State<_HymnalRefDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        widget.atual == null ? 'Adicionar referência' : 'Editar referência',
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DropdownButtonFormField<Hymnal>(
-            initialValue: _hymnal,
-            decoration: const InputDecoration(labelText: 'Hinário'),
-            items: [
-              for (final hymnal in widget.hymnals)
-                DropdownMenuItem(value: hymnal, child: Text(hymnal.name)),
-            ],
-            onChanged: (value) => setState(() {
-              _hymnal = value;
-              _erro = null;
-            }),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: _number,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: 'Número',
-              errorText: _erro,
-              helperText: _hymnal?.maxNumber != null
-                  ? 'De 1 a ${_hymnal!.maxNumber}'
-                  : null,
-            ),
-            onSubmitted: (_) => _confirmar(),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
         ),
-        FilledButton(onPressed: _confirmar, child: const Text('Aplicar')),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.atual == null ? 'Adicionar referência' : 'Editar referência',
+              style: theme.textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            DropdownButtonFormField<Hymnal>(
+              initialValue: _hymnal,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Hinário'),
+              items: [
+                for (final hymnal in widget.hymnals)
+                  DropdownMenuItem(value: hymnal, child: Text(hymnal.name)),
+              ],
+              onChanged: (value) => setState(() {
+                _hymnal = value;
+                _erro = null;
+              }),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _number,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Número',
+                errorText: _erro,
+                helperText: _hymnal?.maxNumber != null
+                    ? 'De 1 a ${_hymnal!.maxNumber}'
+                    : null,
+              ),
+              onSubmitted: (_) => _confirmar(),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            FilledButton(onPressed: _confirmar, child: const Text('Aplicar')),
+          ],
+        ),
+      ),
     );
   }
 }

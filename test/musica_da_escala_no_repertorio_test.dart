@@ -48,8 +48,9 @@ void main() {
 
     // "Editar no repertório" prometeria a quem é MEMBER uma edição que a tela
     // do repertório não oferece.
-    expect(find.text('Ver no repertório'), findsOneWidget);
+    expect(find.byTooltip('Ver no repertório'), findsOneWidget);
     expect(find.textContaining('Editar'), findsNothing);
+    expect(find.byTooltip('Editar no repertório'), findsNothing);
   });
 }
 
@@ -63,7 +64,7 @@ const _song = EventSong(
 Future<String?> _abrirEToqueNoAtalho(WidgetTester tester) async {
   final rotas = await _abrirFolha(tester);
 
-  await tester.tap(find.text('Ver no repertório'));
+  await tester.tap(find.byTooltip('Ver no repertório'));
   await tester.pumpAndSettle();
 
   return rotas.last;

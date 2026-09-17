@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/config/feature_flags.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../shared/widgets/app_badge.dart';
 import '../../../shared/widgets/app_date_badge.dart';
 import '../../../shared/widgets/app_pressable.dart';
 import '../../../shared/widgets/you_highlight.dart';
 import '../domain/event_datetime.dart';
 import '../domain/event_models.dart';
 import '../domain/open_date.dart';
-import 'duplicate_event_dialog.dart';
 import 'event_schedule_facts.dart';
 
 /// Uma escala como linha de lista.
@@ -34,7 +30,15 @@ import 'event_schedule_facts.dart';
 /// vira colunas — data, horários, sua função — e a lista passa a ser lida de
 /// cima a baixo por coluna, que é o que faz uma agenda de trinta escalas
 /// funcionar num monitor. As duas usam exatamente os mesmos campos do modelo.
-class CompactScheduleTile extends ConsumerWidget {
+///
+/// **A data por extenso vem sem o dia da semana** ("21 de setembro"): o bloco
+/// ao lado já diz "DOM 21", e "Domingo, 21 de setembro" repetia as duas
+/// informações na mesma linha.
+///
+/// **Sem menu na linha.** Quem lidera tinha um ⋮ em cada escala com um item
+/// só, "Duplicar escala" — que também está no menu do detalhe. Numa agenda de
+/// oito escalas eram oito ícones iguais disputando a coluna da seta.
+class CompactScheduleTile extends StatelessWidget {
   const CompactScheduleTile({
     super.key,
     required this.event,
@@ -49,7 +53,7 @@ class CompactScheduleTile extends ConsumerWidget {
   final bool wide;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final timezone =
@@ -76,7 +80,7 @@ class CompactScheduleTile extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          formatEventWeekdayDate(event.startsAt, timezone),
+          formatEventDayMonth(event.startsAt, timezone),
           style: theme.textTheme.titleMedium,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -100,37 +104,14 @@ class CompactScheduleTile extends ConsumerWidget {
       ),
     );
 
-    final trailing = canManage && FeatureFlags.duplicateSchedule
-        // O menu do item só existe por causa de "Duplicar escala"; com a
-        // funcionalidade escondida, a linha volta a ser só um atalho.
-        ? PopupMenuButton<String>(
-            tooltip: 'Mais opções desta escala',
-            icon: Icon(
-              Icons.more_vert_rounded,
-              size: 20,
-              color: scheme.onSurfaceVariant,
-            ),
-            onSelected: (value) async {
-              if (value == 'duplicate') {
-                await showDuplicateEventDialog(
-                  context: context,
-                  ref: ref,
-                  source: event,
-                );
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'duplicate', child: Text('Duplicar escala')),
-            ],
-          )
-        : Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm, right: 4),
-            child: Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
-            ),
-          );
+    final trailing = Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm, right: 4),
+      child: Icon(
+        Icons.chevron_right_rounded,
+        size: 20,
+        color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+      ),
+    );
 
     return AppPressable(
       onTap: () => context.push('/agenda/${event.id}'),
@@ -181,13 +162,6 @@ class CompactScheduleTile extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (event.isDraft) ...[
-                          const AppBadge(
-                            label: 'Rascunho',
-                            tone: AppTone.warning,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                        ],
                         title,
                         const SizedBox(height: 3),
                         timesText,
@@ -243,7 +217,7 @@ class OpenDateTile extends StatelessWidget {
     );
 
     final title = Text(
-      formatEventWeekdayDate(date.startsAt, timezone),
+      formatEventDayMonth(date.startsAt, timezone),
       style: theme.textTheme.titleMedium?.copyWith(
         color: scheme.onSurfaceVariant,
       ),
@@ -345,14 +319,17 @@ class ScheduleStatusLines extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: alignment,
       children: [
+        // Um sinal só para o rascunho. Havia a etiqueta "Rascunho" em cima do
+        // título e esta linha embaixo, as duas em âmbar, dizendo o mesmo
+        // estado duas vezes na mesma linha da agenda.
         if (event.isDraft)
           _StatusLine(
             icon: blockers.isEmpty
                 ? Icons.check_circle_outline
                 : Icons.pending_actions,
             text: blockers.isEmpty
-                ? 'Pronta para publicar'
-                : 'Falta ${blockers.join(' e ')}',
+                ? 'Rascunho · pronta para publicar'
+                : 'Rascunho · falta ${blockers.join(' e ')}',
             palette: cores.warning,
           ),
         if (naHora) ...[

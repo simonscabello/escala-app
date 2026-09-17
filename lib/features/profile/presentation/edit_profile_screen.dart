@@ -7,8 +7,9 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/domain/person_fields.dart';
-import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_feedback.dart';
+import '../../../shared/widgets/app_options_sheet.dart';
+import '../../../shared/widgets/app_picker_field.dart';
 import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../../auth/application/auth_controller.dart';
@@ -134,7 +135,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     return FormScaffold(
       appBar: AppBar(title: const Text('Meus dados')),
-      title: 'Meus dados',
       subtitle: 'Seu nome aparece para a equipe, e o e-mail é o que você '
           'usa para entrar.',
       children: [
@@ -179,25 +179,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 onPick: _pickBirthDate,
                 onClear: () => setState(() => _birthDate = null),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Gênero',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              AppChoiceBar<Gender?>(
-                value: _gender,
-                onChanged:
-                    _saving ? (_) {} : (value) => setState(() => _gender = value),
-                options: const [
-                  AppChoice(value: null, label: 'Não informar'),
-                  AppChoice(value: Gender.male, label: 'Masculino'),
-                  AppChoice(value: Gender.female, label: 'Feminino'),
-                  AppChoice(value: Gender.other, label: 'Outro'),
-                ],
+              const SizedBox(height: AppSpacing.lg),
+              // Um campo de seleção, e não uma barra: quatro opções numa barra
+              // que não divide a largura rolavam de lado num celular de 360px,
+              // e "Outro" ficava fora da tela.
+              AppPickerField(
+                label: 'Gênero',
+                value: _gender?.label ?? 'Não informar',
+                enabled: !_saving,
+                onTap: () async {
+                  final escolha = await showAppOptionsSheet<Gender?>(
+                    context: context,
+                    title: 'Gênero',
+                    selected: _gender,
+                    options: [
+                      const AppOption(value: null, label: 'Não informar'),
+                      for (final gender in Gender.values)
+                        AppOption(value: gender, label: gender.label),
+                    ],
+                  );
+                  if (escolha != null) setState(() => _gender = escolha.value);
+                },
               ),
             ],
           ),
@@ -232,37 +234,23 @@ class _BirthDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final preenchida = value != null;
 
-    return InkWell(
-      onTap: enabled ? onPick : null,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Data de nascimento',
-          helperText: preenchida
-              ? 'A equipe vê o dia e o mês, não o ano'
-              : 'Opcional. Assim a equipe lembra do seu aniversário',
-          enabled: enabled,
-          suffixIcon: preenchida
-              ? IconButton(
-                  tooltip: 'Remover data',
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: enabled ? onClear : null,
-                )
-              : const Icon(Icons.calendar_today_rounded, size: 20),
-        ),
-        child: Text(
-          preenchida
-              ? '${formatFullDate(value!)} · ${ageOn(value!, today())} anos'
-              : 'Escolher',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: preenchida ? null : scheme.onSurfaceVariant,
-          ),
-        ),
-      ),
+    return AppPickerField(
+      label: 'Data de nascimento',
+      value: preenchida
+          ? '${formatFullDate(value!)} · ${ageOn(value!, today())} anos'
+          : null,
+      placeholder: 'Escolher',
+      // Sem ícone, como Nome, E-mail e Gênero: só este tinha, e o texto dele
+      // começava mais à direita que o dos outros campos.
+      enabled: enabled,
+      helperText: preenchida
+          ? 'A equipe vê o dia e o mês, não o ano'
+          : 'Opcional. Assim a equipe lembra do seu aniversário',
+      onTap: onPick,
+      onClear: onClear,
+      clearTooltip: 'Remover data',
     );
   }
 }

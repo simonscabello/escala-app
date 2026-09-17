@@ -5,9 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
-import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_group.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_states.dart';
@@ -262,10 +263,9 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
   /// expunha as duas buscas — numa equipe nova, sem catálogo e sem credenciais
   /// do Spotify, era impossível cadastrar a primeira música.
   Future<void> _addManual() async {
-    final draft = await showModalBottomSheet<_ManualSongDraft>(
+    final draft = await showAdaptiveSheet<_ManualSongDraft>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      maxWidth: 480,
       builder: (_) => _ManualSongSheet(
         initialTitle: _controller.text.trim(),
         initialArtist: widget.initialArtist,
@@ -329,11 +329,12 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                   ),
                   child: FormErrorBanner(message: _error!),
                 ),
-              // Só quando há o que escolher: antes da busca não existe música a
-              // que a marca possa se aplicar, e um controle solto na tela vazia
-              // seria uma pergunta sem assunto. Aqui ela fica logo acima dos
-              // cartões, no caminho do olho de quem vai tocar em um deles.
-              if (!_adding && (_catalog.isNotEmpty || _external.isNotEmpty))
+              // **Uma faixa fixa, logo abaixo da busca.** Ela só aparecia quando
+              // chegavam resultados, acima deles — a tela pulava no meio da
+              // digitação e as opções nasciam antes de haver música escolhida.
+              // No mesmo lugar sempre, ela é lida uma vez e deixada para trás.
+              // "Música nova" é interruptor, como na edição da música.
+              if (!_adding)
                 Padding(
                   padding: const EdgeInsets.only(
                     left: AppSpacing.screenPadding,
@@ -343,12 +344,10 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CheckboxListTile(
+                      SwitchListTile(
                         value: _isNew,
-                        onChanged: (v) => setState(() => _isNew = v ?? false),
+                        onChanged: (v) => setState(() => _isNew = v),
                         contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        dense: true,
                         title: const Text('Música nova'),
                       ),
                       _ThemePicker(
@@ -414,8 +413,6 @@ class _Results extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (!searched) {
       return const AppEmptyState(
         icon: Icons.search_rounded,
@@ -444,36 +441,39 @@ class _Results extends StatelessWidget {
         AppSpacing.xxl,
       ),
       children: [
+        // Linhas agrupadas, como a lista do repertório: cada resultado era um
+        // cartão com borda, e dezesseis cartões são uma pilha de caixinhas.
         if (catalog.isNotEmpty) ...[
-          const _SectionTitle(
+          AppGroup(
             title: 'Já cadastrada por outra equipe',
             subtitle: 'Vem completa, inclusive a letra',
+            dividerIndent: AppGroup.iconIndent,
+            children: [
+              for (final item in catalog)
+                _CatalogTile(item: item, onTap: () => onPickCatalog(item)),
+            ],
           ),
-          for (final item in catalog)
-            _CatalogTile(item: item, onTap: () => onPickCatalog(item)),
           const SizedBox(height: AppSpacing.xl),
         ],
-        if (external.isNotEmpty) ...[
-          const _SectionTitle(
+        if (external.isNotEmpty)
+          AppGroup(
             title: 'Spotify',
-            subtitle: 'Buscamos a cifra e o tom ao adicionar',
+            subtitle: 'Buscamos a cifra e o tom ao adicionar. A letra não vem '
+                'do Spotify: dá para colar depois, na edição.',
+            dividerIndent: AppGroup.iconIndent,
+            children: [
+              for (final item in external)
+                _ExternalTile(item: item, onTap: () => onPickExternal(item)),
+            ],
           ),
-          for (final item in external)
-            _ExternalTile(item: item, onTap: () => onPickExternal(item)),
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          'A letra não vem do Spotify. Se ninguém tiver essa música ainda, '
-          'você pode colar a letra depois, na edição.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
         const SizedBox(height: AppSpacing.md),
-        OutlinedButton.icon(
-          onPressed: onManual,
-          icon: const Icon(Icons.edit_note_rounded, size: 18),
-          label: const Text('Cadastrar outra versão manualmente'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: onManual,
+            icon: const Icon(Icons.edit_note_rounded, size: 18),
+            label: const Text('Não achou? Cadastrar manualmente'),
+          ),
         ),
       ],
     );
@@ -590,34 +590,6 @@ class _ManualSongSheetState extends State<_ManualSongSheet> {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: theme.textTheme.titleSmall),
-          Text(
-            subtitle,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _CatalogTile extends StatelessWidget {
   const _CatalogTile({required this.item, required this.onTap});
 
@@ -637,10 +609,9 @@ class _CatalogTile extends StatelessWidget {
       if (item.hasSpotify) 'Spotify',
     ];
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        onTap: onTap,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [
@@ -686,10 +657,9 @@ class _ExternalTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        onTap: onTap,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [

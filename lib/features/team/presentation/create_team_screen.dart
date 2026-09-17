@@ -50,8 +50,8 @@ class _CreateTeamScreenState extends ConsumerState<CreateTeamScreen> {
   @override
   Widget build(BuildContext context) {
     return FormScaffold(
-      appBar: AppBar(title: const Text('Nova equipe')),
-      title: 'Criar equipe',
+      // O nome da ação na barra, e não repetido no corpo.
+      appBar: AppBar(title: const Text('Criar equipe')),
       subtitle: 'Você será o dono da equipe e poderá cadastrar os integrantes '
           'em seguida.',
       children: [

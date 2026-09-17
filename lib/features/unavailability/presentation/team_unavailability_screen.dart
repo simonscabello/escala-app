@@ -9,7 +9,9 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/app_content_width.dart';
+import '../../../shared/widgets/app_month_grid.dart';
 import '../../../shared/widgets/app_states.dart';
+import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
 import '../../team/data/team_repository.dart';
 import '../data/unavailability_repository.dart';
@@ -211,14 +213,7 @@ class _MonthBody extends StatelessWidget {
       byDay.putIfAbsent(item.date.day, () => []).add(item);
     }
 
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    // weekday: seg=1 … dom=7. Com a semana começando no domingo, o domingo vai
-    // para a coluna 0.
-    final leading = DateTime(month.year, month.month, 1).weekday % 7;
     final today = DateTime.now();
-    final todayDay = today.year == month.year && today.month == month.month
-        ? today.day
-        : null;
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -226,33 +221,30 @@ class _MonthBody extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
         children: [
-          const _WeekdayHeader(),
-          const Divider(height: 1),
+          // A mesma grade da agenda: dia com alguém que não pode é o dia
+          // pintado, em âmbar, com um traço por pessoa. Era um círculo com o
+          // número embaixo — um terceiro desenho de calendário no app.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: 0.85,
-              ),
-              itemCount: leading + daysInMonth,
-              itemBuilder: (context, index) {
-                if (index < leading) return const SizedBox.shrink();
-
-                final dayNumber = index - leading + 1;
-                final day = DateTime(month.year, month.month, dayNumber);
-                final people = byDay[dayNumber] ?? const <Unavailability>[];
-
-                return _DayCell(
-                  day: day,
-                  isToday: dayNumber == todayDay,
-                  people: people,
-                  onTap: people.isEmpty
-                      ? null
-                      : () => _openDay(context, day, people),
+            child: AppMonthGrid(
+              month: month,
+              today: DateTime(today.year, today.month, today.day),
+              keyPrefix: 'quem-nao-pode-',
+              describe: (day) {
+                final count = (byDay[day.day] ?? const []).length;
+                return AppMonthDay(
+                  marks: day.month == month.month ? count : 0,
+                  markTone: AppTone.warning,
+                  detail: count == 0
+                      ? 'ninguém avisou que não pode'
+                      : count == 1
+                          ? '1 pessoa não pode'
+                          : '$count pessoas não podem',
                 );
+              },
+              onTap: (day) {
+                final people = byDay[day.day] ?? const <Unavailability>[];
+                if (people.isNotEmpty) _openDay(context, day, people);
               },
             ),
           ),
@@ -304,123 +296,6 @@ class _MonthBody extends StatelessWidget {
   }
 }
 
-class _WeekdayHeader extends StatelessWidget {
-  const _WeekdayHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const labels = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          for (final label in labels)
-            Expanded(
-              child: Center(
-                child: Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Um dia da grade. O número de pessoas vem em âmbar, o papel de atenção da
-/// paleta — não é erro, é algo a considerar antes de escalar.
-///
-/// **A cor não é o único sinal** (WCAG 1.4.1): o número de ausentes aparece
-/// escrito abaixo do dia, e o leitor de tela recebe a frase inteira.
-class _DayCell extends StatelessWidget {
-  const _DayCell({
-    required this.day,
-    required this.isToday,
-    required this.people,
-    required this.onTap,
-  });
-
-  final DateTime day;
-  final bool isToday;
-  final List<Unavailability> people;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final warning = AppStatusColors.of(context).warning;
-    final count = people.length;
-
-    return Semantics(
-      button: onTap != null,
-      excludeSemantics: true,
-      label: [
-        capitalizeWeekday(DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(day)),
-        if (count == 0)
-          'ninguém avisou que não pode'
-        else if (count == 1)
-          '1 pessoa não pode'
-        else
-          '$count pessoas não podem',
-      ].join(': '),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: count > 0 ? warning.container : null,
-                border:
-                    isToday ? Border.all(color: scheme.primary, width: 2) : null,
-              ),
-              child: Text(
-                '${day.day}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: count > 0 ? warning.onContainer : null,
-                  fontWeight: count > 0 || isToday
-                      ? FontWeight.w700
-                      : FontWeight.w400,
-                ),
-              ),
-            ),
-            SizedBox(
-              height: 14,
-              child: count == 0
-                  ? null
-                  : Text(
-                      '$count',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: warning.foreground,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _DaySummary extends StatelessWidget {
   const _DaySummary({
     required this.day,
@@ -458,7 +333,7 @@ class _DaySummary extends StatelessWidget {
   }
 }
 
-class _DaySheet extends StatelessWidget {
+class _DaySheet extends ConsumerWidget {
   const _DaySheet({
     required this.teamId,
     required this.day,
@@ -470,8 +345,23 @@ class _DaySheet extends StatelessWidget {
   final List<Unavailability> people;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // A escala que já existe neste dia, se existe: o botão leva a ela em vez
+    // de propor criar outra.
+    final escalas = [
+      for (final scope in ['upcoming', 'past'])
+        ...?ref.watch(eventsProvider((teamId, scope))).valueOrNull?.data,
+    ];
+    final existente = escalas.where((event) {
+      final local = eventLocalTime(
+        event.startsAt,
+        event.timezone.isEmpty ? 'America/Sao_Paulo' : event.timezone,
+      );
+      return local.year == day.year &&
+          local.month == day.month &&
+          local.day == day.day;
+    }).firstOrNull;
     final scheme = theme.colorScheme;
     final dateKey = '${day.year}-'
         '${day.month.toString().padLeft(2, '0')}-'
@@ -518,14 +408,24 @@ class _DaySheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             // O calendário existe para virar decisão: é daqui que sai a escala
             // do dia, já sabendo quem não está.
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.push('/agenda/novo?data=$dateKey');
-              },
-              icon: const Icon(Icons.event_available_rounded, size: 18),
-              label: const Text('Criar escala neste dia'),
-            ),
+            if (existente != null)
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  context.push('/agenda/${existente.id}');
+                },
+                icon: const Icon(Icons.event_note_rounded, size: 18),
+                label: const Text('Ver escala'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  context.push('/agenda/novo?data=$dateKey');
+                },
+                icon: const Icon(Icons.event_available_rounded, size: 18),
+                label: const Text('Criar escala neste dia'),
+              ),
           ],
         ),
       ),

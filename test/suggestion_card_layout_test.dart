@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:louvor_app/features/suggestions/presentation/suggestions_screen.dart';
-import 'package:louvor_app/shared/widgets/app_card.dart';
+import 'package:louvor_app/shared/widgets/app_pressable.dart';
 
-/// O cartão da sugestão, no tamanho de um celular de verdade.
+/// A linha da sugestão, no tamanho de um celular de verdade.
 ///
-/// O cartão nasceu grande — justificativa inteira, dois botões de decisão — e
-/// numa equipe ativa cada sugestão ocupava meia tela. Aqui se protege o que a
-/// densidade comprou: quatro linhas curtas, nenhuma decisão de raspão, e o
-/// cartão inteiro levando ao detalhe.
+/// Nasceu como cartão grande — justificativa inteira, dois botões de decisão —
+/// e numa equipe ativa cada sugestão ocupava meia tela. Virou linha de um grupo
+/// por destino. Aqui se protege o que a densidade comprou: três linhas curtas,
+/// nenhuma decisão de raspão, e a linha inteira levando ao detalhe.
 void main() {
+  setUpAll(() => initializeDateFormatting('pt_BR'));
+
   SongSuggestion sugestao({
     String status = 'PENDING',
     String? targetDate,
@@ -62,7 +65,7 @@ void main() {
           theme: theme,
           home: Scaffold(
             body: SingleChildScrollView(
-              child: SuggestionCard(
+              child: SuggestionRow(
                 suggestion: item ?? sugestao(),
                 teamId: 't1',
                 isMine: true,
@@ -78,8 +81,8 @@ void main() {
   testWidgets('o conteúdo não encosta na borda do cartão', (tester) async {
     await montar(tester);
 
-    final cartao = tester.getTopLeft(find.byType(AppCard));
-    final titulo = tester.getTopLeft(find.text('Louvores e Honras'));
+    final cartao = tester.getTopLeft(find.byType(AppPressable));
+    final titulo = tester.getTopLeft(find.textContaining('Louvores e Honras'));
 
     // Sem padding o título nascia em cima da borda e o Clip.antiAlias do canto
     // arredondado cortava o "L".
@@ -95,7 +98,7 @@ void main() {
     // de propósito — a fonte do ambiente de teste é mais larga que a do
     // aparelho —, mas o cartão antigo, com o motivo inteiro e dois botões,
     // passava com folga daqui.
-    expect(tester.getSize(find.byType(AppCard)).height, lessThan(150));
+    expect(tester.getSize(find.byType(AppPressable)).height, lessThan(150));
   });
 
   testWidgets('o motivo é truncado numa linha', (tester) async {
@@ -122,7 +125,7 @@ void main() {
     expect(find.text('Recusar'), findsNothing);
     expect(find.byIcon(Icons.delete_outline_rounded), findsNothing);
 
-    expect(tester.widget<AppCard>(find.byType(AppCard)).onTap, isNotNull);
+    expect(tester.widget<AppPressable>(find.byType(AppPressable)).onTap, isNotNull);
   });
 
   testWidgets('os materiais viram pontinhos, e só os que existem',
@@ -146,12 +149,38 @@ void main() {
     expect(find.byIcon(Icons.headphones_rounded), findsNothing);
   });
 
-  testWidgets('a data manda no selo; sem data, é o repertório', (tester) async {
+  testWidgets('a data não se repete na linha: é o título do grupo',
+      (tester) async {
     await montar(tester, item: sugestao(targetDate: '2026-09-13'));
-    expect(find.text('13 set'), findsOneWidget);
+    expect(find.text('13 set'), findsNothing);
+    expect(find.text('Repertório'), findsNothing);
+  });
 
-    await montar(tester);
-    expect(find.text('Repertório'), findsOneWidget);
+  test('o grupo é o destino: datas em ordem e o repertório por último', () {
+    final grupos = groupSuggestionsByTarget(
+      [
+        sugestao(),
+        sugestao(targetDate: '2026-09-20'),
+        sugestao(targetDate: '2026-09-13'),
+        sugestao(targetDate: '2026-09-13'),
+      ],
+      now: DateTime(2026, 9, 10),
+    );
+
+    expect(grupos.map((g) => g.title), [
+      'Domingo, 13 de setembro',
+      'Domingo, 20 de setembro',
+      'Para o repertório',
+    ]);
+    expect(grupos.first.items, hasLength(2));
+
+    // Nas encerradas, a mais recente primeiro.
+    final encerradas = groupSuggestionsByTarget(
+      [sugestao(targetDate: '2026-09-13'), sugestao(targetDate: '2026-09-20')],
+      newestFirst: true,
+      now: DateTime(2026, 9, 10),
+    );
+    expect(encerradas.first.title, 'Domingo, 20 de setembro');
   });
 
   testWidgets('repetida vira contagem, não lista de nomes', (tester) async {
@@ -159,7 +188,7 @@ void main() {
 
     // Os nomes não caberiam na linha; o que o líder usa para priorizar é o
     // número. Eles voltam por extenso na tela de detalhes.
-    expect(find.text('Você · +2 pessoas'), findsOneWidget);
+    expect(find.text('Você +2'), findsOneWidget);
   });
 
   testWidgets('a linha não estoura no celular estreito, nem no escuro',

@@ -27,8 +27,8 @@ const _preview = 5;
 /// Cartão de resumo e listas em que dá para agir; cada música abre o próprio
 /// detalhe. Lista vazia **some**: "0 músicas sem tom" é boa notícia, e um bloco
 /// inteiro para dizer nada seria peso na tela.
-class RepertoireHealthScreen extends ConsumerWidget {
-  const RepertoireHealthScreen({super.key, required this.teamId});
+class RepertoireHealthView extends ConsumerWidget {
+  const RepertoireHealthView({super.key, required this.teamId});
 
   final String teamId;
 
@@ -36,26 +36,17 @@ class RepertoireHealthScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final health = ref.watch(repertoireHealthProvider(teamId));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Análise do repertório')),
-      body: SafeArea(
-        top: false,
-        child: AppContentWidth.reading(
-          child: health.when(
-            loading: () => const AppListSkeleton(itemCount: 6),
-            error: (error, _) => AppErrorState(
-              message: error is ApiException
-                  ? error.message
-                  : 'Não foi possível carregar a saúde do repertório.',
-              onRetry: () => ref.invalidate(repertoireHealthProvider(teamId)),
-            ),
-            data: (value) => RefreshIndicator(
-              onRefresh: () =>
-                  ref.refresh(repertoireHealthProvider(teamId).future),
-              child: _HealthBody(health: value, now: DateTime.now()),
-            ),
-          ),
-        ),
+    return health.when(
+      loading: () => const AppListSkeleton(itemCount: 6),
+      error: (error, _) => AppErrorState(
+        message: error is ApiException
+            ? error.message
+            : 'Não foi possível carregar a análise do repertório.',
+        onRetry: () => ref.invalidate(repertoireHealthProvider(teamId)),
+      ),
+      data: (value) => RefreshIndicator(
+        onRefresh: () => ref.refresh(repertoireHealthProvider(teamId).future),
+        child: _HealthBody(health: value, now: DateTime.now()),
       ),
     );
   }
@@ -121,9 +112,9 @@ class _HealthBody extends StatelessWidget {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
+        AppSpacing.screenPadding,
+        AppSpacing.md,
+        AppSpacing.screenPadding,
         AppSpacing.xxl,
       ),
       children: [

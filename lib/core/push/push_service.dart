@@ -17,7 +17,8 @@ const androidChannelId = 'escalas';
 const _androidChannel = AndroidNotificationChannel(
   androidChannelId,
   'Escalas',
-  description: 'Publicacao da escala, trocas, repertorio e sugestoes.',
+  // Só a descrição tem acento: o id acima precisa bater com o backend.
+  description: 'Publicação da escala, trocas, repertório e sugestões.',
   importance: Importance.high,
 );
 

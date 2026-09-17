@@ -9,14 +9,16 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../core/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/app_badge.dart';
-import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/app_choice_bar.dart';
 import '../../../shared/widgets/app_content_width.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_group.dart';
+import '../../../shared/widgets/greeting_header.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/team_picker.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_models.dart';
+import '../../team/data/team_repository.dart';
 import 'profile_photo.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -34,119 +36,136 @@ class ProfileScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: AppContentWidth.reading(
           child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.screenPadding),
+            padding: const EdgeInsets.fromLTRB(
+              0,
+              0,
+              0,
+              AppSpacing.screenPadding,
+            ),
             children: [
-              // O nome sobe para o tamanho de manchete. É a única coisa nesta
-              // tela que identifica de quem ela é, e estava no mesmo corpo dos
-              // títulos de bloco logo abaixo.
-              Row(
-                children: [
-                  const ProfilePhoto(radius: 34),
-                  const SizedBox(width: AppSpacing.lg),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // O título grande das outras abas ([TabHeader]), sem a linha da
+              // equipe: o Perfil é da pessoa, e a equipe é uma linha abaixo.
+              const TabHeader(title: 'Perfil'),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenPadding,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // O nome sobe para o tamanho de manchete. É a única coisa nesta
+                    // tela que identifica de quem ela é, e estava no mesmo corpo dos
+                    // títulos de bloco logo abaixo.
+                    Row(
                       children: [
-                        Text(
-                          user.name,
-                          style: theme.textTheme.headlineSmall,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          user.email,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                        const ProfilePhoto(radius: 34),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.name,
+                                style: theme.textTheme.headlineSmall,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                user.email,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(height: AppSpacing.xxl),
 
-              // "Minha disponibilidade" abre a tela e saiu de "Equipe". Não é
-              // uma configuração: é a única coisa que um integrante **faz**
-              // neste app além de ler a escala, e estava enterrada abaixo de
-              // "Meus dados" e "Alterar senha" — dois itens que se mexe uma
-              // vez na vida.
-              AppGroup(
-                title: 'Minha participação',
-                children: [
-                  AppGroupRow(
-                    icon: Icons.event_busy_outlined,
-                    title: 'Minha disponibilidade',
-                    subtitle: 'Os dias em que você não pode ser escalado',
-                    onTap: () => context.push('/disponibilidade'),
-                  ),
-                  _TeamRow(teams: auth.teams),
-                ],
-              ),
+                    // "Minha disponibilidade" abre a tela e saiu de "Equipe". Não é
+                    // uma configuração: é a única coisa que um integrante **faz**
+                    // neste app além de ler a escala, e estava enterrada abaixo de
+                    // "Meus dados" e "Alterar senha" — dois itens que se mexe uma
+                    // vez na vida.
+                    AppGroup(
+                      title: 'Minha participação',
+                      children: [
+                        AppGroupRow(
+                          icon: Icons.event_busy_outlined,
+                          title: 'Minha disponibilidade',
+                          subtitle: 'Os dias em que você não pode ser escalado',
+                          onTap: () => context.push('/disponibilidade'),
+                        ),
+                        _TeamRow(teams: auth.teams),
+                      ],
+                    ),
 
-              const SizedBox(height: AppSpacing.xxl),
-              AppGroup(
-                title: 'Conta',
-                children: [
-                  AppGroupRow(
-                    icon: Icons.badge_outlined,
-                    title: 'Meus dados',
-                    // A foto se troca tocando no avatar aqui em cima, que já
-                    // tem o selo de câmera. Repeti-la dentro de "Meus dados"
-                    // daria dois caminhos para o mesmo gesto.
-                    subtitle: 'Nome, e-mail e data de nascimento',
-                    onTap: () => context.push('/perfil/dados'),
-                  ),
-                  AppGroupRow(
-                    icon: Icons.lock_outline_rounded,
-                    title: 'Alterar senha',
-                    subtitle: 'Você precisa da senha atual',
-                    onTap: () => context.push('/perfil/senha'),
-                  ),
-                  const _PushNotificationsRow(),
-                ],
-              ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    AppGroup(
+                      title: 'Conta',
+                      children: [
+                        AppGroupRow(
+                          icon: Icons.badge_outlined,
+                          title: 'Meus dados',
+                          // A foto se troca tocando no avatar aqui em cima, que já
+                          // tem o selo de câmera. Repeti-la dentro de "Meus dados"
+                          // daria dois caminhos para o mesmo gesto.
+                          subtitle: 'Nome, e-mail e data de nascimento',
+                          onTap: () => context.push('/perfil/dados'),
+                        ),
+                        AppGroupRow(
+                          icon: Icons.lock_outline_rounded,
+                          title: 'Alterar senha',
+                          subtitle: 'Você precisa da senha atual',
+                          onTap: () => context.push('/perfil/senha'),
+                        ),
+                        const _PushNotificationsRow(),
+                      ],
+                    ),
 
-              const SizedBox(height: AppSpacing.xxl),
-              const SectionHeader(
-                title: 'Aparência',
-                subtitle: 'Vale só neste aparelho.',
-                padding: EdgeInsets.only(
-                  left: AppSpacing.xs,
-                  bottom: AppSpacing.md,
+                    const SizedBox(height: AppSpacing.xxl),
+                    const SectionHeader(
+                      title: 'Aparência',
+                      subtitle: 'Vale só neste aparelho.',
+                      padding: EdgeInsets.only(
+                        left: AppSpacing.xs,
+                        bottom: AppSpacing.md,
+                      ),
+                    ),
+                    const _ThemeModeCard(),
+
+                    const SizedBox(height: AppSpacing.xxl),
+                    // Sair e diagnóstico viraram linhas de um grupo, no fim da tela.
+                    // Como botão vermelho de largura inteira, "Sair" era o elemento
+                    // mais pesado do Perfil — e ele é a coisa que menos se faz ali. O
+                    // vermelho fica no texto, que basta para avisar o que é.
+                    AppGroup(
+                      dividerIndent: AppGroup.iconIndent,
+                      children: [
+                        AppGroupRow(
+                          icon: Icons.wifi_tethering_rounded,
+                          title: 'Diagnóstico de conexão',
+                          onTap: () => context.push('/diagnostico'),
+                        ),
+                        AppGroupRow(
+                          icon: Icons.logout_rounded,
+                          title: 'Sair da conta',
+                          tone: AppTone.danger,
+                          showChevron: false,
+                          onTap: () => _confirmLogout(context, ref),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              const _ThemeModeCard(),
-
-              const SizedBox(height: AppSpacing.xxl),
-              // Sair e diagnóstico viraram linhas de um grupo, no fim da tela.
-              // Como botão vermelho de largura inteira, "Sair" era o elemento
-              // mais pesado do Perfil — e ele é a coisa que menos se faz ali. O
-              // vermelho fica no texto, que basta para avisar o que é.
-              AppGroup(
-                dividerIndent: AppGroup.iconIndent,
-                children: [
-                  AppGroupRow(
-                    icon: Icons.wifi_tethering_rounded,
-                    title: 'Diagnóstico de conexão',
-                    onTap: () => context.push('/diagnostico'),
-                  ),
-                  AppGroupRow(
-                    icon: Icons.logout_rounded,
-                    title: 'Sair da conta',
-                    tone: AppTone.danger,
-                    showChevron: false,
-                    onTap: () => _confirmLogout(context, ref),
-                  ),
-                ],
               ),
             ],
           ),
@@ -215,7 +234,8 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
         // Religar tem duas metades: a conta volta a aceitar aviso, e o
         // aparelho precisa estar registrado e com permissao. Pedir aqui e o
         // segundo momento legitimo -- a pessoa acabou de dizer que quer.
-        final permitido = await ref.read(pushServiceProvider).requestPermission();
+        final permitido =
+            await ref.read(pushServiceProvider).requestPermission();
         if (mounted) setState(() => _blockedBySystem = !permitido);
         await ref.read(pushCoordinatorProvider).registerDevice();
       }
@@ -230,8 +250,7 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
 
   @override
   Widget build(BuildContext context) {
-    final ligado =
-        ref.watch(authControllerProvider).user?.pushEnabled ?? true;
+    final ligado = ref.watch(authControllerProvider).user?.pushEnabled ?? true;
 
     // Sem push na plataforma (Web e desktop hoje), a linha nao aparece: um
     // interruptor que nao liga nada e pior do que interruptor nenhum.
@@ -276,26 +295,25 @@ class _ThemeModeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
 
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: AppChoiceBar<ThemeMode>(
-        expanded: true,
-        value: mode,
-        onChanged: (option) =>
-            ref.read(themeModeProvider.notifier).select(option),
-        options: [
-          for (final option in [
-            ThemeMode.light,
-            ThemeMode.dark,
-            ThemeMode.system,
-          ])
-            AppChoice(
-              value: option,
-              label: themeModeLabel(option),
-              icon: _iconFor(option),
-            ),
-        ],
-      ),
+    // Sem cartão em volta: a barra já tem a superfície dela, e o cartão fazia
+    // um container dentro de outro.
+    return AppChoiceBar<ThemeMode>(
+      expanded: true,
+      value: mode,
+      onChanged: (option) =>
+          ref.read(themeModeProvider.notifier).select(option),
+      options: [
+        for (final option in [
+          ThemeMode.light,
+          ThemeMode.dark,
+          ThemeMode.system,
+        ])
+          AppChoice(
+            value: option,
+            label: themeModeLabel(option),
+            icon: _iconFor(option),
+          ),
+      ],
     );
   }
 
@@ -310,13 +328,19 @@ class _ThemeModeCard extends ConsumerWidget {
 ///
 /// Era um cartão só para si, logo abaixo de outro cartão — dois retângulos para
 /// duas informações do mesmo assunto.
-class _TeamRow extends StatelessWidget {
+/// A equipe ativa, e o caminho para trocar de equipe.
+///
+/// Mostrava a **primeira** equipe da lista, e não a ativa — errado justamente
+/// para quem serve em duas, que é quem precisa desta linha. E não levava a
+/// lugar nenhum: no celular, trocar de equipe só existia no cabeçalho da Home
+/// e da Agenda. Com duas ou mais equipes, a linha abre o mesmo seletor delas.
+class _TeamRow extends ConsumerWidget {
   const _TeamRow({required this.teams});
 
   final List<TeamSummary> teams;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (teams.isEmpty) {
       return const AppGroupRow(
         icon: Icons.groups_outlined,
@@ -326,20 +350,36 @@ class _TeamRow extends StatelessWidget {
       );
     }
 
-    final team = teams.first;
+    final activeId = ref.watch(activeTeamIdProvider);
+    final team =
+        teams.where((t) => t.teamId == activeId).firstOrNull ?? teams.first;
+    final canSwitch = teams.length > 1;
+
     return AppGroupRow(
       icon: Icons.groups_outlined,
       title: team.name,
-      subtitle: 'Sua equipe',
+      subtitle:
+          canSwitch ? 'Sua equipe ativa · toque para trocar' : 'Sua equipe',
       showChevron: false,
-      // O papel virou etiqueta: era uma segunda linha de texto cinza com o
-      // mesmo peso do nome da equipe, e "Dono" precisa ser lido como um
-      // atributo do vínculo, não como uma informação solta.
       trailing: AppBadge(
         label: roleLabel(team.role),
         tone: team.role == 'MEMBER' ? AppTone.neutral : AppTone.primary,
         semanticsLabel: 'Seu papel na equipe: ${roleLabel(team.role)}',
       ),
+      onTap: canSwitch
+          ? () async {
+              final id = await showTeamPicker(
+                context,
+                teams: [
+                  for (final item in teams) (id: item.teamId, name: item.name),
+                ],
+                activeTeamId: team.teamId,
+              );
+              if (id != null) {
+                ref.read(activeTeamIdProvider.notifier).select(id);
+              }
+            }
+          : null,
     );
   }
 }

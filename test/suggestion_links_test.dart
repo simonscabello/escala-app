@@ -131,6 +131,8 @@ Future<void> enviar(WidgetTester tester) async {
     200,
     scrollable: find.byType(Scrollable).first,
   );
+  await tester.ensureVisible(find.text('Enviar sugestão'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Enviar sugestão'));
   await tester.pumpAndSettle();
 }
@@ -158,14 +160,20 @@ void main() {
     await tester.tap(find.text('Bondade de Deus').last);
     await tester.pumpAndSettle();
 
+    // Os links vêm recolhidos, depois da justificativa, e o resumo já diz o
+    // que a busca trouxe.
+    expect(find.text('Spotify (opcional)'), findsNothing);
+    await tester.ensureVisible(find.text('Links: Spotify'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Links: Spotify'));
+    await tester.pumpAndSettle();
     expect(
       tester.widget<TextField>(campo('Spotify (opcional)')).controller?.text,
       'https://open.spotify.com/track/abc',
     );
 
-    // O último campo é a justificativa: os três de link vêm antes dela.
     await tester.enterText(
-      find.byType(TextField).last,
+      find.byKey(const ValueKey('sugestao-motivo')),
       'A igreja já canta essa nos cultos de oração.',
     );
     await tester.pumpAndSettle();
@@ -193,21 +201,13 @@ void main() {
 
     final sugestoes = await _montar(tester, songs: _SongsFake(), song: song);
 
-    // Preenchidos sozinhos: pedir de novo o que já está cadastrado é pedir o
-    // que já se tem.
-    expect(
-      tester.widget<TextField>(campo('Link da letra ou cifra (opcional)'))
-          .controller
-          ?.text,
-      'https://www.cifraclub.com.br/deus-e-deus/',
-    );
-    expect(
-      tester.widget<TextField>(campo('YouTube (opcional)')).controller?.text,
-      'https://www.youtube.com/watch?v=xyz',
-    );
+    // Da música do repertório os campos nem aparecem: os links dela já estão
+    // cadastrados, e vão junto sem ninguém precisar vê-los.
+    expect(find.text('Link da letra ou cifra (opcional)'), findsNothing);
+    expect(find.textContaining('Adicionar links'), findsNothing);
 
     await tester.enterText(
-      find.byType(TextField).last,
+      find.byKey(const ValueKey('sugestao-motivo')),
       'Faz tempo que a gente não canta essa.',
     );
     await tester.pumpAndSettle();
