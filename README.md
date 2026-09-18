@@ -10,7 +10,8 @@ continua o mesmo: são identificadores de instalação e assinatura, não marca.
 Trocá-los publicaria outro aplicativo.
 
 Projeto **independente** do backend: só se comunicam por HTTP. Arquitetura e
-convenções: [`AGENTS.md`](AGENTS.md) e [`docs/`](docs/).
+convenções: o `AGENTS.md` e a pasta `docs/` do repositório
+[`pauta`](https://github.com/simonscabello/pauta), que é a pasta acima desta.
 
 ## Pré-requisitos
 
@@ -109,7 +110,7 @@ pacote é incompatível, não desinstale antes de confirmar que o APK foi assina
 com o keystore definitivo.
 
 O procedimento completo de Railway, versão, assinatura e publicação está em
-[`../docs/DEPLOY.md`](../docs/DEPLOY.md).
+`docs/DEPLOY.md`, no repositório `pauta` (a pasta acima desta).
 
 ### Publicar a versão Web
 

@@ -15,7 +15,7 @@
 #
 #   Settings → Secrets and variables → Actions → New repository secret
 #
-#     ANDROID_KEYSTORE_BASE64   o .jks em base64 (comando no docs/DEPLOY.md)
+#     ANDROID_KEYSTORE_BASE64   o .jks em base64 (comando no docs/DEPLOY.md do repo pauta)
 #     ANDROID_KEYSTORE_PASSWORD storePassword do android/key.properties
 #     ANDROID_KEY_ALIAS         keyAlias (hoje: louvor)
 #     ANDROID_KEY_PASSWORD      keyPassword
