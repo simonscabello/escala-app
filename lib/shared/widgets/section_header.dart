@@ -34,37 +34,40 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // O título e a ação dividem uma linha centralizada na vertical; a linha de
+    // apoio vai embaixo, na largura toda. Com tudo encostado no topo, o botão
+    // (48px de área de toque) deixava "Editar" mais baixo que o título.
     return Padding(
       padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          Row(
+            children: [
+              Expanded(
                 // `header: true` faz o leitor de tela anunciar "cabeçalho" e
                 // permite pular de bloco em bloco, em vez de percorrer a tela
                 // linha a linha.
-                Semantics(
+                child: Semantics(
                   header: true,
                   child: Text(title, style: theme.textTheme.titleMedium),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    subtitle!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                trailing!,
               ],
-            ),
+            ],
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
+          if (subtitle != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ],
       ),

@@ -27,7 +27,8 @@ class AppFact {
   final bool highlight;
 
   /// O valor quebra em até [maxLines] linhas em vez de encolher. Para valores
-  /// de comprimento livre (dois cultos, uma anotação antiga de tom).
+  /// de comprimento livre (uma anotação antiga de tom). Um valor com `\n`
+  /// (um culto por linha) ignora isto: cada linha aparece inteira.
   final bool wrapValue;
   final int maxLines;
 
@@ -158,14 +159,20 @@ class _FactCell extends StatelessWidget {
       color: fact.highlight ? scheme.primary : scheme.onSurface,
     );
 
-    // **Tudo encostado no topo e à esquerda de cada coluna.** Centralizado, a
-    // coluna de valor curto ("19:30") ficava no meio e a de valor longo ("17
-    // de setembro") parecia alinhada à esquerda; e com uma coluna de duas
-    // linhas (dois cultos) os rótulos das outras desciam para o meio. Assim os
-    // rótulos formam uma linha só e os ícones ficam na mesma altura.
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: AppSpacing.xs),
+    // Um valor com várias linhas (um culto por linha) mostra **todas**: cada
+    // uma encolhe se não couber, em vez de quebrar. Quebrando, "Manhã 08:30"
+    // virava duas linhas numa coluna estreita e o limite de linhas cortava o
+    // culto da noite fora.
+    final valueLines = fact.value.split('\n');
+
+    // **Centralizado na coluna e encostado no topo.** O bloco (ícone + textos)
+    // fica no meio da coluna, mas os textos dentro dele seguem alinhados entre
+    // si; e com uma coluna de duas linhas (dois cultos) os rótulos das outras
+    // continuam na mesma altura, em vez de descerem para o meio.
+    return Align(
+      alignment: Alignment.topCenter,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (showIcon && fact.icon != null) ...[
@@ -186,7 +193,9 @@ class _FactCell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 oneLine(fact.label, labelStyle(theme)),
-                if (fact.wrapValue)
+                if (valueLines.length > 1)
+                  for (final line in valueLines) oneLine(line, valueColored)
+                else if (fact.wrapValue)
                   Text(
                     fact.value,
                     maxLines: fact.maxLines,

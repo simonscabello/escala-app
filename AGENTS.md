@@ -1659,9 +1659,10 @@ não pode, e quem monta a escala vê a etiqueta na hora de escalar.
 - LEADER+ pode marcar indisponibilidade por outra pessoa; MEMBER, só a própria.
 - `GET /teams/:id/unavailabilities?from&to` alimenta o **calendário da equipe**
   (`Gerenciar equipe → Quem não pode`): um mês civil por vez, contagem por dia,
-  filtro por pessoa e atalho "criar escala neste dia", que abre a escala nova
-  já na data (`/agenda/novo?data=AAAA-MM-DD`). Antes disso o líder só descobria
-  a ausência ao abrir a escala de um domingo específico — depois de escalar.
+  filtro por pessoa. Tocar num dia mostra só quem não pode (e "Ver escala" se
+  já houver uma); o atalho "criar escala neste dia" saiu — quem abre o dia veio
+  consultar, não montar. Antes do calendário o líder só descobria a ausência
+  ao abrir a escala de um domingo específico — depois de escalar.
 
 ## Rascunho e publicação
 

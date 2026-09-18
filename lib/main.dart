@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 
+import 'core/platform/keyboard_back_guard.dart';
 import 'core/push/push_coordinator.dart';
 import 'core/router/app_router.dart';
 import 'core/storage/shared_preferences_provider.dart';
@@ -18,6 +19,8 @@ Future<void> main() async {
   // pt_BR lanca excecao em tempo de execucao.
   await initializeDateFormatting('pt_BR');
   final prefs = await SharedPreferences.getInstance();
+  // Antes do `runApp`, para ser consultado antes do roteador.
+  KeyboardBackGuard.install();
   runApp(
     ProviderScope(
       overrides: [

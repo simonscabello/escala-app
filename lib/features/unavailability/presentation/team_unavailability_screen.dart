@@ -363,9 +363,6 @@ class _DaySheet extends ConsumerWidget {
           local.day == day.day;
     }).firstOrNull;
     final scheme = theme.colorScheme;
-    final dateKey = '${day.year}-'
-        '${day.month.toString().padLeft(2, '0')}-'
-        '${day.day.toString().padLeft(2, '0')}';
 
     return SafeArea(
       child: Padding(
@@ -405,10 +402,12 @@ class _DaySheet extends ConsumerWidget {
                 title: Text(person.displayName ?? 'Alguém'),
                 subtitle: person.reason == null ? null : Text(person.reason!),
               ),
-            const SizedBox(height: AppSpacing.md),
-            // O calendário existe para virar decisão: é daqui que sai a escala
-            // do dia, já sabendo quem não está.
-            if (existente != null)
+            // A folha responde "quem não pode neste dia" e para aí. Propor
+            // criar escala a partir de uma ausência era estranho: quem abre o
+            // dia veio consultar, não montar. Se já existe escala, o atalho
+            // para ela fica — é a pergunta seguinte natural (quem está nela).
+            if (existente != null) ...[
+              const SizedBox(height: AppSpacing.md),
               FilledButton.tonalIcon(
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -416,16 +415,8 @@ class _DaySheet extends ConsumerWidget {
                 },
                 icon: const Icon(Icons.event_note_rounded, size: 18),
                 label: const Text('Ver escala'),
-              )
-            else
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  context.push('/agenda/novo?data=$dateKey');
-                },
-                icon: const Icon(Icons.event_available_rounded, size: 18),
-                label: const Text('Criar escala neste dia'),
               ),
+            ],
           ],
         ),
       ),

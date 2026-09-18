@@ -480,13 +480,12 @@ class _EventHeader extends StatelessWidget {
                 label: 'Cultos',
                 // Uma linha por culto, com a hora alinhada: é a pergunta de
                 // quem abre a escala, e comparar 08:30 com 19:00 é de relance.
+                // Cada linha encolhe em vez de quebrar: nenhum culto some.
                 value: [
                   for (final service in services)
                     '${service.label} '
                         '${formatEventTime(service.startsAt, timezone)}',
                 ].join('\n'),
-                wrapValue: true,
-                maxLines: services.length,
               ),
             AppFact(
               icon: Icons.schedule_rounded,
