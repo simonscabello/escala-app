@@ -133,6 +133,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           pending.remember(state.uri.toString());
           return '/';
 
+        case AuthStatus.locked:
         case AuthStatus.unauthenticated:
           if (_publicRoutes.contains(location)) return null;
           pending.remember(state.uri.toString());

@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- A API e acessada pela rede; sem isto o app nao conecta. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <!-- Android 13+ (API 33) exige permissao em runtime para notificar. Os
          plugins tambem a declaram, mas ela fica explicita aqui porque e uma
@@ -9,6 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
+        android:allowBackup="false"
         android:label="Pauta"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"

@@ -38,6 +38,21 @@ class AuthRepository {
     return _post('/auth/login', {'email': email, 'password': password});
   }
 
+  Future<(String, String)> refresh(String refreshToken) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+      return (
+        response.data!['accessToken'] as String,
+        response.data!['refreshToken'] as String,
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<Session> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -66,8 +81,7 @@ class AuthRepository {
       if (name != null) 'name': name,
       if (email != null) 'email': email,
       if (birthDate != null)
-        'birthDate':
-            birthDate.value == null ? null : dateKey(birthDate.value!),
+        'birthDate': birthDate.value == null ? null : dateKey(birthDate.value!),
       if (gender != null) 'gender': gender.value?.apiValue,
       if (pushEnabled != null) 'pushEnabled': pushEnabled,
     });

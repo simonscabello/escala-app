@@ -9,10 +9,14 @@ import '../../../core/storage/token_storage.dart';
 import '../../../shared/domain/person_fields.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_models.dart';
+import 'biometric_service.dart';
+
+enum BiometricUnlock { success, cancelled, offline, expired }
 
 enum AuthStatus {
   /// Ainda verificando se ha sessao salva -- estado da splash.
   unknown,
+  locked,
   unauthenticated,
 
   /// Autenticado, mas obrigado a trocar a senha antes de usar o app
@@ -35,7 +39,10 @@ class AuthState {
   final AuthUser? user;
   final List<TeamSummary> teams;
 
-  factory AuthState.signedIn(AuthUser user, [List<TeamSummary> teams = const []]) {
+  factory AuthState.signedIn(
+    AuthUser user, [
+    List<TeamSummary> teams = const [],
+  ]) {
     return AuthState(
       status: user.mustChangePassword
           ? AuthStatus.mustChangePassword
@@ -56,6 +63,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   AuthRepository get _repository => _ref.read(authRepositoryProvider);
   TokenStorage get _storage => _ref.read(tokenStorageProvider);
+  BiometricService get _biometrics => _ref.read(biometricServiceProvider);
 
   /// Chamado no start: se ha token salvo, valida com o servidor.
   /// O interceptor renova a sessao sozinho se o access token tiver expirado.
@@ -72,22 +80,104 @@ class AuthController extends StateNotifier<AuthState> {
     }
 
     if (refreshToken == null) {
+      await _storage.disableBiometrics();
       state = const AuthState.signedOut();
+      return;
+    }
+
+    final biometricUserId = await _storage.readBiometricUserId();
+    if (biometricUserId != null) {
+      state = const AuthState(status: AuthStatus.locked);
       return;
     }
 
     try {
       final me = await _repository.me();
       state = AuthState.signedIn(me.user, me.teams);
-    } on ApiException {
-      await _storage.clear();
+    } on ApiException catch (e) {
+      // Sem rede a sessao continua guardada: a proxima abertura a restaura.
+      if (e.statusCode == 401) await _storage.clear();
       state = const AuthState.signedOut();
     }
   }
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({
+    required String email,
+    required String password,
+    Future<void> Function(AuthUser user)? onAuthenticated,
+  }) async {
     final session = await _repository.login(email: email, password: password);
+    // Quem entra pela senha com uma sessao ainda guardada (tela bloqueada pela
+    // biometria, ou sem rede na abertura) deixaria o refresh antigo valido no
+    // servidor por semanas. Revoga antes de sobrescrever.
+    final previous = await _storage.readRefreshToken();
+    if (previous != null) await _repository.logout(previous);
+    final biometricUserId = await _storage.readBiometricUserId();
+    if (biometricUserId != null && biometricUserId != session.user.id) {
+      await _storage.disableBiometrics();
+    }
+    if (onAuthenticated != null) await onAuthenticated(session.user);
     await _applySession(session);
+  }
+
+  Future<bool> get biometricsAvailable => _biometrics.available;
+
+  Future<bool> get biometricsEnabled async =>
+      state.user != null &&
+      await _storage.readBiometricUserId() == state.user!.id;
+
+  Future<bool> enableBiometrics() async {
+    final user = state.user;
+    if (user == null || !await _biometrics.confirm()) return false;
+    await _storage.enableBiometrics(user.id);
+    return true;
+  }
+
+  Future<bool> enableBiometricsFor(AuthUser user) async {
+    if (!await _biometrics.confirm()) return false;
+    await _storage.enableBiometrics(user.id);
+    return true;
+  }
+
+  Future<void> disableBiometrics() => _storage.disableBiometrics();
+
+  Future<bool> shouldOfferBiometrics(AuthUser user) async {
+    return !user.mustChangePassword &&
+        await _biometrics.available &&
+        await _storage.readBiometricOfferUserId() != user.id &&
+        await _storage.readBiometricUserId() != user.id;
+  }
+
+  Future<void> markBiometricOffer(AuthUser user) =>
+      _storage.markBiometricOffer(user.id);
+
+  /// A biometria so libera a sessao que ja esta guardada: o refresh token e
+  /// rotacionado no servidor e so entao o app entra. Nenhuma senha e guardada.
+  ///
+  /// Cancelar ou falhar a biometria mantem a tela bloqueada, com o login por
+  /// senha disponivel. Sem rede tambem: a sessao continua valida para a
+  /// proxima tentativa. So a recusa do servidor (ou outra conta) a descarta.
+  Future<BiometricUnlock> unlockWithBiometrics() async {
+    if (!await _biometrics.confirm()) return BiometricUnlock.cancelled;
+    try {
+      final old = await _storage.readRefreshToken();
+      if (old == null) throw StateError('Sessao ausente');
+      final (access, refresh) = await _repository.refresh(old);
+      await _storage.save(accessToken: access, refreshToken: refresh);
+      final me = await _repository.me();
+      final configured = await _storage.readBiometricUserId();
+      if (configured != me.user.id) throw StateError('Conta diferente');
+      state = AuthState.signedIn(me.user, me.teams);
+      return BiometricUnlock.success;
+    } on ApiException catch (e) {
+      final refused = e.statusCode == 401 || e.statusCode == 400;
+      if (!refused) return BiometricUnlock.offline;
+      await _signOutLocally();
+      return BiometricUnlock.expired;
+    } catch (_) {
+      await _signOutLocally();
+      return BiometricUnlock.expired;
+    }
   }
 
   Future<void> register({
@@ -161,13 +251,13 @@ class AuthController extends StateNotifier<AuthState> {
     // da conta: sem esta chamada o proximo a entrar neste celular receberia a
     // escala de quem saiu. Depois do `_signOutLocally` a requisicao sairia sem
     // autenticacao e o aparelho ficaria registrado.
-    await _forgetDevice();
-
-    final refreshToken = await _storage.readRefreshToken();
-    if (refreshToken != null) {
-      await _repository.logout(refreshToken);
+    try {
+      await _forgetDevice();
+      final refreshToken = await _storage.readRefreshToken();
+      if (refreshToken != null) await _repository.logout(refreshToken);
+    } finally {
+      await _signOutLocally();
     }
-    await _signOutLocally();
   }
 
   /// Esquece este aparelho no servidor. Falhar aqui nao pode segurar a saida:

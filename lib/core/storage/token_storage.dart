@@ -15,11 +15,14 @@ class TokenStorage {
 
   static const _accessKey = 'access_token';
   static const _refreshKey = 'refresh_token';
+  static const _biometricUserKey = 'biometric_user_id';
+  static const _biometricOfferKey = 'biometric_offer_user_id';
 
   String? _accessToken;
   String? _refreshToken;
   Future<void>? _loading;
   bool _loaded = false;
+  Future<void> _writes = Future.value();
 
   Future<void> _ensureLoaded() {
     if (_loaded) return Future.value();
@@ -47,6 +50,20 @@ class TokenStorage {
     return _refreshToken;
   }
 
+  Future<String?> readBiometricUserId() =>
+      _storage.read(key: _biometricUserKey);
+
+  Future<void> enableBiometrics(String userId) =>
+      _storage.write(key: _biometricUserKey, value: userId);
+
+  Future<void> disableBiometrics() => _storage.delete(key: _biometricUserKey);
+
+  Future<String?> readBiometricOfferUserId() =>
+      _storage.read(key: _biometricOfferKey);
+
+  Future<void> markBiometricOffer(String userId) =>
+      _storage.write(key: _biometricOfferKey, value: userId);
+
   Future<void> save({
     required String accessToken,
     required String refreshToken,
@@ -54,16 +71,41 @@ class TokenStorage {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
     _loaded = true;
-    await _storage.write(key: _accessKey, value: accessToken);
-    await _storage.write(key: _refreshKey, value: refreshToken);
+    _writes = _writes.then((_) async {
+      await _storage.write(key: _accessKey, value: accessToken);
+      await _storage.write(key: _refreshKey, value: refreshToken);
+    });
+    await _writes;
+  }
+
+  Future<bool> saveRotatedIfCurrent({
+    required String previousRefreshToken,
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    await _ensureLoaded();
+    if (_refreshToken != previousRefreshToken) return false;
+    await save(accessToken: accessToken, refreshToken: refreshToken);
+    return true;
+  }
+
+  Future<bool> clearIfRefreshMatches(String expected) async {
+    await _ensureLoaded();
+    if (_refreshToken != expected) return false;
+    await clear();
+    return true;
   }
 
   Future<void> clear() async {
     _accessToken = null;
     _refreshToken = null;
     _loaded = true;
-    await _storage.delete(key: _accessKey);
-    await _storage.delete(key: _refreshKey);
+    _writes = _writes.then((_) async {
+      await _storage.delete(key: _accessKey);
+      await _storage.delete(key: _refreshKey);
+    });
+    await _writes;
+    await disableBiometrics();
   }
 }
 

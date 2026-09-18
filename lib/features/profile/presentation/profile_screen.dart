@@ -17,6 +17,7 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/team_picker.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../auth/application/biometric_service.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../team/data/team_repository.dart';
 import '../../onboarding/domain/member_tour.dart';
@@ -123,13 +124,28 @@ class ProfileScreen extends ConsumerWidget {
                           subtitle: 'Nome, e-mail e data de nascimento',
                           onTap: () => context.push('/perfil/dados'),
                         ),
+                        // Condicional aqui, e nao so dentro da linha: o grupo
+                        // desenha o divisor antes de cada filho, mesmo vazio.
+                        if (PushService.isSupported)
+                          const _PushNotificationsRow(),
+                      ],
+                    ),
+
+                    const SizedBox(height: AppSpacing.xxl),
+                    AppGroup(
+                      title: 'Segurança',
+                      children: [
                         AppGroupRow(
                           icon: Icons.lock_outline_rounded,
                           title: 'Alterar senha',
                           subtitle: 'Você precisa da senha atual',
                           onTap: () => context.push('/perfil/senha'),
                         ),
-                        const _PushNotificationsRow(),
+                        if (ref
+                                .watch(biometricsAvailableProvider)
+                                .valueOrNull ==
+                            true)
+                          const _BiometricRow(),
                       ],
                     ),
 
@@ -201,6 +217,66 @@ class ProfileScreen extends ConsumerWidget {
     );
     if (!confirmed) return;
     await ref.read(authControllerProvider.notifier).logout();
+  }
+}
+
+class _BiometricRow extends ConsumerStatefulWidget {
+  const _BiometricRow();
+
+  @override
+  ConsumerState<_BiometricRow> createState() => _BiometricRowState();
+}
+
+class _BiometricRowState extends ConsumerState<_BiometricRow> {
+  bool _available = false;
+  bool _enabled = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final auth = ref.read(authControllerProvider.notifier);
+    final available = await auth.biometricsAvailable;
+    final enabled = available && await auth.biometricsEnabled;
+    if (mounted) {
+      setState(() {
+        _available = available;
+        _enabled = enabled;
+      });
+    }
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _busy = true);
+    final auth = ref.read(authControllerProvider.notifier);
+    if (value) {
+      final enabled = await auth.enableBiometrics();
+      if (mounted && !enabled) {
+        showAppSnackBar(context, 'Biometria não confirmada. Tente novamente.');
+      }
+    } else {
+      await auth.disableBiometrics();
+    }
+    if (mounted) {
+      setState(() => _busy = false);
+      await _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_available) return const SizedBox.shrink();
+    return SwitchListTile.adaptive(
+      secondary: const Icon(Icons.fingerprint),
+      title: const Text('Entrar com biometria'),
+      subtitle: const Text('Segurança deste aparelho'),
+      value: _enabled,
+      onChanged: _busy ? null : _toggle,
+    );
   }
 }
 

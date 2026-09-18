@@ -60,21 +60,37 @@ class AuthInterceptor extends Interceptor {
       return handler.next(err);
     }
 
-    final renewed = await (_refreshing ??= _refresh());
-    _refreshing = null;
+    // Outra requisicao pode ter renovado a sessao entre o envio e este 401.
+    // Reusar o refresh antigo aqui seria interpretado como replay no servidor.
+    final currentAccess = await _storage.readAccessToken();
+    final failedAccess = options.headers['Authorization'];
+    if (currentAccess != null && failedAccess != 'Bearer $currentAccess') {
+      return _retry(options, handler);
+    }
+
+    final pending = _refreshing ??= _refresh();
+    final renewed = await pending;
+    if (identical(_refreshing, pending)) _refreshing = null;
 
     if (!renewed) {
       return handler.next(err);
     }
 
+    return _retry(options, handler);
+  }
+
+  Future<void> _retry(
+    RequestOptions options,
+    ErrorInterceptorHandler handler,
+  ) async {
     try {
       options.extra['retried'] = true;
       options.headers['Authorization'] =
           'Bearer ${await _storage.readAccessToken()}';
       final response = await _refreshDio.fetch<dynamic>(options);
-      return handler.resolve(response);
+      handler.resolve(response);
     } on DioException catch (e) {
-      return handler.next(e);
+      handler.next(e);
     }
   }
 
@@ -90,14 +106,21 @@ class AuthInterceptor extends Interceptor {
         '/auth/refresh',
         data: {'refreshToken': refreshToken},
       );
-      await _storage.save(
+      final saved = await _storage.saveRotatedIfCurrent(
+        previousRefreshToken: refreshToken,
         accessToken: response.data!['accessToken'] as String,
         refreshToken: response.data!['refreshToken'] as String,
       );
-      return true;
-    } on DioException {
-      await _storage.clear();
-      await _onSessionExpired();
+      return saved;
+    } on DioException catch (e) {
+      // So o servidor recusando a credencial encerra a sessao. Sem rede ou com
+      // timeout o refresh token continua valido, e apaga-lo deslogaria quem so
+      // abriu o app no metro.
+      final status = e.response?.statusCode;
+      if (status != 401 && status != 400) return false;
+      if (await _storage.clearIfRefreshMatches(refreshToken)) {
+        await _onSessionExpired();
+      }
       return false;
     }
   }
