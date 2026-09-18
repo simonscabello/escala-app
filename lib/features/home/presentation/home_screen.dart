@@ -17,6 +17,10 @@ import '../../../shared/widgets/greeting_header.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/domain/event_datetime.dart';
+import '../../onboarding/application/tour_controller.dart';
+import '../../onboarding/data/onboarding_repository.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../songs/data/song_repository.dart';
 import '../../suggestions/data/suggestion_repository.dart';
 import '../../team/data/team_repository.dart';
@@ -66,7 +70,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// app agora cai aqui, e um integrante que nunca toca na aba Agenda jamais
   /// veria a pergunta. O próprio sistema lembra a resposta, então a guarda
   /// abaixo só evita repetir a chamada a cada reconstrução.
-  void _maybeAskForNotifications() {
+  void _maybeAskForNotifications({required bool onboardingSettled}) {
+    // Com o tour na tela, ou ainda sem saber se ele vai aparecer, a pergunta
+    // espera: o pedido do sistema por cima das boas-vindas faria a pessoa
+    // decidir sobre avisos antes de saber o que o app avisa — e o tour tem uma
+    // parada justamente para isso.
+    if (!onboardingSettled) return;
     if (_askedForNotifications || !PushService.isSupported) return;
     _askedForNotifications = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -89,7 +98,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final team = auth.teams.where((t) => t.teamId == teamId).firstOrNull ??
         auth.teams.first;
     final events = ref.watch(eventsProvider((teamId, 'upcoming')));
-    if (events.hasValue) _maybeAskForNotifications();
+
+    // As boas-vindas são dos integrantes: quem lidera tem treinamento próprio
+    // neste primeiro momento. O papel é o da equipe **ativa**, como o resto
+    // da tela.
+    final offersOnboarding = team.role == 'MEMBER';
+    final onboardingDue = offersOnboarding
+        ? ref.watch(memberOnboardingDueProvider)
+        : const AsyncValue.data(false);
+    final tourActive =
+        ref.watch(tourControllerProvider.select((tour) => tour.isActive));
+    if (onboardingDue.valueOrNull == true && !tourActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(tourControllerProvider.notifier).offerWelcome();
+      });
+    }
+
+    if (events.hasValue) {
+      _maybeAskForNotifications(
+        onboardingSettled: !onboardingDue.isLoading && !tourActive,
+      );
+    }
 
     // **A exceção à regra de não somar requisições.** A Home nasceu lendo só o
     // que a agenda já lia, e isso continua valendo para tudo o mais. O próximo
@@ -252,17 +281,20 @@ class _HomeBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final myNext = summary.myNext;
 
-    final hero = myNext == null
-        ? NoScheduleCard(
-            hasSchedules: summary.hasSchedules,
-            canManage: canManage,
-          )
-        : MyNextScheduleCard(
-            event: myNext,
-            positions: summary.myPositions,
-            following: summary.myFollowing,
-            daysAway: summary.myNextDaysAway,
-          );
+    final hero = TourTarget(
+      id: TourTargetIds.homeNext,
+      child: myNext == null
+          ? NoScheduleCard(
+              hasSchedules: summary.hasSchedules,
+              canManage: canManage,
+            )
+          : MyNextScheduleCard(
+              event: myNext,
+              positions: summary.myPositions,
+              following: summary.myFollowing,
+              daysAway: summary.myNextDaysAway,
+            ),
+    );
 
     return Column(
       children: [

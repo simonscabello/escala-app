@@ -16,6 +16,7 @@ import '../../features/events/presentation/main_shell.dart';
 import '../../features/events/presentation/setlist_form_screen.dart';
 import '../../features/events/domain/event_models.dart';
 import '../../features/health/presentation/health_screen.dart';
+import '../../features/help/presentation/help_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/invites/presentation/invites_screen.dart';
 import '../../features/invites/presentation/join_team_screen.dart';
@@ -432,6 +433,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'senha',
                 builder: (_, __) => const ChangePasswordScreen(forced: false),
+              ),
+              // Dentro do Perfil, que é onde a pessoa procura ajuda — e dentro
+              // da casca, para a barra lateral continuar à vista no monitor.
+              GoRoute(
+                path: 'ajuda',
+                builder: (_, __) => const HelpScreen(),
               ),
             ],
           ),

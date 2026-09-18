@@ -19,6 +19,8 @@ import '../../../shared/widgets/team_picker.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../team/data/team_repository.dart';
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import 'profile_photo.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -150,6 +152,14 @@ class ProfileScreen extends ConsumerWidget {
                     AppGroup(
                       dividerIndent: AppGroup.iconIndent,
                       children: [
+                        // Junto do diagnóstico, no fim: é para quando algo
+                        // não está claro, e não uma coisa do dia a dia.
+                        AppGroupRow(
+                          icon: Icons.help_outline_rounded,
+                          title: 'Ajuda',
+                          subtitle: 'Conhecer o Pauta e perguntas frequentes',
+                          onTap: () => context.push('/perfil/ajuda'),
+                        ),
                         AppGroupRow(
                           icon: Icons.wifi_tethering_rounded,
                           title: 'Diagnóstico de conexão',
@@ -256,6 +266,13 @@ class _PushNotificationsRowState extends ConsumerState<_PushNotificationsRow> {
     // interruptor que nao liga nada e pior do que interruptor nenhum.
     if (!PushService.isSupported) return const SizedBox.shrink();
 
+    return TourTarget(
+      id: TourTargetIds.profilePush,
+      child: _row(ligado),
+    );
+  }
+
+  Widget _row(bool ligado) {
     return AppGroupRow(
       icon: Icons.notifications_active_outlined,
       title: 'Avisos no celular',

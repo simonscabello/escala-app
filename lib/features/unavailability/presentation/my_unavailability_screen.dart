@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -208,10 +210,13 @@ class _MyUnavailabilityScreenState
       // Sem dia marcado, a ação mora no próprio vazio: dois botões para a
       // mesma coisa na mesma tela seria um a mais.
       floatingActionButton: items.hasValue && upcoming.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: _saving ? null : openPicker,
-              icon: const Icon(Icons.edit_calendar_rounded),
-              label: const Text('Escolher dias'),
+          ? TourTarget(
+              id: TourTargetIds.availabilityChoose,
+              child: FloatingActionButton.extended(
+                onPressed: _saving ? null : openPicker,
+                icon: const Icon(Icons.edit_calendar_rounded),
+                label: const Text('Escolher dias'),
+              ),
             )
           : null,
       body: SafeArea(
@@ -273,13 +278,16 @@ class _MyUnavailabilityScreenState
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          FilledButton.icon(
-                            onPressed: _saving ? null : openPicker,
-                            icon: const Icon(
-                              Icons.edit_calendar_rounded,
-                              size: 18,
+                          TourTarget(
+                            id: TourTargetIds.availabilityChoose,
+                            child: FilledButton.icon(
+                              onPressed: _saving ? null : openPicker,
+                              icon: const Icon(
+                                Icons.edit_calendar_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Escolher dias'),
                             ),
-                            label: const Text('Escolher dias'),
                           ),
                         ],
                       ),

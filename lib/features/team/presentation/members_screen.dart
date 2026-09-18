@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/app_breakpoints.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -131,25 +133,32 @@ class MembersScreen extends ConsumerWidget {
                         children: [
                           AppGroup(
                             children: [
-                              AppGroupRow(
-                                icon: Icons.library_music_outlined,
-                                title: 'Repertório',
-                                subtitle:
-                                    'As músicas da equipe, com letra, cifra e tom',
-                                onTap: () => context.push('/equipe/musicas'),
+                              TourTarget(
+                                id: TourTargetIds.teamRepertoire,
+                                child: AppGroupRow(
+                                  icon: Icons.library_music_outlined,
+                                  title: 'Repertório',
+                                  subtitle:
+                                      'As músicas da equipe, com letra, cifra e tom',
+                                  onTap: () => context.push('/equipe/musicas'),
+                                ),
                               ),
                               // Ao lado do repertório e para todo mundo, pelo mesmo
                               // motivo dele: quem sugere é a equipe inteira, e quem
                               // sugeriu precisa ver o que aconteceu.
-                              AppGroupRow(
-                                icon: Icons.lightbulb_outline_rounded,
-                                title: 'Sugestões',
-                                subtitle:
-                                    'Músicas que a equipe pediu, e por quê',
-                                trailing: canManage
-                                    ? _SuggestionCountBadge(teamId: teamId)
-                                    : null,
-                                onTap: () => context.push('/equipe/sugestoes'),
+                              TourTarget(
+                                id: TourTargetIds.teamSuggestions,
+                                child: AppGroupRow(
+                                  icon: Icons.lightbulb_outline_rounded,
+                                  title: 'Sugestões',
+                                  subtitle:
+                                      'Músicas que a equipe pediu, e por quê',
+                                  trailing: canManage
+                                      ? _SuggestionCountBadge(teamId: teamId)
+                                      : null,
+                                  onTap: () =>
+                                      context.push('/equipe/sugestoes'),
+                                ),
                               ),
                             ],
                           ),

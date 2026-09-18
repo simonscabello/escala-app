@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -366,7 +368,10 @@ class _EventDetailBody extends StatelessWidget {
               // esta tela — a cifra, o tom, a ordem —, e atrás da manchete e
               // da lista de nomes ele começava fora da tela. "Onde eu entro"
               // já está respondido na faixa de fatos do topo.
-              _SongsSection(event: event, canManage: canManage),
+              TourTarget(
+                id: TourTargetIds.eventSongs,
+                child: _SongsSection(event: event, canManage: canManage),
+              ),
               const SizedBox(height: AppSpacing.xl),
               if (event.warnings.unavailableAssigned.isNotEmpty) ...[
                 _UnavailableWarningBand(

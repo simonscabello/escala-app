@@ -11,6 +11,7 @@ import 'package:louvor_app/features/auth/domain/auth_models.dart';
 import 'package:louvor_app/features/events/data/event_repository.dart';
 import 'package:louvor_app/features/events/domain/event_models.dart';
 import 'package:louvor_app/features/home/presentation/home_screen.dart';
+import 'package:louvor_app/features/onboarding/data/onboarding_repository.dart';
 import 'package:louvor_app/features/songs/data/song_repository.dart';
 import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
@@ -335,6 +336,9 @@ Future<void> _pumpHome(
           (ref, teamId) async => openSuggestions,
         ),
         learningSongsProvider.overrideWith((ref, teamId) async => learning),
+        // As boas-vindas dos integrantes têm teste próprio
+        // (`onboarding_tour_test.dart`); aqui a Home é lida sem elas.
+        memberOnboardingDueProvider.overrideWith((ref) async => false),
         authControllerProvider.overrideWith(
           (ref) => _FakeAuthController(
             ref,

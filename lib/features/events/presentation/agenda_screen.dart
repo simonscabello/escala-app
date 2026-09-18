@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/date/civil_date.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/responsive/adaptive_dialog.dart';
@@ -234,15 +236,18 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final calendar = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AgendaCalendar(
-          month: month,
-          selectedDay: selected,
-          today: today,
-          markedDays: markedDays,
-          onSelected: _select,
-          onMonthChanged: _select,
-          onToday: () => _select(today),
-          legend: _filter.isMine ? 'Seus compromissos' : 'Com compromisso',
+        TourTarget(
+          id: TourTargetIds.agendaCalendar,
+          child: AgendaCalendar(
+            month: month,
+            selectedDay: selected,
+            today: today,
+            markedDays: markedDays,
+            onSelected: _select,
+            onMonthChanged: _select,
+            onToday: () => _select(today),
+            legend: _filter.isMine ? 'Seus compromissos' : 'Com compromisso',
+          ),
         ),
         // Mês que a consulta não cobre inteiro fica calado: dizer "pode ter
         // escalas fora do período disponível" era expor o limite da API a

@@ -117,6 +117,10 @@ Depois da etapa 8 o sistema seguiu por um plano de evolução cujo princípio é
 - **Lembretes agendados**: repertório para ouvir, ensaio de hoje, véspera do
   culto, convite a sugerir e repertório vazio — com deduplicação em banco.
 
+- **Onboarding dos integrantes e Central de Ajuda** — boas-vindas e tour
+  sobre a interface real no primeiro acesso de quem é MEMBER, com a resposta
+  gravada por versão no servidor (`user_onboardings`), e Perfil › Ajuda com
+  "Conhecer o Pauta" e perguntas frequentes (seção própria).
 O que o plano ainda prevê e **não** foi feito: lembretes agendados (ensaio hoje,
 culto amanhã, domingo ainda em rascunho), modo culto offline (letra garantida
 sem rede), solicitação de troca pelo integrante, link web somente leitura da
@@ -1340,6 +1344,70 @@ categoria, central de notificações dentro do app e confirmação de leitura.
 
 Plano e registro de execução:
 `docs/superpowers/plans/2026-09-08-notificacoes.md`.
+
+## Onboarding dos integrantes e Central de Ajuda
+
+Primeiro acesso de quem é **MEMBER na equipe ativa**: um cartão de
+boas-vindas ("Conhecer o Pauta" / "Agora não") e, depois, um **tour sobre a
+interface de verdade** — o app navega até cada tela, escurece o resto e
+recorta o elemento real. Quem lidera não recebe (treinamento próprio neste
+primeiro momento); a arquitetura já aceita outros tours.
+
+### Persistência versionada (backend)
+
+- Tabela `user_onboardings` (`UserOnboarding`): `user_id`, `flow`, `version`,
+  `status` (`COMPLETED` | `SKIPPED`), `created_at`; único em
+  `(user_id, flow, version)`. Migration `20260918015419_user_onboardings`.
+- `GET /users/me/onboardings` — o que a pessoa já respondeu, com
+  `key` legível (`member_onboarding_v1`).
+- `POST /users/me/onboardings` `{ flow, version, status }` — **200**,
+  idempotente, e **a primeira resposta vale** (repetir não troca SKIPPED por
+  COMPLETED). `flow` é validado por formato (`^[a-z][a-z0-9_]{2,59}$`), não
+  por lista: o app é quem sabe quais tours existem, e um tour novo não exige
+  publicar a API antes. Teste: `test/onboardings.spec.ts`.
+- **Versão nova é outra linha.** Refazer o tour dos integrantes é trocar
+  `OnboardingFlows.member` para a versão 2 no app: ninguém respondeu a ela,
+  então ela reaparece, e a v1 continua no histórico. Tour de líder ou de
+  funcionalidade nova = outro `flow` (`leader_onboarding`, …).
+
+### No app (`features/onboarding/`, `features/help/`)
+
+- **"Agora não" conta como pular**: encerra a oferta automática, e um aviso
+  diz que o tour está em Perfil › Ajuda. Concluir grava `COMPLETED`.
+- **Rever pela Ajuda não grava nada** (`TourState.manual`). A tabela responde
+  "o app ainda deve oferecer?", e quem pediu para rever já respondeu.
+- O servidor é a fonte da verdade; o aparelho só guarda a resposta que não
+  conseguiu entregar (`PendingOnboardings`, por usuário) e a reenvia na
+  próxima abertura. Sem isso, falhar a rede no fim do tour traria as
+  boas-vindas de volta.
+- `OnboardingTourHost` fica no `builder` do `MaterialApp`, **acima do
+  Navigator** — o tour troca de tela, e uma camada de página sumiria com ela.
+  Por isso nada nele usa `Tooltip` (não há `Overlay` ali).
+- **Alvos**: cada tela marca o seu com `TourTarget(id: TourTargetIds.x)`, que
+  não muda o desenho. A camada mede o alvo a cada quadro (a tela rola,
+  carrega, gira), rola até ele uma vez por parada e, se ele não aparecer em
+  3 s, mostra o texto sem destaque. Renomear ou remover um alvo tira o
+  destaque daquela parada **sem erro nenhum** — `onboarding_tour_test.dart`
+  cobre o caminho; confira na tela ao mexer nessas telas.
+- As oito paradas (`memberTourSteps`): próxima escala (manchete da Home) →
+  músicas (seção da **minha** próxima escala; sem escala, a manchete) →
+  disponibilidade na Home → "Escolher dias" dentro de Minha disponibilidade
+  → calendário da Agenda → Repertório e Sugestões na aba Equipe → avisos
+  (interruptor do Perfil no Android; cartão sem destaque na Web, que não
+  recebe push) → "Tudo pronto!".
+- O pedido de permissão de notificação da Home **espera** o tour: primeiro a
+  pessoa entende o que o app avisa, depois o sistema pergunta.
+- **Ajuda** (`/perfil/ajuda`, linha no último grupo do Perfil): "Conhecer o
+  Pauta" e as perguntas frequentes em `help_faq.dart` — lista de dados, com
+  `**negrito**` como único realce. **Cada resposta descreve o app de hoje**;
+  mudou uma tela citada ali, mude a resposta junto.
+
+### Refazer o primeiro acesso (só local)
+
+`backend/scripts/reset-onboarding.ps1 [-Email maria@teste.com] [-Flow member_onboarding]`
+apaga apenas as linhas de `user_onboardings` daquela conta, no serviço `db`
+local (recusa Docker remoto; não alcança a cópia de produção nem o Railway).
+Depois, F5 no app — as boas-vindas aparecem uma vez por abertura.
 
 ## Vocabulário: "escala", "culto", "evento", "compromisso"
 

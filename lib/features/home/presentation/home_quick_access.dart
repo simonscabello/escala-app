@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../onboarding/domain/member_tour.dart';
+import '../../onboarding/presentation/tour_target.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_status_colors.dart';
 import '../../../shared/widgets/app_badge.dart';
@@ -112,11 +114,14 @@ class HomeQuickAccess extends ConsumerWidget {
                     ),
               onTap: () => context.push('/equipe/sugestoes'),
             );
-            final disponibilidade = _QuickCard(
-              icon: Icons.event_busy_rounded,
-              title: 'Minha disponibilidade',
-              stacked: empilhado,
-              onTap: () => context.push('/disponibilidade'),
+            final disponibilidade = TourTarget(
+              id: TourTargetIds.homeAvailability,
+              child: _QuickCard(
+                icon: Icons.event_busy_rounded,
+                title: 'Minha disponibilidade',
+                stacked: empilhado,
+                onTap: () => context.push('/disponibilidade'),
+              ),
             );
 
             // `IntrinsicHeight` para os cartões da linha terem a mesma altura:

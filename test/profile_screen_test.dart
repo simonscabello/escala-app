@@ -28,6 +28,21 @@ void main() {
     expect(find.text('Sair da conta'), findsOneWidget);
   });
 
+  testWidgets('a Ajuda fica no Perfil, junto do diagnóstico', (tester) async {
+    await _pumpPerfil(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Ajuda'),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    expect(find.text('Ajuda'), findsOneWidget);
+    expect(
+      find.text('Conhecer o Pauta e perguntas frequentes'),
+      findsOneWidget,
+    );
+  });
+
   /// O seletor Claro/Escuro/Sistema era um `SegmentedButton`, e num celular
   /// estreito ele quebrava o rótulo em duas linhas dentro do segmento. O que
   /// se protege agora é o contrário disso: as três opções continuam inteiras e

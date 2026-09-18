@@ -11,6 +11,7 @@ import 'core/router/app_router.dart';
 import 'core/storage/shared_preferences_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_controller.dart';
+import 'features/onboarding/presentation/tour_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +49,10 @@ class LouvorApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ref.watch(themeModeProvider),
       routerConfig: ref.watch(routerProvider),
+      // O tour dos integrantes fica acima do Navigator: ele anda de tela em
+      // tela, e uma camada que pertencesse a uma página sumiria com ela.
+      builder: (context, child) =>
+          OnboardingTourHost(child: child ?? const SizedBox.shrink()),
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],
       localizationsDelegates: const [
