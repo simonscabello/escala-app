@@ -445,3 +445,50 @@ class SongThemeFilterButton extends StatelessWidget {
     );
   }
 }
+
+/// Os temas a aplicar na música que vai ser cadastrada.
+///
+/// Uma tira de etiquetas e não o seletor inteiro: a tela de adicionar é uma busca, e
+/// oitenta e dois chips entre o campo e os resultados afastariam do olho
+/// justamente o que se veio fazer aqui. Fechado, ocupa uma linha; aberto, o
+/// seletor é o mesmo da edição e do filtro.
+class SongThemeStrip extends StatelessWidget {
+  const SongThemeStrip({
+    super.key,
+    required this.themes,
+    required this.onChanged,
+  });
+
+  final Set<String> themes;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final tema in themes)
+          InputChip(
+            label: Text(songThemeLabel(tema)),
+            selected: true,
+            showCheckmark: false,
+            onDeleted: () => onChanged({...themes}..remove(tema)),
+            deleteIcon: const Icon(Icons.close_rounded, size: 16),
+            deleteButtonTooltipMessage: 'Tirar ${songThemeLabel(tema)}',
+          ),
+        ActionChip(
+          avatar: const Icon(Icons.sell_outlined, size: 18),
+          label: Text(themes.isEmpty ? 'Temas' : 'Mais temas'),
+          onPressed: () async {
+            final escolha = await showSongThemePicker(
+              context,
+              selected: themes,
+            );
+            if (escolha != null) onChanged(escolha);
+          },
+        ),
+      ],
+    );
+  }
+}

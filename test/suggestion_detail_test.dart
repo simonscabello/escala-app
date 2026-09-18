@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:louvor_app/core/theme/app_theme.dart';
 import 'package:louvor_app/features/auth/application/auth_controller.dart';
 import 'package:louvor_app/features/auth/domain/auth_models.dart';
+import 'package:louvor_app/features/songs/data/song_repository.dart';
+import 'package:louvor_app/features/songs/domain/song_models.dart';
 import 'package:louvor_app/features/suggestions/data/suggestion_repository.dart';
 import 'package:louvor_app/features/suggestions/domain/song_suggestion.dart';
 import 'package:louvor_app/features/songs/presentation/song_resources.dart';
@@ -39,6 +41,54 @@ class _RepositorioFake extends SuggestionRepository {
   }
 }
 
+/// O repertório, para o aceite que cadastra a música no caminho.
+class _MusicasFake extends SongRepository {
+  _MusicasFake() : super(Dio());
+
+  ExternalCandidate? doSpotify;
+  bool? doSpotifyIsNew;
+  Map<String, dynamic>? completada;
+
+  @override
+  Future<Song> createFromExternal(
+    String teamId,
+    ExternalCandidate candidate, {
+    bool isNew = false,
+    Set<String> themes = const {},
+  }) async {
+    doSpotify = candidate;
+    doSpotifyIsNew = isNew;
+    return Song(
+      id: 'm1',
+      title: candidate.title,
+      artist: candidate.artist,
+      spotifyUrl: candidate.spotifyUrl,
+      isNew: isNew,
+    );
+  }
+
+  @override
+  Future<Song> update(
+    String teamId,
+    String songId,
+    Map<String, dynamic> body,
+  ) async {
+    completada = body;
+    return Song(id: songId, title: 'Bondade de Deus');
+  }
+
+  @override
+  Future<List<CatalogCandidate>> catalog(String teamId, String search) async =>
+      [];
+
+  @override
+  Future<List<ExternalCandidate>> searchExternal(
+    String teamId,
+    String search,
+  ) async =>
+      [];
+}
+
 class _FakeAuthController extends AuthController {
   _FakeAuthController(super.ref, this._initial) {
     state = _initial;
@@ -54,6 +104,7 @@ class _FakeAuthController extends AuthController {
 
 SongSuggestion _sugestao({
   String status = 'PENDING',
+  String? artist = 'Isaías Saad',
   String? songId,
   String? lyricsUrl = 'https://www.cifraclub.com.br/x/',
   String? spotifyUrl,
@@ -66,7 +117,7 @@ SongSuggestion _sugestao({
       'id': 'sg1',
       'songId': songId,
       'title': 'Bondade de Deus',
-      'artist': 'Isaías Saad',
+      'artist': artist,
       'lyricsUrl': lyricsUrl,
       'spotifyUrl': spotifyUrl,
       'youtubeUrl': youtubeUrl,
@@ -88,6 +139,7 @@ SongSuggestion _sugestao({
 Future<_RepositorioFake> _montar(
   WidgetTester tester, {
   required SongSuggestion suggestion,
+  _MusicasFake? musicas,
   String role = 'OWNER',
   ThemeData? theme,
   Size size = const Size(375 * 3, 812 * 3),
@@ -102,6 +154,7 @@ Future<_RepositorioFake> _montar(
     ProviderScope(
       overrides: [
         suggestionRepositoryProvider.overrideWithValue(repositorio),
+        songRepositoryProvider.overrideWithValue(musicas ?? _MusicasFake()),
         authControllerProvider.overrideWith(
           (ref) => _FakeAuthController(
             ref,
@@ -215,6 +268,72 @@ void main() {
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
     expect(repositorio.chamouAceitar, isFalse);
+  });
+
+  testWidgets('veio do Spotify: aceitar cadastra a faixa sem buscar de novo',
+      (tester) async {
+    final musicas = _MusicasFake();
+    final repositorio = await _montar(
+      tester,
+      musicas: musicas,
+      suggestion: _sugestao(spotifyUrl: 'https://open.spotify.com/track/x'),
+    );
+
+    await tester.tap(find.text('Aceitar sugestão'));
+    await tester.pumpAndSettle();
+
+    // Uma folha de confirmação, e não a busca: a faixa já foi escolhida por
+    // quem sugeriu.
+    expect(find.text('Adicionar ao repertório'), findsOneWidget);
+    expect(find.text('Adicionar música'), findsNothing);
+    expect(find.text('Isaías Saad'), findsOneWidget);
+
+    await tester.tap(find.text('Adicionar e aceitar'));
+    await tester.pumpAndSettle();
+
+    expect(musicas.doSpotify?.title, 'Bondade de Deus');
+    expect(musicas.doSpotify?.artist, 'Isaías Saad');
+    expect(musicas.doSpotify?.spotifyUrl, 'https://open.spotify.com/track/x');
+    // "Música nova" nasce ligada, como na tela de adicionar -- e é o líder
+    // quem desliga, não uma dedução.
+    expect(musicas.doSpotifyIsNew, isTrue);
+    // O link de cifra que quem sugeriu mandou completa a música.
+    expect(musicas.completada, {'chordsUrl': 'https://www.cifraclub.com.br/x/'});
+    expect(repositorio.aceitaComSongId, 'm1');
+  });
+
+  testWidgets('link do Spotify errado: "outra versão" abre a busca direto',
+      (tester) async {
+    final repositorio = await _montar(
+      tester,
+      suggestion: _sugestao(spotifyUrl: 'https://open.spotify.com/track/x'),
+    );
+
+    await tester.tap(find.text('Aceitar sugestão'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Escolher outra versão'));
+    await tester.pumpAndSettle();
+
+    // Sem perguntar de novo "Adicionar ao repertório?": a folha já perguntou.
+    expect(find.text('Adicionar ao repertório?'), findsNothing);
+    expect(find.text('Adicionar música'), findsOneWidget);
+    expect(repositorio.chamouAceitar, isFalse);
+  });
+
+  testWidgets('Spotify sem artista cai no cadastro pela busca', (tester) async {
+    await _montar(
+      tester,
+      suggestion: _sugestao(
+        artist: null,
+        spotifyUrl: 'https://open.spotify.com/track/x',
+      ),
+    );
+
+    await tester.tap(find.text('Aceitar sugestão'));
+    await tester.pumpAndSettle();
+
+    // O cadastro pelo Spotify exige o artista; sem ele, o caminho de sempre.
+    expect(find.text('Adicionar ao repertório?'), findsOneWidget);
   });
 
   testWidgets('encerrada mostra a resposta e o caminho de volta',

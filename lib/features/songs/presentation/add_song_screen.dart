@@ -16,8 +16,62 @@ import '../../../shared/widgets/app_submit_button.dart';
 import '../../../shared/widgets/form_scaffold.dart';
 import '../data/song_repository.dart';
 import '../domain/song_models.dart';
-import '../domain/song_themes.dart';
 import 'song_theme_picker.dart';
+
+/// Completa a música recém-criada com os links que a sugestão trouxe.
+///
+/// **Só o que ficou vazio.** O catálogo traz cifra e letra de verdade, e o
+/// enriquecimento do Spotify vai ao CifraClub: sobrescrever com o link que
+/// alguém colou no celular trocaria o melhor pelo aproximado. E o que
+/// chegou como "letra ou cifra" — um campo só na sugestão, porque perguntar
+/// qual dos dois é cobrar uma classificação que não muda nada para quem
+/// sugere — cai na coluna que o próprio endereço denuncia.
+///
+/// Um PATCH a mais, e não campos no POST, porque as portas de cadastro têm
+/// corpos diferentes: aqui a regra é uma só para todas — inclusive o aceite
+/// direto da sugestão que já veio do Spotify.
+Future<Song> applySuggestedLinks(
+  SongRepository repository,
+  String teamId,
+  Song song, {
+  String? lyricsUrl,
+  String? youtubeUrl,
+  String? spotifyUrl,
+}) async {
+  final colado = lyricsUrl?.trim() ?? '';
+  final letraOuCifra = colado.isEmpty ? null : colado;
+  final ehCifra = letraOuCifra != null && _pareceCifra(letraOuCifra);
+
+  final patch = <String, dynamic>{
+    if (ehCifra && (song.chordsUrl ?? '').isEmpty) 'chordsUrl': letraOuCifra,
+    if (letraOuCifra != null && !ehCifra && (song.lyricsUrl ?? '').isEmpty)
+      'lyricsUrl': letraOuCifra,
+    if ((youtubeUrl ?? '').isNotEmpty && (song.youtubeUrl ?? '').isEmpty)
+      'youtubeUrl': youtubeUrl!.trim(),
+    if ((spotifyUrl ?? '').isNotEmpty && (song.spotifyUrl ?? '').isEmpty)
+      'spotifyUrl': spotifyUrl!.trim(),
+  };
+  if (patch.isEmpty) return song;
+
+  try {
+    return await repository.update(teamId, song.id, patch);
+  } on ApiException {
+    // A música já existe, e é isso que o líder veio fazer. Um link recusado
+    // (endereço torto digitado por quem sugeriu) não pode desfazer o
+    // cadastro nem virar erro numa tela que deu certo — ele se completa na
+    // edição.
+    return song;
+  }
+}
+
+/// Site de cifra ou site de letra. Heurística curta de propósito: errar aqui
+/// põe o link na outra coluna da mesma tela, e o líder corrige num toque.
+bool _pareceCifra(String url) {
+  final endereco = url.toLowerCase();
+  return endereco.contains('cifraclub') ||
+      endereco.contains('cifras') ||
+      endereco.contains('cifra');
+}
 
 /// Adicionar música: uma caixa de busca, duas fontes.
 ///
@@ -57,7 +111,7 @@ class AddSongScreen extends ConsumerStatefulWidget {
   ///
   /// Vale nas três portas de cadastro: o que o catálogo ou o Spotify já
   /// trouxerem manda, e estes preenchem só o que ficou vazio (ver
-  /// [_aplicarLinksDaSugestao]).
+  /// [applySuggestedLinks]).
   final String? initialArtist;
   final String? initialLyricsUrl;
   final String? initialYoutubeUrl;
@@ -175,7 +229,14 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
 
     try {
       var song = await create();
-      song = await _aplicarLinksDaSugestao(song);
+      song = await applySuggestedLinks(
+        ref.read(songRepositoryProvider),
+        widget.teamId,
+        song,
+        lyricsUrl: widget.initialLyricsUrl,
+        youtubeUrl: widget.initialYoutubeUrl,
+        spotifyUrl: widget.initialSpotifyUrl,
+      );
       if (!mounted) return;
 
       // A lista do repertório precisa enxergar a música nova: quem volta para
@@ -204,58 +265,6 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
     } finally {
       if (mounted) setState(() => _adding = false);
     }
-  }
-
-  /// Completa a música recém-criada com os links que a sugestão trouxe.
-  ///
-  /// **Só o que ficou vazio.** O catálogo traz cifra e letra de verdade, e o
-  /// enriquecimento do Spotify vai ao CifraClub: sobrescrever com o link que
-  /// alguém colou no celular trocaria o melhor pelo aproximado. E o que
-  /// chegou como "letra ou cifra" — um campo só na sugestão, porque perguntar
-  /// qual dos dois é cobrar uma classificação que não muda nada para quem
-  /// sugere — cai na coluna que o próprio endereço denuncia.
-  ///
-  /// Um PATCH a mais, e não campos no POST, porque as três portas de cadastro
-  /// têm corpos diferentes: aqui a regra é uma só para as três.
-  Future<Song> _aplicarLinksDaSugestao(Song song) async {
-    final letraOuCifra = widget.initialLyricsUrl?.trim();
-    final ehCifra = letraOuCifra != null && _pareceCifra(letraOuCifra);
-
-    final patch = <String, dynamic>{
-      if (ehCifra && (song.chordsUrl ?? '').isEmpty) 'chordsUrl': letraOuCifra,
-      if (letraOuCifra != null &&
-          !ehCifra &&
-          (song.lyricsUrl ?? '').isEmpty)
-        'lyricsUrl': letraOuCifra,
-      if ((widget.initialYoutubeUrl ?? '').isNotEmpty &&
-          (song.youtubeUrl ?? '').isEmpty)
-        'youtubeUrl': widget.initialYoutubeUrl!.trim(),
-      if ((widget.initialSpotifyUrl ?? '').isNotEmpty &&
-          (song.spotifyUrl ?? '').isEmpty)
-        'spotifyUrl': widget.initialSpotifyUrl!.trim(),
-    };
-    if (patch.isEmpty) return song;
-
-    try {
-      return await ref
-          .read(songRepositoryProvider)
-          .update(widget.teamId, song.id, patch);
-    } on ApiException {
-      // A música já existe, e é isso que o líder veio fazer. Um link recusado
-      // (endereço torto digitado por quem sugeriu) não pode desfazer o
-      // cadastro nem virar erro numa tela que deu certo — ele se completa na
-      // edição.
-      return song;
-    }
-  }
-
-  /// Site de cifra ou site de letra. Heurística curta de propósito: errar aqui
-  /// põe o link na outra coluna da mesma tela, e o líder corrige num toque.
-  static bool _pareceCifra(String url) {
-    final endereco = url.toLowerCase();
-    return endereco.contains('cifraclub') ||
-        endereco.contains('cifras') ||
-        endereco.contains('cifra');
   }
 
   /// Porta de saída quando a música não existe nem no catálogo nem no
@@ -350,7 +359,7 @@ class _AddSongScreenState extends ConsumerState<AddSongScreen> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Música nova'),
                       ),
-                      _ThemePicker(
+                      SongThemeStrip(
                         themes: _themes,
                         onChanged: (themes) => setState(() => _themes = themes),
                       ),
@@ -692,49 +701,6 @@ class _ExternalTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Os temas a aplicar na música que for escolhida abaixo.
-///
-/// Uma tira de etiquetas e não o seletor inteiro: esta tela é uma busca, e
-/// oitenta e dois chips entre o campo e os resultados afastariam do olho
-/// justamente o que se veio fazer aqui. Fechado, ocupa uma linha; aberto, o
-/// seletor é o mesmo da edição e do filtro.
-class _ThemePicker extends StatelessWidget {
-  const _ThemePicker({required this.themes, required this.onChanged});
-
-  final Set<String> themes;
-  final ValueChanged<Set<String>> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        for (final tema in themes)
-          InputChip(
-            label: Text(songThemeLabel(tema)),
-            selected: true,
-            showCheckmark: false,
-            onDeleted: () => onChanged({...themes}..remove(tema)),
-            deleteIcon: const Icon(Icons.close_rounded, size: 16),
-            deleteButtonTooltipMessage: 'Tirar ${songThemeLabel(tema)}',
-          ),
-        ActionChip(
-          avatar: const Icon(Icons.sell_outlined, size: 18),
-          label: Text(themes.isEmpty ? 'Temas' : 'Mais temas'),
-          onPressed: () async {
-            final escolha = await showSongThemePicker(
-              context,
-              selected: themes,
-            );
-            if (escolha != null) onChanged(escolha);
-          },
-        ),
-      ],
     );
   }
 }

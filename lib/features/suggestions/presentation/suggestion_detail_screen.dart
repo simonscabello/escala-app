@@ -20,6 +20,7 @@ import '../../songs/data/song_repository.dart';
 import '../../songs/domain/song_models.dart';
 import '../../songs/presentation/add_song_screen.dart';
 import '../../songs/presentation/song_resources.dart';
+import '../../songs/presentation/song_theme_picker.dart';
 import '../data/suggestion_repository.dart';
 import '../domain/song_suggestion.dart';
 import 'suggestions_screen.dart' show suggestionMaterialIcon;
@@ -80,6 +81,10 @@ class _SuggestionDetailScreenState
     extends ConsumerState<SuggestionDetailScreen> {
   bool _busy = false;
 
+  /// O que dizer embaixo do indicador, quando a espera é longa o bastante
+  /// para merecer explicação.
+  String? _busyMessage;
+
   SuggestionRef get _args => (teamId: widget.teamId, id: widget.suggestionId);
 
   void _refresh() {
@@ -111,7 +116,12 @@ class _SuggestionDetailScreenState
         showAppSnackBar(context, error.message, tone: AppTone.danger);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _busyMessage = null;
+        });
+      }
     }
   }
 
@@ -122,13 +132,111 @@ class _SuggestionDetailScreenState
   /// título, artista e os links. Redigitar o que quem sugeriu digitou é o tipo
   /// de trabalho que faz o líder deixar a sugestão para depois.
   ///
-  /// O `isNew` continua sendo decidido lá, à mão, onde já nasce marcado:
-  /// ligá-lo aqui seria deduzir "a equipe está aprendendo" de "alguém
-  /// sugeriu".
+  /// Quando quem sugeriu escolheu a música no Spotify, nem a busca abre: a
+  /// faixa já foi escolhida uma vez, e o líder só confirma numa folha curta.
+  ///
+  /// O `isNew` continua sendo decidido à mão — na folha ou na busca, onde já
+  /// nasce marcado: ligá-lo aqui seria deduzir "a equipe está aprendendo" de
+  /// "alguém sugeriu".
   Future<void> _accept(SongSuggestion s) async {
-    var songId = s.songId;
+    final songId = s.songId ?? _songIdCriado;
 
-    if (songId == null) {
+    if (songId == null && _veioDoSpotify(s)) {
+      final escolha = await showAdaptiveSheet<_SpotifyChoice>(
+        context: context,
+        maxWidth: 480,
+        builder: (_) => _AddFromSpotifySheet(suggestion: s),
+      );
+      if (escolha == null || !mounted) return;
+      if (escolha is _SpotifyConfirmed) {
+        return _acceptFromSpotify(s, escolha);
+      }
+      // "Escolher outra versão": o link da sugestão não era o certo, e o
+      // caminho é a busca de sempre — sem a pergunta de antes, que já foi
+      // respondida nesta folha.
+      return _acceptViaSearch(s, outraVersao: true);
+    }
+
+    if (songId == null) return _acceptViaSearch(s);
+
+    await _run(
+      () => ref
+          .read(suggestionRepositoryProvider)
+          .accept(widget.teamId, s.id, songId: songId)
+          .then((_) {}),
+      'Sugestão aceita.',
+    );
+  }
+
+  /// A sugestão trouxe a faixa do Spotify, com título e artista.
+  ///
+  /// É o que o cadastro pelo Spotify precisa — o servidor vai ao CifraClub com
+  /// título e artista, e guarda o link. Procurar a mesma música de novo só
+  /// para tocar no mesmo resultado era trabalho repetido. O artista é
+  /// obrigatório lá; sem ele, o caminho é a busca.
+  static bool _veioDoSpotify(SongSuggestion s) =>
+      (s.spotifyUrl ?? '').trim().isNotEmpty &&
+      (s.artist ?? '').trim().length >= 2;
+
+  /// A música criada por um aceite que falhou no meio.
+  ///
+  /// Cadastrar e aceitar são duas chamadas. Se a segunda falha, a música já
+  /// existe — e tentar de novo não pode cadastrá-la outra vez (o servidor
+  /// recusaria como repetida e o líder ficaria preso).
+  String? _songIdCriado;
+
+  Future<void> _acceptFromSpotify(
+    SongSuggestion s,
+    _SpotifyConfirmed escolha,
+  ) async {
+    final songs = ref.read(songRepositoryProvider);
+    final sugestoes = ref.read(suggestionRepositoryProvider);
+
+    // O servidor vai ao CifraClub atrás de cifra, letra e tom: segundos, e
+    // não um instante.
+    _busyMessage = 'Procurando a cifra, a letra e o tom.';
+    await _run(
+      () async {
+        if (_songIdCriado == null) {
+          var song = await songs.createFromExternal(
+            widget.teamId,
+            ExternalCandidate(
+              title: s.title.trim(),
+              artist: s.artist!.trim(),
+              spotifyUrl: s.spotifyUrl!.trim(),
+            ),
+            isNew: escolha.isNew,
+            themes: escolha.themes,
+          );
+          song = await applySuggestedLinks(
+            songs,
+            widget.teamId,
+            song,
+            lyricsUrl: s.lyricsUrl,
+            youtubeUrl: s.youtubeUrl,
+          );
+          _songIdCriado = song.id;
+          ref.invalidate(songsProvider);
+          ref.invalidate(learningSongsProvider(widget.teamId));
+        }
+        await sugestoes.accept(widget.teamId, s.id, songId: _songIdCriado!);
+      },
+      'Sugestão aceita. "${s.title}" entrou no repertório.',
+    );
+  }
+
+  /// Cadastrar pela busca, que já abre com o que a sugestão trouxe. É o
+  /// caminho quando a sugestão não tem o Spotify, ou quando o líder recusou o
+  /// link que veio nela.
+  ///
+  /// [outraVersao]: o líder já disse, na folha do Spotify, que quer cadastrar
+  /// e que aquele link não é o certo. Nem a pergunta volta, nem o link
+  /// descartado entra na música pela porta dos fundos.
+  Future<void> _acceptViaSearch(
+    SongSuggestion s, {
+    bool outraVersao = false,
+  }) async {
+    if (!outraVersao) {
       final cadastrar = await showConfirmDialog(
         context,
         title: 'Adicionar ao repertório?',
@@ -137,29 +245,28 @@ class _SuggestionDetailScreenState
         confirmLabel: 'Adicionar ao repertório',
       );
       if (!cadastrar || !mounted) return;
-
-      final criada = await Navigator.of(context).push<Song>(
-        MaterialPageRoute(
-          builder: (rota) => AddSongScreen(
-            teamId: widget.teamId,
-            initialSearch: s.title,
-            initialArtist: s.artist,
-            initialLyricsUrl: s.lyricsUrl,
-            initialYoutubeUrl: s.youtubeUrl,
-            initialSpotifyUrl: s.spotifyUrl,
-            onCreated: (song) => Navigator.of(rota).pop(song),
-          ),
-        ),
-      );
-      if (criada == null || !mounted) return;
-      songId = criada.id;
-      ref.invalidate(songsProvider);
     }
+
+    final criada = await Navigator.of(context).push<Song>(
+      MaterialPageRoute(
+        builder: (rota) => AddSongScreen(
+          teamId: widget.teamId,
+          initialSearch: s.title,
+          initialArtist: s.artist,
+          initialLyricsUrl: s.lyricsUrl,
+          initialYoutubeUrl: s.youtubeUrl,
+          initialSpotifyUrl: outraVersao ? null : s.spotifyUrl,
+          onCreated: (song) => Navigator.of(rota).pop(song),
+        ),
+      ),
+    );
+    if (criada == null || !mounted) return;
+    ref.invalidate(songsProvider);
 
     await _run(
       () => ref
           .read(suggestionRepositoryProvider)
-          .accept(widget.teamId, s.id, songId: songId)
+          .accept(widget.teamId, s.id, songId: criada.id)
           .then((_) {}),
       'Sugestão aceita.',
     );
@@ -276,6 +383,7 @@ class _SuggestionDetailScreenState
             isMine: isMine,
             canManage: canManage,
             busy: _busy,
+            busyMessage: _busyMessage,
             onAccept: () => _accept(s),
             onDecline: () => _decline(s),
             onReopen: () => _reopen(s),
@@ -292,6 +400,7 @@ class _Body extends StatelessWidget {
     required this.isMine,
     required this.canManage,
     required this.busy,
+    this.busyMessage,
     required this.onAccept,
     required this.onDecline,
     required this.onReopen,
@@ -301,6 +410,7 @@ class _Body extends StatelessWidget {
   final bool isMine;
   final bool canManage;
   final bool busy;
+  final String? busyMessage;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   final VoidCallback onReopen;
@@ -433,8 +543,8 @@ class _Body extends StatelessWidget {
     if (!canManage) return const [];
 
     if (busy) {
-      return const [
-        Center(
+      return [
+        const Center(
           child: Padding(
             padding: EdgeInsets.all(AppSpacing.md),
             child: SizedBox(
@@ -444,6 +554,14 @@ class _Body extends StatelessWidget {
             ),
           ),
         ),
+        if (busyMessage != null)
+          Text(
+            busyMessage!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
       ];
     }
 
@@ -497,6 +615,118 @@ class _Body extends StatelessWidget {
         : '${outros.take(outros.length - 1).join(', ')} e ${outros.last}';
     final verbo = outros.length == 1 ? 'também sugeriu' : 'também sugeriram';
     return 'Sugerida por $quem · $lista $verbo';
+  }
+}
+
+/// O que a folha do Spotify respondeu.
+sealed class _SpotifyChoice {
+  const _SpotifyChoice();
+}
+
+/// Cadastrar a faixa que veio na sugestão, com o que o líder marcou.
+class _SpotifyConfirmed extends _SpotifyChoice {
+  const _SpotifyConfirmed({required this.isNew, required this.themes});
+
+  final bool isNew;
+  final Set<String> themes;
+}
+
+/// O link não era o certo: procurar outra versão na busca de sempre.
+class _SpotifyOtherVersion extends _SpotifyChoice {
+  const _SpotifyOtherVersion();
+}
+
+/// Aceitar uma sugestão que já veio do Spotify.
+///
+/// O lugar da confirmação que antes abria a busca: a música aparece como a
+/// busca a mostraria, e o que só o líder sabe fica aqui — se a equipe vai
+/// aprendê-la e sob que temas. É o mesmo par de controles da tela de
+/// adicionar, com o mesmo padrão: "Música nova" nasce ligada.
+///
+/// "Escolher outra versão" é a saída para o link errado — ao vivo no lugar
+/// do estúdio, ou a gravação de outro ministério com o mesmo nome.
+class _AddFromSpotifySheet extends StatefulWidget {
+  const _AddFromSpotifySheet({required this.suggestion});
+
+  final SongSuggestion suggestion;
+
+  @override
+  State<_AddFromSpotifySheet> createState() => _AddFromSpotifySheetState();
+}
+
+class _AddFromSpotifySheetState extends State<_AddFromSpotifySheet> {
+  bool _isNew = true;
+  Set<String> _themes = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final s = widget.suggestion;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          0,
+          AppSpacing.xl,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Adicionar ao repertório', style: theme.textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Buscamos a cifra e o tom ao adicionar.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                leading: Icon(Icons.headphones_rounded, color: scheme.primary),
+                title: Text(s.title),
+                subtitle: Text(s.artist!),
+                trailing: IconButton(
+                  tooltip: 'Ouvir no Spotify',
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  onPressed: () => openResourceLink(context, s.spotifyUrl!),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            SwitchListTile(
+              value: _isNew,
+              onChanged: (v) => setState(() => _isNew = v),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Música nova'),
+            ),
+            SongThemeStrip(
+              themes: _themes,
+              onChanged: (themes) => setState(() => _themes = themes),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(
+                _SpotifyConfirmed(isNew: _isNew, themes: _themes),
+              ),
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Adicionar e aceitar'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(const _SpotifyOtherVersion()),
+              child: const Text('Escolher outra versão'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
