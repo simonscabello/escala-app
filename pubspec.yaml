@@ -1,4 +1,4 @@
-﻿name: louvor_app
+name: louvor_app
 description: Pauta - sua equipe no mesmo ritmo
 publish_to: "none"
 version: 0.19.0+26
@@ -32,8 +32,8 @@ dependencies:
   # Foto de perfil. A imagem ja sai reduzida do picker (ver profile_screen):
   # o backend aceita ate 5 MB, e foto de celular passa disso com folga.
   image_picker: ^1.1.2
-  # LÃª a versÃ£o realmente instalada para comparar com GET /version. Manter
-  # isto automÃ¡tico evita um segundo nÃºmero de versÃ£o esquecido no cÃ³digo.
+  # Lê a versão realmente instalada para comparar com GET /version. Manter
+  # isto automático evita um segundo número de versão esquecido no código.
   # 9.x enquanto share_plus 12 fixa win32 5.x; a 10.x exige win32 6.x.
   package_info_plus: ^9.0.1
   # Icones das funcoes (violao, bateria, mesa de som). O Material Icons do
@@ -65,18 +65,18 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 # O arquivo cheio atende Android antigo; foreground e monochrome preservam as
-# camadas do Ã­cone adaptativo e o Ã­cone temÃ¡tico do Android 13+. As camadas sÃ£o
+# camadas do ícone adaptativo e o ícone temático do Android 13+. As camadas são
 # geradas por tools/generate_brand_assets.py. Sem pasta ios neste projeto.
 #
-# **As duas camadas adaptativas apontam para o sÃ­mbolo branco, nÃ£o para o
-# colorido.** O fundo Ã© o violeta profundo da marca, e o sÃ­mbolo colorido sobre
-# ele entrega de 1,19:1 a 1,61:1 â€” some. O branco dÃ¡ 11,13:1, que Ã© exatamente o
-# que o Ã­cone completo entregue pelo design mostra: peÃ§a clara sobre violeta.
-# O colorido Ã© o sÃ­mbolo para fundo claro, e Ã© assim que o app o usa.
+# **As duas camadas adaptativas apontam para o símbolo branco, não para o
+# colorido.** O fundo é o violeta profundo da marca, e o símbolo colorido sobre
+# ele entrega de 1,19:1 a 1,61:1 — some. O branco dá 11,13:1, que é exatamente o
+# que o ícone completo entregue pelo design mostra: peça clara sobre violeta.
+# O colorido é o símbolo para fundo claro, e é assim que o app o usa.
 #
-# **E apontam para o derivado, nÃ£o para o master.** O sÃ­mbolo entregue ocupa
-# 42,2% de raio; a mÃ¡scara redonda do Android garante 30,6%. Sem a reduÃ§Ã£o, as
-# pontas do P saem cortadas no lanÃ§ador.
+# **E apontam para o derivado, não para o master.** O símbolo entregue ocupa
+# 42,2% de raio; a máscara redonda do Android garante 30,6%. Sem a redução, as
+# pontas do P saem cortadas no lançador.
 flutter_launcher_icons:
   android: true
   ios: false
@@ -84,11 +84,11 @@ flutter_launcher_icons:
   adaptive_icon_background: "#312E81"
   adaptive_icon_foreground: assets/branding/pauta_adaptive_foreground.png
   adaptive_icon_monochrome: assets/branding/pauta_adaptive_foreground.png
-  # O recuo jÃ¡ estÃ¡ embutido no arquivo derivado, medido contra o cÃ­rculo real
-  # da mÃ¡scara. Um recuo por cima dele encolheria a peÃ§a duas vezes.
+  # O recuo já está embutido no arquivo derivado, medido contra o círculo real
+  # da máscara. Um recuo por cima dele encolheria a peça duas vezes.
   adaptive_icon_foreground_inset: 0
   web:
-    # O gerador do pacote usa a mesma imagem para Ã­cones normais e maskable.
+    # O gerador do pacote usa a mesma imagem para ícones normais e maskable.
     # Nossa fonte gera o normal com cantos transparentes e o maskable cheio.
     generate: false
     background_color: "#312E81"
@@ -97,14 +97,14 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
 
-  # O sÃ­mbolo oficial da marca, nas duas artes que a identidade entrega: a
+  # O símbolo oficial da marca, nas duas artes que a identidade entrega: a
   # branca para fundo violeta/escuro e a colorida para fundo claro. `AppBrandMark`
-  # escolhe entre elas pela luminÃ¢ncia do ladrilho, porque no tema escuro o
-  # quadrado da marca Ã© claro e a arte branca sumiria dentro dele.
+  # escolhe entre elas pela luminância do ladrilho, porque no tema escuro o
+  # quadrado da marca é claro e a arte branca sumiria dentro dele.
   #
-  # SÃ£o os derivados de 512px, e nÃ£o os masters de 1254: o app nunca desenha a
-  # marca acima de ~110dp, e empacotar 600 KB para pintar 40px Ã© peso que a
-  # versÃ£o Web baixa no primeiro quadro. Os masters ficam em assets/branding
+  # São os derivados de 512px, e não os masters de 1254: o app nunca desenha a
+  # marca acima de ~110dp, e empacotar 600 KB para pintar 40px é peso que a
+  # versão Web baixa no primeiro quadro. Os masters ficam em assets/branding
   # como fonte, fora do bundle.
   assets:
     - assets/branding/pauta_symbol_on_dark.png
