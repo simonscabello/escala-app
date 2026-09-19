@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -45,8 +46,27 @@ final versionRepositoryProvider = Provider<VersionRepository>((ref) {
   return VersionRepository(ref.watch(rootDioProvider));
 });
 
-/// Mantém o resultado durante a sessão; não há razão para consultar /version
-/// a cada troca entre Agenda, Equipe e Perfil.
+/// De quanto em quanto tempo, no máximo, voltar ao app reconsulta /version.
+const _recheckAfter = Duration(minutes: 15);
+
+/// Mantém o resultado enquanto o app está na tela; não há razão para consultar
+/// /version a cada troca entre Agenda, Equipe e Perfil.
+///
+/// **Mas volta a consultar quando o app sai do segundo plano.** O Android
+/// mantém o processo vivo por dias, e com uma consulta só por sessão quem
+/// nunca fecha o app não via a versão nova. O intervalo mínimo existe porque
+/// voltar de um compartilhamento ou do seletor de arquivos também é "voltar".
+/// O toque no push de versão nova não espera o intervalo: o
+/// [PushCoordinator] invalida este provider direto.
 final appUpdateProvider = FutureProvider<AppUpdateInfo?>((ref) {
+  final checkedAt = DateTime.now();
+  final listener = AppLifecycleListener(
+    onResume: () {
+      if (DateTime.now().difference(checkedAt) >= _recheckAfter) {
+        ref.invalidateSelf();
+      }
+    },
+  );
+  ref.onDispose(listener.dispose);
   return ref.watch(versionRepositoryProvider).check();
 });

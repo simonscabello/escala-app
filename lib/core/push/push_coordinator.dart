@@ -7,6 +7,7 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/events/data/event_repository.dart';
 import '../../features/team/data/team_repository.dart';
+import '../../features/update/data/version_repository.dart';
 import '../router/app_router.dart';
 import 'push_service.dart';
 
@@ -90,6 +91,10 @@ class PushCoordinator {
     // mostrar exatamente a versao que deixou de valer.
     final eventId = _eventIdOf(tap.route);
     if (eventId != null) _ref.invalidate(eventProvider(eventId));
+
+    // Pelo mesmo motivo: o aviso de atualização só aparece na Home se a
+    // consulta a /version for refeita -- a da sessão é de antes da versão sair.
+    if (tap.kind == 'APP_UPDATE_AVAILABLE') _ref.invalidate(appUpdateProvider);
 
     _ref.read(routerProvider).go(tap.route);
   }

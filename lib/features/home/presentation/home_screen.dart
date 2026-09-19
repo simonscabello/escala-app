@@ -33,6 +33,14 @@ import '../domain/home_summary.dart';
 import 'home_next_card.dart';
 import 'home_quick_access.dart';
 
+/// O relógio da Home — "HOJE" e "AMANHÃ" na manchete dependem dele.
+///
+/// Uma função, e não um `DateTime` como o `agendaNowProvider`: a Home fica
+/// montada por dias com o app em segundo plano, e um valor guardado deixaria a
+/// manchete dizendo "AMANHÃ" no próprio dia. Os testes o fixam; sem isso eles
+/// dependiam da data em que rodavam.
+final homeClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
 /// A porta de entrada do app.
 ///
 /// **Quatro perguntas, nesta ordem:** quando eu toco, o que preciso fazer
@@ -204,7 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       cached.data,
                       membershipId: team.membershipId,
                       canManage: team.canManage,
-                      now: DateTime.now(),
+                      now: ref.watch(homeClockProvider)(),
                     ),
                     nextTeamEvent: proximoEvento,
                     fromCache: cached.fromCache,

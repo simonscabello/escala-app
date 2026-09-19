@@ -329,6 +329,12 @@ Future<void> _pumpHome(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        // A quarta anterior às escalas do arquivo. Com o relógio de verdade,
+        // em 19/09/2026 a escala do dia 20 virou "AMANHÃ · MINHA PRÓXIMA
+        // ESCALA" e o teste da manchete quebrou.
+        homeClockProvider.overrideWithValue(
+          () => DateTime.utc(2026, 9, 9, 16),
+        ),
         eventsProvider.overrideWith(
           (ref, query) async => CachedValue(data: events, fromCache: false),
         ),
