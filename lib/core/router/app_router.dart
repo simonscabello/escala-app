@@ -7,6 +7,7 @@ import '../../features/auth/presentation/change_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
+import '../../features/auth/presentation/unlock_screen.dart';
 import '../../features/assignments/presentation/assignment_form_screen.dart';
 import '../../features/events/presentation/agenda_screen.dart';
 import '../../features/events/presentation/event_detail_screen.dart';
@@ -83,6 +84,7 @@ class _PendingLocation {
   void remember(String location) {
     final path = Uri.parse(location).path;
     if (path == '/' ||
+        path == '/desbloquear' ||
         _publicRoutes.contains(path) ||
         _passwordChangeRoutes.contains(path)) {
       return;
@@ -134,6 +136,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           return '/';
 
         case AuthStatus.locked:
+          // A sessão existe e só espera a digital: o fundo é a tela de
+          // desbloqueio, e não o formulário de login -- que fazia parecer que
+          // o app tinha deslogado. O login continua acessível a partir dela.
+          if (location == '/desbloquear' || _publicRoutes.contains(location)) {
+            return null;
+          }
+          pending.remember(state.uri.toString());
+          return '/desbloquear';
+
         case AuthStatus.unauthenticated:
           if (_publicRoutes.contains(location)) return null;
           pending.remember(state.uri.toString());
@@ -146,6 +157,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
         case AuthStatus.authenticated:
           final isEntryRoute = location == '/' ||
+              location == '/desbloquear' ||
               _publicRoutes.contains(location) ||
               location == '/trocar-senha';
           if (isEntryRoute && location != '/diagnostico') {
@@ -160,6 +172,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/desbloquear',
+        builder: (_, __) => const UnlockScreen(),
+      ),
       GoRoute(path: '/cadastro', builder: (_, __) => const RegisterScreen()),
       GoRoute(
         path: '/trocar-senha',

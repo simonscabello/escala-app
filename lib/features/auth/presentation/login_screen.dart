@@ -10,6 +10,11 @@ import '../../../shared/widgets/form_scaffold.dart';
 import '../application/auth_controller.dart';
 import '../domain/auth_models.dart';
 
+/// Um aviso para a próxima abertura do login — hoje, só "sua sessão expirou",
+/// vindo da `UnlockScreen`. Quem o põe já foi desmontado quando o login abre,
+/// por isso ele mora num provider e não num parâmetro de rota.
+final loginNoticeProvider = StateProvider<String?>((ref) => null);
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -31,20 +36,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    // O pedido automático de biometria saiu daqui para a `UnlockScreen`: quem
+    // chega ao login com a sessão bloqueada escolheu a senha, e abrir a
+    // digital de novo por cima seria desfazer a escolha.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final available =
           await ref.read(authControllerProvider.notifier).biometricsAvailable;
       if (!mounted) return;
       setState(() => _biometricAvailable = available);
-      if (available &&
-          ref.read(authControllerProvider).status == AuthStatus.locked) {
-        await _unlock();
-      }
     });
   }
 
   Future<void> _unlock() async {
     if (_unlocking) return;
+    ref.read(loginNoticeProvider.notifier).state = null;
     setState(() {
       _unlocking = true;
       _error = null;
@@ -104,6 +109,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    ref.read(loginNoticeProvider.notifier).state = null;
     setState(() {
       _loading = true;
       _error = null;
@@ -125,6 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final error = _error ?? ref.watch(loginNoticeProvider);
     return FormScaffold(
       showBrand: true,
       title: 'Que bom te ver por aqui!',
@@ -180,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        if (_error != null) FormErrorBanner(message: _error!),
+        if (error != null) FormErrorBanner(message: error),
         AppSubmitButton(
           label: 'Entrar',
           loading: _loading,
